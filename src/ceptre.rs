@@ -11,7 +11,7 @@ macro_rules! dump {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Token {
+struct Token {
     string: String,
     depth: i32,
     is_var: bool,
@@ -91,7 +91,47 @@ fn match_variables(
     return Some(result);
 }
 
-pub fn tokenize(string: &str) -> Vec<Token> {
+fn evaluate_backwards_pred(tokens: &Vec<Token>) -> Option<Vec<Token>> {
+    if tokens.len() == 0 {
+        return None;
+    }
+
+    match tokens[0].string.as_str() {
+        "+" => {
+            use std::str::FromStr;
+
+            let n1 = f32::from_str(&tokens[1].string);
+            let n2 = f32::from_str(&tokens[2].string);
+            let n3 = f32::from_str(&tokens[3].string);
+
+            return match (n1, n2, n3) {
+                (Ok(v1), Ok(v2), Err(_)) => Some(vec![
+                    tokens[0].clone(),
+                    tokens[1].clone(),
+                    tokens[2].clone(),
+                    Token::new(&(v1 + v2).to_string(), 0),
+                ]),
+                (Ok(v1), Err(_), Ok(v3)) => Some(vec![
+                    tokens[0].clone(),
+                    tokens[1].clone(),
+                    Token::new(&(v3 - v1).to_string(), 0),
+                    tokens[3].clone(),
+                ]),
+                (Err(_), Ok(v2), Ok(v3)) => Some(vec![
+                    tokens[0].clone(),
+                    Token::new(&(v3 - v2).to_string(), 0),
+                    tokens[2].clone(),
+                    tokens[3].clone(),
+                ]),
+                (Ok(v1), Ok(v2), Ok(v3)) if v1 + v2 == v3 => Some(tokens.clone()),
+                _ => None,
+            };
+        }
+        _ => None,
+    }
+}
+
+fn tokenize(string: &str) -> Vec<Token> {
     tokenize_depth(string, 0)
 }
 
@@ -206,6 +246,20 @@ mod tests {
 
         for (input_tokens, pred_tokens, result) in test_cases.drain(..) {
             assert_eq!(match_variables(&input_tokens, &pred_tokens), result);
+        }
+    }
+
+    #[test]
+    fn evaluate_backwards_pred_test() {
+        let mut test_cases = vec![
+            (tokenize("+ A 2 3"), Some(tokenize("+ 1 2 3"))),
+            (tokenize("+ 1 B 3"), Some(tokenize("+ 1 2 3"))),
+            (tokenize("+ 1 2 C"), Some(tokenize("+ 1 2 3"))),
+            (tokenize("+ 1 2 4"), None),
+        ];
+
+        for (input, result) in test_cases.drain(..) {
+            assert_eq!(evaluate_backwards_pred(&input), result);
         }
     }
 
