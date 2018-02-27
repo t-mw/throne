@@ -1,5 +1,6 @@
 use regex::Regex;
 
+use std::iter::Iterator;
 use std::vec::Vec;
 
 macro_rules! dump {
@@ -13,12 +14,13 @@ macro_rules! dump {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Token {
     string: String,
-    depth: i32,
     is_var: bool,
+    opens_group: bool,
+    closes_group: bool,
 }
 
 impl Token {
-    fn new(string: &str, depth: i32) -> Token {
+    fn new(string: &str, opens_group: bool, closes_group: bool) -> Token {
         let mut chars = string.chars();
         let first_char = chars.next();
         let is_var = first_char.expect("first_char").is_ascii_uppercase()
@@ -26,16 +28,9 @@ impl Token {
 
         Token {
             string: string.to_string(),
-            depth,
             is_var,
-        }
-    }
-
-    fn set_depth(&self, depth: i32) -> Token {
-        Token {
-            string: self.string.clone(),
-            depth,
-            is_var: self.is_var,
+            opens_group,
+            closes_group,
         }
     }
 }
@@ -189,9 +184,20 @@ fn assign_vars(tokens: &Vec<Token>, matches: &Vec<Match>) -> Vec<Token> {
     for token in tokens.iter() {
         if token.is_var {
             if let Some(&(_, ref tokens)) = matches.iter().find(|&&(ref s, _)| *s == token.string) {
-                let var_depth = token.depth;
-                let tokens = tokens.iter().map(|t| t.set_depth(t.depth + var_depth));
-                result.extend(tokens);
+                let mut tokens = tokens.clone();
+                let len = tokens.len();
+
+                if len == 1 {
+                    tokens[0].opens_group = token.opens_group;
+                    tokens[len - 1].closes_group = token.closes_group;
+                } else {
+                    tokens[0].opens_group = tokens[0].opens_group || token.opens_group;
+                    tokens[len - 1].closes_group =
+                        tokens[len - 1].closes_group || token.closes_group;
+                }
+
+                result.append(&mut tokens);
+
                 continue;
             }
         }
@@ -227,17 +233,17 @@ fn evaluate_backwards_pred(tokens: &Vec<Token>) -> Option<Vec<Token>> {
                     tokens[0].clone(),
                     tokens[1].clone(),
                     tokens[2].clone(),
-                    Token::new(&(v1 + v2).to_string(), 0),
+                    Token::new(&(v1 + v2).to_string(), false, true),
                 ]),
                 (Ok(v1), Err(_), Ok(v3)) => Some(vec![
                     tokens[0].clone(),
                     tokens[1].clone(),
-                    Token::new(&(v3 - v1).to_string(), 0),
+                    Token::new(&(v3 - v1).to_string(), false, false),
                     tokens[3].clone(),
                 ]),
                 (Err(_), Ok(v2), Ok(v3)) => Some(vec![
                     tokens[0].clone(),
-                    Token::new(&(v3 - v2).to_string(), 0),
+                    Token::new(&(v3 - v2).to_string(), false, false),
                     tokens[2].clone(),
                     tokens[3].clone(),
                 ]),
@@ -261,29 +267,50 @@ fn match_variables_with_existing(
     let mut pred_token_iter = pred_tokens.iter();
     let mut result = vec![];
 
+    let mut input_depth = 0;
+    let mut pred_depth = 0;
+
     for token in input_tokens.iter() {
         let pred_token = pred_token_iter.next();
 
+        if token.opens_group {
+            input_depth += 1;
+        }
+
         if let Some(pred_token) = pred_token {
+            if pred_token.opens_group {
+                pred_depth += 1;
+            }
+
             if !token.is_var {
-                if token != pred_token {
+                if token != pred_token || input_depth != pred_depth {
                     return None;
                 }
             } else {
                 let mut matches = vec![pred_token.clone()];
 
-                // clone the iterator, because take_while consumes the final
-                // non-matching item and we want to keep it. otherwise we could
-                // just mutate the original iterator.
-                {
-                    let mut iter_clone = pred_token_iter.clone();
-                    if pred_token.depth > token.depth {
-                        matches.extend(iter_clone.take_while(|t| t.depth > token.depth).cloned());
-                    }
+                while input_depth != pred_depth {
+                    if let Some(pred_token) = pred_token_iter.next() {
+                        if pred_token.opens_group {
+                            pred_depth += 1;
+                        }
+                        if pred_token.closes_group {
+                            pred_depth -= 1;
+                        }
 
-                    for _ in 0..matches.len() - 1 {
-                        pred_token_iter.next();
+                        matches.push(pred_token.clone());
+                    } else {
+                        return None;
                     }
+                }
+
+                let len = matches.len();
+                if len == 1 {
+                    matches[0].opens_group = false;
+                    matches[0].closes_group = false;
+                } else {
+                    matches[0].opens_group = true;
+                    matches[len - 1].closes_group = true;
                 }
 
                 let has_existing_matches = if let Some(&(_, ref existing_matches)) = result
@@ -304,8 +331,16 @@ fn match_variables_with_existing(
                     result.push((token.string.clone(), matches));
                 }
             }
+
+            if pred_token.closes_group {
+                pred_depth -= 1;
+            }
         } else {
             return None;
+        }
+
+        if token.closes_group {
+            input_depth -= 1;
         }
     }
 
@@ -317,29 +352,34 @@ fn match_variables_with_existing(
 }
 
 fn tokenize(string: &str) -> Vec<Token> {
-    tokenize_depth(string, 0)
-}
+    let mut string = String::from(string);
 
-fn tokenize_depth(string: &str, depth: i32) -> Vec<Token> {
-    // lazy_static! {
-    //     static ref RE1: Regex = Regex::new(r"^\(\s*(\w+)\s*\)$").unwrap();
-    // }
+    lazy_static! {
+        static ref RE1: Regex = Regex::new(r"\(\s*(\w+)\s*\)").unwrap();
+    }
 
-    // // remove instances of brackets surrounding single terms
-    // if let Some(caps) = RE1.captures(string) {
-    //     string = caps.get(1).unwrap().as_str();
-    // }
+    loop {
+        // remove instances of brackets surrounding single atoms
+        let string1 = string.clone();
+        let string2 = RE1.replace_all(&string1, "$1");
+
+        if string1 == string2 {
+            break;
+        } else {
+            string = string2.into_owned();
+        }
+    }
 
     lazy_static! {
         static ref RE2: Regex = Regex::new(r"\(|\)|\s+|[^\(\)\s]+").unwrap();
     }
 
-    let tokens = RE2.find_iter(string)
+    let tokens = RE2.find_iter(&string)
         .map(|m| m.as_str())
         .filter(|s| !s.trim().is_empty())
         .collect::<Vec<_>>();
 
-    return tokenize_internal(tokens.as_slice(), depth);
+    return tokenize_internal(tokens.as_slice(), 0);
 }
 
 fn tokenize_internal(tokens: &[&str], mut depth: i32) -> Vec<Token> {
@@ -353,21 +393,29 @@ fn tokenize_internal(tokens: &[&str], mut depth: i32) -> Vec<Token> {
             if depth == start_depth {
                 depth_start_i = Some(i + 1);
             }
+
             depth += 1;
             continue;
         }
 
         if *token == ")" {
             depth -= 1;
+
             if depth == start_depth {
                 let range = depth_start_i.expect("depth_start_i")..i;
                 result.append(&mut tokenize_internal(&tokens[range], depth + 1));
             }
+
             continue;
         }
 
         if depth == start_depth {
-            result.push(Token::new(token, depth));
+            let len = tokens.len();
+
+            let opens_group = len > 1 && i == 0;
+            let closes_group = len > 1 && i == tokens.len() - 1;
+
+            result.push(Token::new(token, opens_group, closes_group));
         }
     }
 
@@ -380,13 +428,13 @@ mod tests {
 
     #[test]
     fn token_test() {
-        assert!(!Token::new("tt1", 0).is_var);
-        assert!(!Token::new("tT1", 0).is_var);
-        assert!(!Token::new("1", 0).is_var);
-        assert!(!Token::new("1Tt", 0).is_var);
-        assert!(Token::new("T", 0).is_var);
-        assert!(Token::new("TT1", 0).is_var);
-        assert!(Token::new("TT1'", 0).is_var);
+        assert!(!Token::new("tt1", true, true).is_var);
+        assert!(!Token::new("tT1", true, true).is_var);
+        assert!(!Token::new("1", true, true).is_var);
+        assert!(!Token::new("1Tt", true, true).is_var);
+        assert!(Token::new("T", true, true).is_var);
+        assert!(Token::new("TT1", true, true).is_var);
+        assert!(Token::new("TT1'", true, true).is_var);
     }
 
     #[test]
@@ -514,7 +562,7 @@ mod tests {
                 tokenize("T1 (T2 T3)"),
                 vec![
                     ("T1".to_string(), tokenize("(t11 t12)")),
-                    ("T3".to_string(), tokenize("(t31 (t32 t33))")),
+                    ("T3".to_string(), tokenize("t31 (t32 t33)")),
                 ],
                 tokenize("(t11 t12) (T2 (t31 (t32 t33)))"),
             ),
@@ -539,13 +587,13 @@ mod tests {
             (
                 tokenize("t1 T2"),
                 tokenize("t1 (t21 t22)"),
-                Some(vec![("T2".to_string(), tokenize_depth("t21 t22", 1))]),
+                Some(vec![("T2".to_string(), tokenize("t21 t22"))]),
             ),
             (
                 tokenize("t1 (t21 T22 t23) T3"),
                 tokenize("t1 (t21 (t221 t222 t223) t23) t3"),
                 Some(vec![
-                    ("T22".to_string(), tokenize_depth("t221 t222 t223", 2)),
+                    ("T22".to_string(), tokenize("t221 t222 t223")),
                     ("T3".to_string(), tokenize("t3")),
                 ]),
             ),
@@ -554,7 +602,15 @@ mod tests {
                 tokenize("t1 t2 (t3 t2)"),
                 Some(vec![
                     ("T2".to_string(), tokenize("t2")),
-                    ("T3".to_string(), tokenize_depth("t3 t2", 1)),
+                    ("T3".to_string(), tokenize("t3 t2")),
+                ]),
+            ),
+            (
+                tokenize("t1 T2 T3"),
+                tokenize("t1 (t2 t3) (t3 t2)"),
+                Some(vec![
+                    ("T2".to_string(), tokenize("t2 t3")),
+                    ("T3".to_string(), tokenize("t3 t2")),
                 ]),
             ),
             (tokenize("t1 t3"), tokenize("t1 t3"), Some(vec![])),
@@ -593,38 +649,48 @@ mod tests {
 
     #[test]
     fn tokenize_test() {
-        assert_eq!(tokenize("t1"), [Token::new("t1", 0)]);
+        assert_eq!(tokenize("t1"), [Token::new("t1", false, false)]);
 
         assert_eq!(
             tokenize("t1 (t21 (t221 t222 t223) t23) t3"),
             [
-                Token::new("t1", 0),
-                Token::new("t21", 1),
-                Token::new("t221", 2),
-                Token::new("t222", 2),
-                Token::new("t223", 2),
-                Token::new("t23", 1),
-                Token::new("t3", 0),
+                Token::new("t1", true, false),
+                Token::new("t21", true, false),
+                Token::new("t221", true, false),
+                Token::new("t222", false, false),
+                Token::new("t223", false, true),
+                Token::new("t23", false, true),
+                Token::new("t3", false, true),
             ]
         );
 
         assert_eq!(
             tokenize("t1 t2 (((t3 )) t4)"),
             [
-                Token::new("t1", 0),
-                Token::new("t2", 0),
-                Token::new("t3", 3),
-                Token::new("t4", 1),
+                Token::new("t1", true, false),
+                Token::new("t2", false, false),
+                Token::new("t3", true, false),
+                Token::new("t4", false, true),
+            ]
+        );
+
+        assert_eq!(
+            tokenize("(t1 t2) (t3 t4)"),
+            [
+                Token::new("t1", true, false),
+                Token::new("t2", false, true),
+                Token::new("t3", true, false),
+                Token::new("t4", false, true),
             ]
         );
 
         assert_eq!(
             tokenize("t1 t2 (t3'' t4')"),
             [
-                Token::new("t1", 0),
-                Token::new("t2", 0),
-                Token::new("t3''", 1),
-                Token::new("t4'", 1),
+                Token::new("t1", true, false),
+                Token::new("t2", false, false),
+                Token::new("t3''", true, false),
+                Token::new("t4'", false, true),
             ]
         );
     }
