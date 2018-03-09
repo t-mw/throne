@@ -5,4 +5,5 @@ authors = ["Tobias Mansfield-Williams <contact@tmwhere.com>"]
 
 [dependencies]
 lazy_static = "1.0.0"
+rand = "0.3.17"
 regex = "0.2.6"

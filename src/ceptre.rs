@@ -1,3 +1,5 @@
+use rand;
+use rand::{Rng, SeedableRng, StdRng};
 use regex::Regex;
 
 use std::iter::Iterator;
@@ -47,6 +49,194 @@ struct Rule {
 impl Rule {
     fn new(inputs: Vec<Phrase>, outputs: Vec<Phrase>) -> Rule {
         Rule { inputs, outputs }
+    }
+}
+
+struct Context {
+    rules: Vec<Rule>,
+    state: Vec<Phrase>,
+    quiescence: bool,
+}
+
+impl Context {
+    fn from_text(text: &str) -> Context {
+        let text = text.replace("()", "qui");
+        let lines = text.split("\n");
+
+        let parse_rule = |string: &str| {
+            let mut r = string.split("=");
+
+            let (dollars, inputs): (Vec<_>, Vec<_>) = r.next()
+                .expect("r[0]")
+                .split(".")
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .partition(|s| s.chars().next().expect("char") == '$');
+
+            let outputs = r.next()
+                .expect("r[1]")
+                .split(".")
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty());
+
+            let dollars: Vec<_> = dollars.iter().map(|s| s.split_at(1).1).collect();
+
+            let inputs: Vec<_> = inputs
+                .iter()
+                .chain(dollars.iter())
+                .cloned()
+                .map(tokenize)
+                .collect();
+
+            let outputs = outputs.chain(dollars).map(tokenize).collect();
+
+            return Rule::new(inputs, outputs);
+        };
+
+        let get_label = |line| {
+            lazy_static! {
+                static ref RE: Regex = Regex::new(r"^(#[^:]*):\s*$").unwrap();
+            }
+
+            RE.captures(line)
+                .map(|caps| caps.get(1).unwrap().as_str().trim())
+        };
+
+        let get_init = |line: &String| {
+            if !line.contains("=") && !line.is_empty() {
+                return Some(line.split(".").map(tokenize).collect::<Vec<_>>());
+            } else {
+                return None;
+            }
+        };
+
+        let get_rule = |line: &String| {
+            if line.contains("=") && !line.is_empty() {
+                return Some(parse_rule(line));
+            } else {
+                return None;
+            }
+        };
+
+        let mut out_lines = vec![];
+
+        let mut attach = None;
+
+        for line in lines {
+            let line = line.trim();
+
+            if line.is_empty() {
+                attach = None;
+            } else {
+                let label = get_label(line);
+
+                if label.is_some() {
+                    attach = label;
+                } else if let Some(attach) = attach {
+                    // discard the current label on quiescence
+                    if line.split(|c| c == '.' || c == '=')
+                        .any(|s| s.trim() == "qui")
+                    {
+                        out_lines.push(format!("{} . {}", attach, line));
+                    } else {
+                        out_lines.push(format!("{} . {} . {}", attach, line, attach));
+                    }
+                } else {
+                    out_lines.push(String::from(line));
+                }
+            }
+        }
+
+        let state = out_lines
+            .iter()
+            .map(get_init)
+            .filter(|v| v.is_some())
+            .flat_map(|v| v.expect("v"))
+            .collect::<Vec<_>>();
+
+        let rules = out_lines
+            .iter()
+            .map(get_rule)
+            .filter(|v| v.is_some())
+            .map(|v| v.expect("v"))
+            .collect::<Vec<_>>();
+
+        Context {
+            state,
+            rules,
+            quiescence: false,
+        }
+    }
+}
+
+fn update(context: &mut Context) {
+    let rules = &context.rules;
+    let state = &mut context.state;
+
+    let seed = vec![
+        rand::random::<usize>(),
+        rand::random::<usize>(),
+        rand::random::<usize>(),
+        rand::random::<usize>(),
+    ];
+
+    let mut rng: StdRng = SeedableRng::from_seed(&seed[..]);
+
+    loop {
+        let mut matching_rule = None;
+
+        // using prime modulo, check each rule exactly once in random order
+        let mut rand = 1;
+
+        while rules.len() % rand == 0 || rand % rules.len() == 0 {
+            rand = random_prime(&mut rng);
+        }
+
+        let mut modulo = rand % rules.len();
+
+        for _ in 0..rules.len() {
+            let rule = &rules[modulo];
+
+            if let Some(rule) = rule_matches_state(&rule, &state) {
+                matching_rule = Some(rule);
+                break;
+            }
+
+            modulo = (modulo + rand) % rules.len();
+        }
+
+        if context.quiescence {
+            if matching_rule.is_some() {
+                context.quiescence = false;
+            } else {
+                return;
+            }
+        }
+
+        if let Some(ref matching_rule) = matching_rule {
+            let inputs = &matching_rule.inputs;
+            let outputs = &matching_rule.outputs;
+
+            for input in inputs.iter() {
+                let remove_idx = state.iter().position(|v| v == input);
+                state.remove(remove_idx.expect("remove_idx"));
+            }
+
+            for output in outputs.iter() {
+                state.push(output.clone());
+            }
+        } else {
+            lazy_static! {
+                static ref QUI: Phrase = vec![Token::new("qui", false, false)];
+            }
+
+            state.push(QUI.clone());
+            context.quiescence = true;
+        }
+
+        if matching_rule.is_none() && !context.quiescence {
+            break;
+        }
     }
 }
 
@@ -169,10 +359,7 @@ fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
     }
 }
 
-fn match_backwards_variables(
-    pred: &Vec<Token>,
-    existing_matches: &Vec<Match>,
-) -> Option<Vec<Match>> {
+fn match_backwards_variables(pred: &Phrase, existing_matches: &Vec<Match>) -> Option<Vec<Match>> {
     let pred = assign_vars(pred, existing_matches);
 
     evaluate_backwards_pred(&pred).and_then(|eval_result| {
@@ -180,7 +367,7 @@ fn match_backwards_variables(
     })
 }
 
-fn assign_vars(tokens: &Vec<Token>, matches: &Vec<Match>) -> Vec<Token> {
+fn assign_vars(tokens: &Phrase, matches: &Vec<Match>) -> Vec<Token> {
     let mut result: Vec<Token> = vec![];
 
     for token in tokens.iter() {
@@ -424,9 +611,161 @@ fn tokenize_internal(tokens: &[&str], mut depth: i32) -> Vec<Token> {
     return result;
 }
 
+fn random_prime<R: Rng>(rng: &mut R) -> usize {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
+  let primes = [
+    2,    3,    5,    7,    11,   13,   17,   19,   23,   29,   31,   37,
+    41,   43,   47,   53,   59,   61,   67,   71,   73,   79,   83,   89,
+    97,   101,  103,  107,  109,  113,  127,  131,  137,  139,  149,  151,
+    157,  163,  167,  173,  179,  181,  191,  193,  197,  199,  211,  223,
+    227,  229,  233,  239,  241,  251,  257,  263,  269,  271,  277,  281,
+    283,  293,  307,  311,  313,  317,  331,  337,  347,  349,  353,  359,
+    367,  373,  379,  383,  389,  397,  401,  409,  419,  421,  431,  433,
+    439,  443,  449,  457,  461,  463,  467,  479,  487,  491,  499,  503,
+    509,  521,  523,  541,  547,  557,  563,  569,  571,  577,  587,  593,
+    599,  601,  607,  613,  617,  619,  631,  641,  643,  647,  653,  659,
+    661,  673,  677,  683,  691,  701,  709,  719,  727,  733,  739,  743,
+    751,  757,  761,  769,  773,  787,  797,  809,  811,  821,  823,  827,
+    829,  839,  853,  857,  859,  863,  877,  881,  883,  887,  907,  911,
+    919,  929,  937,  941,  947,  953,  967,  971,  977,  983,  991,  997,
+    1009, 1013, 1019, 1021, 1031, 1033, 1039, 1049, 1051, 1061, 1063, 1069,
+    1087, 1091, 1093, 1097, 1103, 1109, 1117, 1123, 1129, 1151, 1153, 1163,
+    1171, 1181, 1187, 1193, 1201, 1213, 1217, 1223, 1229, 1231, 1237, 1249,
+    1259, 1277, 1279, 1283, 1289, 1291, 1297, 1301, 1303, 1307, 1319, 1321,
+    1327, 1361, 1367, 1373, 1381, 1399, 1409, 1423, 1427, 1429, 1433, 1439,
+    1447, 1451, 1453, 1459, 1471, 1481, 1483, 1487, 1489, 1493, 1499, 1511,
+    1523, 1531, 1543, 1549, 1553, 1559, 1567, 1571, 1579, 1583, 1597, 1601,
+    1607, 1609, 1613, 1619, 1621, 1627, 1637, 1657, 1663, 1667, 1669, 1693,
+    1697, 1699, 1709, 1721, 1723, 1733, 1741, 1747, 1753, 1759, 1777, 1783,
+    1787, 1789, 1801, 1811, 1823, 1831, 1847, 1861, 1867, 1871, 1873, 1877,
+    1879, 1889, 1901, 1907, 1913, 1931, 1933, 1949, 1951, 1973, 1979, 1987,
+    1993, 1997, 1999, 2003, 2011, 2017, 2027, 2029, 2039, 2053, 2063, 2069,
+    2081, 2083, 2087, 2089, 2099, 2111, 2113, 2129, 2131, 2137, 2141, 2143,
+    2153, 2161, 2179, 2203, 2207, 2213, 2221, 2237, 2239, 2243, 2251, 2267,
+    2269, 2273, 2281, 2287, 2293, 2297, 2309, 2311, 2333, 2339, 2341, 2347,
+    2351, 2357, 2371, 2377, 2381, 2383, 2389, 2393, 2399, 2411, 2417, 2423,
+    2437, 2441, 2447, 2459, 2467, 2473, 2477, 2503, 2521, 2531, 2539, 2543,
+    2549, 2551, 2557, 2579, 2591, 2593, 2609, 2617, 2621, 2633, 2647, 2657,
+    2659, 2663, 2671, 2677, 2683, 2687, 2689, 2693, 2699, 2707, 2711, 2713,
+    2719, 2729, 2731, 2741, 2749, 2753, 2767, 2777, 2789, 2791, 2797, 2801,
+    2803, 2819, 2833, 2837, 2843, 2851, 2857, 2861, 2879, 2887, 2897, 2903,
+    2909, 2917, 2927, 2939, 2953, 2957, 2963, 2969, 2971, 2999, 3001
+  ];
+
+    primes[rng.gen_range(0, primes.len())]
+}
+
+fn build_phrase(phrase: &Phrase) -> String {
+    let mut tokens = vec![];
+
+    for t in phrase.iter() {
+        tokens.push(format!(
+            "{}{}{}",
+            if t.opens_group { "(" } else { "" },
+            t.string,
+            if t.closes_group { ")" } else { "" },
+        ));
+    }
+
+    return tokens.join(" ");
+}
+
+fn print_state(state: &Vec<Phrase>) {
+    for s in state.iter().map(|p| build_phrase(p)).collect::<Vec<_>>() {
+        println!("{}", s);
+    }
+}
+
+fn print_rule(rule: &Rule) {
+    let inputs = rule.inputs
+        .iter()
+        .map(|p| build_phrase(p))
+        .collect::<Vec<_>>()
+        .join(" . ");
+
+    let outputs = rule.outputs
+        .iter()
+        .map(|p| build_phrase(p))
+        .collect::<Vec<_>>()
+        .join(" . ");
+
+    println!("{} = {}", inputs, outputs);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn context_from_text_state() {
+        let context = Context::from_text(
+            "at 0 0 wood . at 0 0 wood . #update \n\
+             at 1 2 wood",
+        );
+
+        assert_eq!(
+            context.state,
+            [
+                tokenize("at 0 0 wood"),
+                tokenize("at 0 0 wood"),
+                tokenize("#update"),
+                tokenize("at 1 2 wood"),
+            ]
+        );
+    }
+
+    #[test]
+    fn context_from_text_rules() {
+        let context = Context::from_text(
+            "at 0 0 wood . at 1 2 wood = at 1 0 wood \n\
+             #test: \n\
+             at 3 4 wood = at 5 6 wood . at 7 8 wood",
+        );
+
+        assert_eq!(
+            context.rules,
+            [
+                Rule::new(
+                    vec![tokenize("at 0 0 wood"), tokenize("at 1 2 wood")],
+                    vec![tokenize("at 1 0 wood")]
+                ),
+                Rule::new(
+                    vec![tokenize("#test"), tokenize("at 3 4 wood")],
+                    vec![
+                        tokenize("at 5 6 wood"),
+                        tokenize("at 7 8 wood"),
+                        tokenize("#test"),
+                    ]
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn update_test() {
+        let mut context = Context::from_text(
+            "at 0 0 wood . at 0 1 wood . at 1 1 wood . at 0 1 fire . #update\n\
+             #update:\n\
+             at X Y wood . at X Y fire = at X Y fire\n\
+             () = #spread\n\
+             \n\
+             #spread . $at X Y fire . + X 1 X' . + Y' 1 Y = at X' Y fire . at X Y' fire",
+        );
+
+        update(&mut context);
+
+        assert_eq!(
+            context.state,
+            [
+                tokenize("at 0 0 wood"),
+                tokenize("at 1 1 wood"),
+                tokenize("at 1 1 fire"),
+                tokenize("at 0 0 fire"),
+                tokenize("at 0 1 fire"),
+                tokenize("qui"),
+            ]
+        );
+    }
 
     #[test]
     fn token_test() {
