@@ -88,20 +88,32 @@ fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
             }
         }
 
-        // once variables have been matched against all forward predicates, check
-        // for compatibility with backwards predicates.
-        if found && i_i == inputs.len() - 1 {
-            for input in inputs.iter() {
-                let backwards = is_backwards_pred(input);
+        if found {
+            // if predicate matches successfully, record state that we can
+            // revert to if subsequent predicates match unsuccessfully.
+            states_stack.push(s_i);
+            s_i0 = 0;
 
-                if backwards {
-                    if let Some(mut extra_matches) =
-                        match_backwards_variables(input, &variables_matched)
-                    {
-                        variables_matched.append(&mut extra_matches);
-                    } else {
-                        found = false;
-                        break;
+            variables_matched_length_stack.push(variables_matched.len());
+            if let Some(ref extract) = extract {
+                variables_matched.append(&mut extract.clone());
+            }
+
+            // once variables have been matched against all forward predicates,
+            // check for compatibility with backwards predicates.
+            if i_i == inputs.len() - 1 {
+                for input in inputs.iter() {
+                    let backwards = is_backwards_pred(input);
+
+                    if backwards {
+                        if let Some(mut extra_matches) =
+                            match_backwards_variables(input, &variables_matched)
+                        {
+                            variables_matched.append(&mut extra_matches);
+                        } else {
+                            found = false;
+                            break;
+                        }
                     }
                 }
             }
@@ -133,16 +145,6 @@ fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
                 }
             }
         } else {
-            // if predicate matches successfully, record state that we can revert to
-            // if subsequent predicates match unsuccessfully.
-            states_stack.push(s_i);
-            s_i0 = 0;
-
-            variables_matched_length_stack.push(variables_matched.len());
-            if let Some(ref extract) = extract {
-                variables_matched.append(&mut extract.clone());
-            }
-
             i_i += 1;
 
             let all_matched = i_i == inputs.len();
@@ -497,6 +499,18 @@ mod tests {
                 ),
                 vec![tokenize("t1 0 2"), tokenize("t3 -2 4")],
                 false,
+            ),
+            (
+                Rule::new(
+                    vec![
+                        tokenize("+ T1 1 T2"),
+                        tokenize("+ T3 1 T4"),
+                        tokenize("t1 T1 T4"),
+                    ],
+                    vec![],
+                ),
+                vec![tokenize("t1 0 1")],
+                true,
             ),
         ];
 
