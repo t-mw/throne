@@ -14,8 +14,8 @@ macro_rules! dump {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct Token {
-    string: String,
+pub struct Token {
+    pub string: String,
     is_var: bool,
     opens_group: bool,
     closes_group: bool,
@@ -37,8 +37,16 @@ impl Token {
     }
 }
 
-type Phrase = Vec<Token>;
+pub type Phrase = Vec<Token>;
 type Match = (String, Phrase);
+
+// https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
+pub trait SideInput: Fn(&Phrase) -> Option<Phrase> {}
+impl<F> SideInput for F
+where
+    F: Fn(&Phrase) -> Option<Phrase>,
+{
+}
 
 #[derive(Debug, Eq, PartialEq)]
 struct Rule {
@@ -52,14 +60,15 @@ impl Rule {
     }
 }
 
-struct Context {
+pub struct Context {
     rules: Vec<Rule>,
-    state: Vec<Phrase>,
+    pub state: Vec<Phrase>,
     quiescence: bool,
+    rng: StdRng,
 }
 
 impl Context {
-    fn from_text(text: &str) -> Context {
+    pub fn from_text(text: &str) -> Context {
         let text = text.replace("()", "qui");
         let lines = text.split("\n");
 
@@ -161,26 +170,44 @@ impl Context {
             .map(|v| v.expect("v"))
             .collect::<Vec<_>>();
 
+        let seed = vec![
+            rand::random::<usize>(),
+            rand::random::<usize>(),
+            rand::random::<usize>(),
+            rand::random::<usize>(),
+        ];
+
+        let rng = SeedableRng::from_seed(&seed[..]);
+
         Context {
             state,
             rules,
             quiescence: false,
+            rng,
+        }
+    }
+
+    pub fn append_state(&mut self, text: &str) {
+        self.state.push(tokenize(text));
+    }
+
+    pub fn print(&self) {
+        println!("state:");
+        print_state(&self.state);
+
+        println!("\nrules:");
+        for r in self.rules.iter() {
+            print_rule(&r);
         }
     }
 }
 
-fn update(context: &mut Context) {
+pub fn update<F>(context: &mut Context, side_input: F)
+where
+    F: SideInput,
+{
     let rules = &context.rules;
     let state = &mut context.state;
-
-    let seed = vec![
-        rand::random::<usize>(),
-        rand::random::<usize>(),
-        rand::random::<usize>(),
-        rand::random::<usize>(),
-    ];
-
-    let mut rng: StdRng = SeedableRng::from_seed(&seed[..]);
 
     loop {
         let mut matching_rule = None;
@@ -189,7 +216,7 @@ fn update(context: &mut Context) {
         let mut rand = 1;
 
         while rules.len() % rand == 0 || rand % rules.len() == 0 {
-            rand = random_prime(&mut rng);
+            rand = random_prime(&mut context.rng);
         }
 
         let mut modulo = rand % rules.len();
@@ -205,7 +232,7 @@ fn update(context: &mut Context) {
         for _ in 0..rules.len() {
             let rule = &rules[modulo];
 
-            if let Some(rule) = rule_matches_state(&rule, &state) {
+            if let Some(rule) = rule_matches_state(&rule, &state, &side_input) {
                 matching_rule = Some(rule);
                 break;
             }
@@ -214,9 +241,9 @@ fn update(context: &mut Context) {
         }
 
         if context.quiescence {
-            if matching_rule.is_some() {
-                context.quiescence = false;
-            } else {
+            context.quiescence = false;
+
+            if matching_rule.is_none() {
                 assert!(
                     state
                         .iter()
@@ -249,17 +276,16 @@ fn update(context: &mut Context) {
         } else {
             context.quiescence = true;
         }
-
-        if matching_rule.is_none() && !context.quiescence {
-            break;
-        }
     }
 }
 
 // Checks whether the rule's forward and backward predicates match the state.
 // Returns a new rule with all variables resolved, with backwards/side
 // predicates removed.
-fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
+fn rule_matches_state<F>(r: &Rule, state: &Vec<Phrase>, side_input: &F) -> Option<Rule>
+where
+    F: SideInput,
+{
     let inputs = &r.inputs;
     let outputs = &r.outputs;
 
@@ -277,7 +303,7 @@ fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
         let mut extract: Option<Vec<Match>> = None;
 
         let mut found = false;
-        if is_backwards_pred(input) {
+        if is_backwards_pred(input) || is_side_pred(input) {
             // predicate does not match to specific state, so store placeholder index.
             s_i = state.len();
             found = true;
@@ -305,16 +331,21 @@ fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
             if i_i == inputs.len() - 1 {
                 for input in inputs.iter() {
                     let backwards = is_backwards_pred(input);
+                    let side = is_side_pred(input);
 
-                    if backwards {
-                        if let Some(mut extra_matches) =
-                            match_backwards_variables(input, &variables_matched)
-                        {
-                            variables_matched.append(&mut extra_matches);
-                        } else {
-                            found = false;
-                            break;
-                        }
+                    let mut extra_matches = if backwards {
+                        match_backwards_variables(input, &variables_matched)
+                    } else if side {
+                        match_side_variables(input, &variables_matched, side_input)
+                    } else {
+                        None
+                    };
+
+                    if let Some(ref mut extra_matches) = extra_matches {
+                        variables_matched.append(extra_matches);
+                    } else if backwards || side {
+                        found = false;
+                        break;
                     }
                 }
             }
@@ -341,7 +372,7 @@ fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
                     }
                 }
 
-                if s_i0 >= state.len() - 1 {
+                if s_i0 > state.len() - 1 {
                     return None;
                 }
             }
@@ -360,7 +391,7 @@ fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
                 let mut outputs_concrete = vec![];
 
                 for v in inputs.iter() {
-                    if !is_backwards_pred(v) {
+                    if !is_backwards_pred(v) && !is_side_pred(v) {
                         forward_concrete.push(assign_vars(v, &variables_matched));
                     }
                 }
@@ -379,6 +410,21 @@ fn match_backwards_variables(pred: &Phrase, existing_matches: &Vec<Match>) -> Op
     let pred = assign_vars(pred, existing_matches);
 
     evaluate_backwards_pred(&pred).and_then(|eval_result| {
+        match_variables_with_existing(&pred, &eval_result, existing_matches)
+    })
+}
+
+fn match_side_variables<F>(
+    pred: &Phrase,
+    existing_matches: &Vec<Match>,
+    side_input: &F,
+) -> Option<Vec<Match>>
+where
+    F: SideInput,
+{
+    let pred = assign_vars(pred, existing_matches);
+
+    evaluate_side_pred(&pred, side_input).and_then(|eval_result| {
         match_variables_with_existing(&pred, &eval_result, existing_matches)
     })
 }
@@ -420,6 +466,19 @@ fn is_backwards_pred(tokens: &Phrase) -> bool {
 
     match tokens[0].string.as_str() {
         "+" => true,
+        "<" => true,
+        ">" => true,
+        _ => false,
+    }
+}
+
+fn is_side_pred(tokens: &Phrase) -> bool {
+    if tokens.len() == 0 {
+        return false;
+    }
+
+    match tokens[0].string.chars().next().expect("char") {
+        '!' => true,
         _ => false,
     }
 }
@@ -456,8 +515,37 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
                 _ => None,
             };
         }
+        "<" => {
+            use std::str::FromStr;
+
+            let n1 = f32::from_str(&tokens[1].string);
+            let n2 = f32::from_str(&tokens[2].string);
+
+            return match (n1, n2) {
+                (Ok(v1), Ok(v2)) if v1 < v2 => Some(tokens.clone()),
+                _ => None,
+            };
+        }
+        ">" => {
+            use std::str::FromStr;
+
+            let n1 = f32::from_str(&tokens[1].string);
+            let n2 = f32::from_str(&tokens[2].string);
+
+            return match (n1, n2) {
+                (Ok(v1), Ok(v2)) if v1 > v2 => Some(tokens.clone()),
+                _ => None,
+            };
+        }
         _ => None,
     }
+}
+
+fn evaluate_side_pred<F>(tokens: &Phrase, side_input: &F) -> Option<Phrase>
+where
+    F: SideInput,
+{
+    side_input(tokens)
 }
 
 fn match_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<Vec<Match>> {
@@ -713,7 +801,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn context_from_text_state() {
+    fn context_from_text_state_test() {
         let context = Context::from_text(
             "at 0 0 wood . at 0 0 wood . #update \n\
              at 1 2 wood",
@@ -731,7 +819,7 @@ mod tests {
     }
 
     #[test]
-    fn context_from_text_rules() {
+    fn context_from_text_rules_test() {
         let context = Context::from_text(
             "at 0 0 wood . at 1 2 wood = at 1 0 wood \n\
              #test: \n\
@@ -758,6 +846,18 @@ mod tests {
     }
 
     #[test]
+    fn context_append_state_test() {
+        let mut context = Context::from_text("test 1 2");
+
+        context.append_state("test 3 4");
+
+        assert_eq!(
+            context.state,
+            vec![tokenize("test 1 2"), tokenize("test 3 4")]
+        );
+    }
+
+    #[test]
     fn update_test() {
         let mut context = Context::from_text(
             "at 0 0 wood . at 0 1 wood . at 1 1 wood . at 0 1 fire . #update\n\
@@ -768,7 +868,7 @@ mod tests {
              #spread . $at X Y fire . + X 1 X' . + Y' 1 Y = at X' Y fire . at X Y' fire",
         );
 
-        update(&mut context);
+        update(&mut context, |_: &Phrase| None);
 
         assert_eq!(
             context.state,
@@ -886,7 +986,7 @@ mod tests {
         ];
 
         for (rule, state, expected) in test_cases.drain(..) {
-            let result = rule_matches_state(&rule, &state);
+            let result = rule_matches_state(&rule, &state, &|_: &Phrase| None);
 
             if expected {
                 assert!(result.is_some());
@@ -917,7 +1017,7 @@ mod tests {
         ];
 
         for (rule, state, expected) in test_cases.drain(..) {
-            let result = rule_matches_state(&rule, &state);
+            let result = rule_matches_state(&rule, &state, &|_: &Phrase| None);
 
             assert!(result.is_some());
             assert_eq!(result.unwrap(), expected);
