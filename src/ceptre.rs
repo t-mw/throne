@@ -295,11 +295,6 @@ fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
         }
 
         if found {
-            // if predicate matches successfully, record state that we can
-            // revert to if subsequent predicates match unsuccessfully.
-            states_stack.push(s_i);
-            s_i0 = 0;
-
             variables_matched_length_stack.push(variables_matched.len());
             if let Some(ref extract) = extract {
                 variables_matched.append(&mut extract.clone());
@@ -351,6 +346,11 @@ fn rule_matches_state(r: &Rule, state: &Vec<Phrase>) -> Option<Rule> {
                 }
             }
         } else {
+            // if predicate matches successfully, record state that we can
+            // revert to if subsequent predicates match unsuccessfully.
+            states_stack.push(s_i);
+            s_i0 = 0;
+
             i_i += 1;
 
             let all_matched = i_i == inputs.len();
@@ -865,6 +865,23 @@ mod tests {
                 ),
                 vec![tokenize("t1 0 1")],
                 true,
+            ),
+            (
+                Rule::new(
+                    vec![
+                        tokenize("first"),
+                        // failing backwards predicate
+                        tokenize("+ 3 4 5"),
+                        tokenize("at X Y fire"),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("at 1 1 fire"),
+                    tokenize("at 1 -1 fire"),
+                    tokenize("first"),
+                ],
+                false,
             ),
         ];
 
