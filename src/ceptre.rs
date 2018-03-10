@@ -881,24 +881,30 @@ mod tests {
 
     #[test]
     fn rule_matches_state_output_test() {
-        let rule = Rule::new(
-            vec![
-                tokenize("t1 T1 T2"),
-                tokenize("+ T1 T2 T3'"),
-                tokenize("+ T1 T4' T2"),
-            ],
-            vec![tokenize("t3 T3'"), tokenize("t4 T4'")],
-        );
-        let state = vec![tokenize("t1 3 4")];
-        let expected = Rule::new(
-            vec![tokenize("t1 3 4")],
-            vec![tokenize("t3 7"), tokenize("t4 1")],
-        );
+        let mut test_cases = vec![
+            (
+                Rule::new(
+                    vec![
+                        tokenize("t1 T1 T2"),
+                        tokenize("+ T1 T2 T3'"),
+                        tokenize("+ T1 T4' T2"),
+                    ],
+                    vec![tokenize("t3 T3'"), tokenize("t4 T4'")],
+                ),
+                vec![tokenize("t1 3 4")],
+                Rule::new(
+                    vec![tokenize("t1 3 4")],
+                    vec![tokenize("t3 7"), tokenize("t4 1")],
+                ),
+            ),
+        ];
 
-        let result = rule_matches_state(&rule, &state);
+        for (rule, state, expected) in test_cases.drain(..) {
+            let result = rule_matches_state(&rule, &state);
 
-        assert!(result.is_some());
-        assert_eq!(result.unwrap(), expected);
+            assert!(result.is_some());
+            assert_eq!(result.unwrap(), expected);
+        }
     }
 
     #[test]
