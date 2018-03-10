@@ -367,8 +367,8 @@ fn match_backwards_variables(pred: &Phrase, existing_matches: &Vec<Match>) -> Op
     })
 }
 
-fn assign_vars(tokens: &Phrase, matches: &Vec<Match>) -> Vec<Token> {
-    let mut result: Vec<Token> = vec![];
+fn assign_vars(tokens: &Phrase, matches: &Vec<Match>) -> Phrase {
+    let mut result: Phrase = vec![];
 
     for token in tokens.iter() {
         if token.is_var {
@@ -397,7 +397,7 @@ fn assign_vars(tokens: &Phrase, matches: &Vec<Match>) -> Vec<Token> {
     return result;
 }
 
-fn is_backwards_pred(tokens: &Vec<Token>) -> bool {
+fn is_backwards_pred(tokens: &Phrase) -> bool {
     if tokens.len() == 0 {
         return false;
     }
@@ -408,7 +408,7 @@ fn is_backwards_pred(tokens: &Vec<Token>) -> bool {
     }
 }
 
-fn evaluate_backwards_pred(tokens: &Vec<Token>) -> Option<Vec<Token>> {
+fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
     match tokens[0].string.as_str() {
         "+" => {
             use std::str::FromStr;
@@ -444,13 +444,13 @@ fn evaluate_backwards_pred(tokens: &Vec<Token>) -> Option<Vec<Token>> {
     }
 }
 
-fn match_variables(input_tokens: &Vec<Token>, pred_tokens: &Vec<Token>) -> Option<Vec<Match>> {
+fn match_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<Vec<Match>> {
     match_variables_with_existing(input_tokens, pred_tokens, &vec![])
 }
 
 fn match_variables_with_existing(
-    input_tokens: &Vec<Token>,
-    pred_tokens: &Vec<Token>,
+    input_tokens: &Phrase,
+    pred_tokens: &Phrase,
     existing_matches: &Vec<Match>,
 ) -> Option<Vec<Match>> {
     let mut pred_token_iter = pred_tokens.iter();
@@ -540,7 +540,7 @@ fn match_variables_with_existing(
     return Some(result);
 }
 
-fn tokenize(string: &str) -> Vec<Token> {
+fn tokenize(string: &str) -> Phrase {
     let mut string = String::from(string);
 
     lazy_static! {
@@ -571,7 +571,7 @@ fn tokenize(string: &str) -> Vec<Token> {
     return tokenize_internal(tokens.as_slice(), 0);
 }
 
-fn tokenize_internal(tokens: &[&str], mut depth: i32) -> Vec<Token> {
+fn tokenize_internal(tokens: &[&str], mut depth: i32) -> Phrase {
     let mut result = vec![];
 
     let start_depth = depth;
