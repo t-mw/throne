@@ -194,6 +194,14 @@ fn update(context: &mut Context) {
 
         let mut modulo = rand % rules.len();
 
+        lazy_static! {
+            static ref QUI: Phrase = vec![Token::new("qui", false, false)];
+        }
+
+        if context.quiescence {
+            state.push(QUI.clone());
+        }
+
         for _ in 0..rules.len() {
             let rule = &rules[modulo];
 
@@ -209,6 +217,19 @@ fn update(context: &mut Context) {
             if matching_rule.is_some() {
                 context.quiescence = false;
             } else {
+                assert!(
+                    state
+                        .iter()
+                        .enumerate()
+                        .filter(|&(_, p)| **p == QUI[..])
+                        .collect::<Vec<_>>()
+                        == vec![(state.len() - 1, &QUI.clone())],
+                    "expected 1 * () at end of state"
+                );
+
+                let idx = state.len() - 1;
+                state.remove(idx);
+
                 return;
             }
         }
@@ -219,18 +240,13 @@ fn update(context: &mut Context) {
 
             for input in inputs.iter() {
                 let remove_idx = state.iter().position(|v| v == input);
-                state.remove(remove_idx.expect("remove_idx"));
+                state.swap_remove(remove_idx.expect("remove_idx"));
             }
 
             for output in outputs.iter() {
                 state.push(output.clone());
             }
         } else {
-            lazy_static! {
-                static ref QUI: Phrase = vec![Token::new("qui", false, false)];
-            }
-
-            state.push(QUI.clone());
             context.quiescence = true;
         }
 
@@ -762,7 +778,6 @@ mod tests {
                 tokenize("at 1 1 fire"),
                 tokenize("at 0 0 fire"),
                 tokenize("at 0 1 fire"),
-                tokenize("qui"),
             ]
         );
     }
