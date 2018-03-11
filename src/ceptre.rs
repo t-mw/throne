@@ -212,15 +212,6 @@ where
     loop {
         let mut matching_rule = None;
 
-        // using prime modulo, check each rule exactly once in random order
-        let mut rand = 1;
-
-        while rules.len() % rand == 0 || rand % rules.len() == 0 {
-            rand = random_prime(&mut context.rng);
-        }
-
-        let mut modulo = rand % rules.len();
-
         lazy_static! {
             static ref QUI: Phrase = vec![Token::new("qui", false, false)];
         }
@@ -229,15 +220,11 @@ where
             state.push(QUI.clone());
         }
 
-        for _ in 0..rules.len() {
-            let rule = &rules[modulo];
-
-            if let Some(rule) = rule_matches_state(&rule, &state, &side_input) {
+        for (_, rule) in rules.iter_rand(&mut context.rng) {
+            if let Some(rule) = rule_matches_state(&rule, &state, &mut context.rng, &side_input) {
                 matching_rule = Some(rule);
                 break;
             }
-
-            modulo = (modulo + rand) % rules.len();
         }
 
         if context.quiescence {
@@ -282,8 +269,14 @@ where
 // Checks whether the rule's forward and backward predicates match the state.
 // Returns a new rule with all variables resolved, with backwards/side
 // predicates removed.
-fn rule_matches_state<F>(r: &Rule, state: &Vec<Phrase>, side_input: &F) -> Option<Rule>
+fn rule_matches_state<R, F>(
+    r: &Rule,
+    state: &Vec<Phrase>,
+    rng: &mut R,
+    side_input: &F,
+) -> Option<Rule>
 where
+    R: Rng,
     F: SideInput,
 {
     let inputs = &r.inputs;
@@ -307,8 +300,7 @@ where
             // TODO: exit early if we already know that side predicate won't match
             input_is_side_pred[i_i] = true;
         } else {
-            // TODO: iterate randomly over state
-            for (s_i, p) in state.iter().enumerate() {
+            for (s_i, p) in state.iter_rand(rng) {
                 if match_variables_with_existing(input, p, &vec![]).is_some() {
                     input_state_matches.push(s_i);
                     count += 1;
@@ -753,6 +745,62 @@ fn random_prime<R: Rng>(rng: &mut R) -> usize {
     primes[rng.gen_range(0, primes.len())]
 }
 
+trait IterRand {
+    type Item;
+
+    fn iter_rand<R: Rng>(&self, rng: &mut R) -> IterRandState<Self::Item>;
+}
+
+impl<T> IterRand for [T] {
+    type Item = T;
+
+    fn iter_rand<R: Rng>(&self, rng: &mut R) -> IterRandState<T> {
+        let length = self.len();
+        let mut rand = 1;
+
+        if length != 1 {
+            while length % rand == 0 || rand % length == 0 {
+                rand = random_prime(rng);
+            }
+        }
+
+        let modulo = rand % length;
+
+        IterRandState {
+            rand,
+            idx: 0,
+            length,
+            modulo,
+            _slice: self,
+        }
+    }
+}
+
+impl<'a, T> Iterator for IterRandState<'a, T> {
+    type Item = (usize, &'a T);
+
+    fn next(&mut self) -> Option<(usize, &'a T)> {
+        if self.idx == self.length {
+            return None;
+        } else {
+            let result = Some((self.modulo, &self._slice[self.modulo]));
+
+            self.idx += 1;
+            self.modulo = (self.modulo + self.rand) % self.length;
+
+            return result;
+        }
+    }
+}
+
+struct IterRandState<'a, T: 'a> {
+    rand: usize,
+    idx: usize,
+    length: usize,
+    modulo: usize,
+    _slice: &'a [T],
+}
+
 fn build_phrase(phrase: &Phrase) -> String {
     let mut tokens = vec![];
 
@@ -989,8 +1037,17 @@ mod tests {
             ),
         ];
 
+        let seed = vec![
+            rand::random::<usize>(),
+            rand::random::<usize>(),
+            rand::random::<usize>(),
+            rand::random::<usize>(),
+        ];
+
+        let mut rng: StdRng = SeedableRng::from_seed(&seed[..]);
+
         for (rule, state, expected) in test_cases.drain(..) {
-            let result = rule_matches_state(&rule, &state, &|_: &Phrase| None);
+            let result = rule_matches_state(&rule, &state, &mut rng, &|_: &Phrase| None);
 
             if expected {
                 assert!(result.is_some());
@@ -1020,8 +1077,17 @@ mod tests {
             ),
         ];
 
+        let seed = vec![
+            rand::random::<usize>(),
+            rand::random::<usize>(),
+            rand::random::<usize>(),
+            rand::random::<usize>(),
+        ];
+
+        let mut rng: StdRng = SeedableRng::from_seed(&seed[..]);
+
         for (rule, state, expected) in test_cases.drain(..) {
-            let result = rule_matches_state(&rule, &state, &|_: &Phrase| None);
+            let result = rule_matches_state(&rule, &state, &mut rng, &|_: &Phrase| None);
 
             assert!(result.is_some());
             assert_eq!(result.unwrap(), expected);
