@@ -187,6 +187,14 @@ impl Context {
         }
     }
 
+    pub fn with_test_rng(mut self) -> Context {
+        let seed = vec![123, 123, 123, 123];
+
+        self.rng = SeedableRng::from_seed(&seed[..]);
+
+        self
+    }
+
     pub fn append_state(&mut self, text: &str) {
         self.state.push(tokenize(text));
     }
@@ -308,7 +316,7 @@ where
             input_is_side_pred[i_i] = true;
         } else {
             for (s_i, p) in state.iter().enumerate() {
-                if match_variables_with_existing(input, p, &vec![]).is_some() {
+                if test_match_without_variables(input, p) {
                     input_state_matches.push(s_i);
                     count += 1;
                 }
@@ -325,38 +333,54 @@ where
         input_state_match_counts.push(count);
     }
 
-    // TODO: avoid re-matching variables that are already known from a previous permutation
+    // precompute values required for deriving branch indices.
+    let mut input_rev_permutation_counts = vec![1; inputs.len()];
+    let mut acc = 1;
+    for (i, count) in input_state_match_counts
+        .iter()
+        .enumerate()
+        .filter(|&(i_i, _)| !input_is_backwards_pred[i_i] && !input_is_side_pred[i_i])
+        .rev()
+    {
+        acc = acc * count;
+
+        if i > 0 {
+            input_rev_permutation_counts[i - 1] = acc;
+        }
+    }
+
     let mut variables_matched = vec![];
 
-    'outer: for p_i in 0..permutation_count {
-        let mut p_i_acc = p_i;
+    let mut states_matched_bool = vec![false; state.len()];
+    let mut states_matched = vec![];
 
+    'outer: for p_i in 0..permutation_count {
         variables_matched.clear();
 
-        // TODO: avoid reallocating vector
-        let mut states_matched = vec![false; state.len()];
+        for s_i in states_matched.drain(..) {
+            states_matched_bool[s_i] = false;
+        }
 
-        // iterate backwards across the graph of permutations from leaf to root,
-        // where each level of the tree is an input, and each branch is a match against
-        // a state.
+        assert!(states_matched_bool.iter().all(|b| !b));
+
+        // iterate across the graph of permutations from root to leaf, where each
+        // level of the tree is an input, and each branch is a match against a state.
         for (i_i, input) in inputs
             .iter()
             .enumerate()
-            .rev()
             .filter(|&(i_i, _)| !input_is_backwards_pred[i_i] && !input_is_side_pred[i_i])
         {
             let match_count = input_state_match_counts[i_i];
-
-            let branch_idx = p_i_acc % match_count;
-            p_i_acc = p_i_acc / match_count;
+            let branch_idx = (p_i / input_rev_permutation_counts[i_i]) % match_count;
 
             let input_state_match_idx = input_state_match_start_indices[i_i] + branch_idx;
             let s_i = input_state_matches[input_state_match_idx];
 
-            if states_matched[s_i] {
+            if states_matched_bool[s_i] {
                 continue 'outer;
             } else {
-                states_matched[s_i] = true;
+                states_matched.push(s_i);
+                states_matched_bool[s_i] = true;
             }
 
             if let Some(ref mut result) =
@@ -543,6 +567,55 @@ where
     F: SideInput,
 {
     side_input(tokens)
+}
+
+fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> bool {
+    let mut pred_token_iter = pred_tokens.iter();
+
+    let mut input_depth = 0;
+    let mut pred_depth = 0;
+
+    for token in input_tokens.iter() {
+        let pred_token = pred_token_iter.next();
+
+        if token.opens_group {
+            input_depth += 1;
+        }
+
+        if let Some(pred_token) = pred_token {
+            if pred_token.opens_group {
+                pred_depth += 1;
+            }
+
+            if !token.is_var {
+                if token != pred_token || input_depth != pred_depth {
+                    return false;
+                }
+            } else {
+                while input_depth != pred_depth {
+                    if pred_token_iter.next().is_none() {
+                        return false;
+                    }
+                }
+            }
+
+            if pred_token.closes_group {
+                pred_depth -= 1;
+            }
+        } else {
+            return false;
+        }
+
+        if token.closes_group {
+            input_depth -= 1;
+        }
+    }
+
+    if let Some(_) = pred_token_iter.next() {
+        return false;
+    }
+
+    return true;
 }
 
 fn match_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<Vec<Match>> {
@@ -919,17 +992,17 @@ mod tests {
              () = #spread\n\
              \n\
              #spread . $at X Y fire . + X 1 X' . + Y' 1 Y = at X' Y fire . at X Y' fire",
-        );
+        ).with_test_rng();
 
         update(&mut context, |_: &Phrase| None);
 
         assert_eq!(
             context.state,
             [
-                tokenize("at 0 0 wood"),
-                tokenize("at 1 1 wood"),
                 tokenize("at 1 1 fire"),
+                tokenize("at 1 1 wood"),
                 tokenize("at 0 0 fire"),
+                tokenize("at 0 0 wood"),
                 tokenize("at 0 1 fire"),
             ]
         );
@@ -1048,13 +1121,7 @@ mod tests {
             ),
         ];
 
-        let seed = vec![
-            rand::random::<usize>(),
-            rand::random::<usize>(),
-            rand::random::<usize>(),
-            rand::random::<usize>(),
-        ];
-
+        let seed = vec![123, 123, 123, 123];
         let mut rng: StdRng = SeedableRng::from_seed(&seed[..]);
 
         for (rule, state, expected) in test_cases.drain(..) {
@@ -1088,13 +1155,7 @@ mod tests {
             ),
         ];
 
-        let seed = vec![
-            rand::random::<usize>(),
-            rand::random::<usize>(),
-            rand::random::<usize>(),
-            rand::random::<usize>(),
-        ];
-
+        let seed = vec![123, 123, 123, 123];
         let mut rng: StdRng = SeedableRng::from_seed(&seed[..]);
 
         for (rule, state, expected) in test_cases.drain(..) {
