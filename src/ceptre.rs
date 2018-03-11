@@ -289,121 +289,115 @@ where
     let inputs = &r.inputs;
     let outputs = &r.outputs;
 
-    // TODO: exit early if we already know that side predicates won't match
+    let mut permutation_count = 1;
 
-    let mut i_i = 0;
-    let mut s_i = 0;
-    let mut s_i0 = 0;
-    let mut states_stack = vec![];
-    let mut variables_matched = vec![];
-    let mut variables_matched_length_stack = vec![];
+    let mut input_state_matches = Vec::with_capacity(inputs.len() * state.len());
+    let mut input_state_match_start_indices = Vec::with_capacity(inputs.len());
+    let mut input_state_match_counts = Vec::with_capacity(inputs.len());
 
-    loop {
-        let input = &inputs[i_i];
-        let mut extract: Option<Vec<Match>> = None;
+    let mut input_is_backwards_pred = vec![false; inputs.len()];
+    let mut input_is_side_pred = vec![false; inputs.len()];
 
-        let mut found = false;
-        if is_backwards_pred(input) || is_side_pred(input) {
-            // predicate does not match to specific state, so store placeholder index.
-            s_i = state.len();
-            found = true;
+    for (i_i, input) in inputs.iter().enumerate() {
+        let mut count = 0;
+
+        if is_backwards_pred(input) {
+            input_is_backwards_pred[i_i] = true;
+        } else if is_side_pred(input) {
+            // TODO: exit early if we already know that side predicate won't match
+            input_is_side_pred[i_i] = true;
         } else {
-            for (i, s) in state.iter().enumerate().skip(s_i0) {
-                let result = match_variables_with_existing(input, s, &variables_matched);
-
-                if result.is_some() && !states_stack.contains(&i) {
-                    s_i = i;
-                    extract = result;
-                    found = true;
-                    break;
+            // TODO: iterate randomly over state
+            for (s_i, p) in state.iter().enumerate() {
+                if match_variables_with_existing(input, p, &vec![]).is_some() {
+                    input_state_matches.push(s_i);
+                    count += 1;
                 }
             }
-        }
 
-        if found {
-            variables_matched_length_stack.push(variables_matched.len());
-            if let Some(ref extract) = extract {
-                variables_matched.append(&mut extract.clone());
-            }
-
-            // once variables have been matched against all forward predicates,
-            // check for compatibility with backwards predicates.
-            if i_i == inputs.len() - 1 {
-                for input in inputs.iter() {
-                    let backwards = is_backwards_pred(input);
-                    let side = is_side_pred(input);
-
-                    let mut extra_matches = if backwards {
-                        match_backwards_variables(input, &variables_matched)
-                    } else if side {
-                        match_side_variables(input, &variables_matched, side_input)
-                    } else {
-                        None
-                    };
-
-                    if let Some(ref mut extra_matches) = extra_matches {
-                        variables_matched.append(extra_matches);
-                    } else if backwards || side {
-                        found = false;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if !found {
-            if i_i == 0 {
+            if count == 0 {
                 return None;
-            } else {
-                loop {
-                    s_i0 = states_stack.pop().expect("states_stack") + 1;
-
-                    let v_length = variables_matched_length_stack
-                        .pop()
-                        .expect("variables_matched_length_stack");
-
-                    assert!(v_length <= variables_matched.len());
-                    variables_matched.drain(v_length..);
-
-                    i_i -= 1;
-
-                    if !(s_i0 >= state.len() - 1 && states_stack.len() > 1) {
-                        break;
-                    }
-                }
-
-                if s_i0 > state.len() - 1 {
-                    return None;
-                }
             }
-        } else {
-            // if predicate matches successfully, record state that we can
-            // revert to if subsequent predicates match unsuccessfully.
-            states_stack.push(s_i);
-            s_i0 = 0;
 
-            i_i += 1;
+            permutation_count *= count;
+        }
 
-            let all_matched = i_i == inputs.len();
+        input_state_match_start_indices.push(input_state_matches.len() - count);
+        input_state_match_counts.push(count);
+    }
 
-            if all_matched {
-                let mut forward_concrete = vec![];
-                let mut outputs_concrete = vec![];
+    'outer: for p_i in 0..permutation_count {
+        let mut p_i_acc = p_i;
 
-                for v in inputs.iter() {
-                    if !is_backwards_pred(v) && !is_side_pred(v) {
-                        forward_concrete.push(assign_vars(v, &variables_matched));
-                    }
-                }
+        // TODO: avoid reallocating vector
+        let mut variables_matched = vec![];
+        let mut states_matched = vec![false; state.len()];
 
-                for v in outputs.iter() {
-                    outputs_concrete.push(assign_vars(v, &variables_matched));
-                }
+        // iterate backwards across the graph of permutations from leaf to root,
+        // where each level of the tree is an input, and each branch is a match against
+        // a state.
+        for (i_i, input) in inputs
+            .iter()
+            .enumerate()
+            .rev()
+            .filter(|&(i_i, _)| !input_is_backwards_pred[i_i] && !input_is_side_pred[i_i])
+        {
+            let match_count = input_state_match_counts[i_i];
 
-                return Some(Rule::new(forward_concrete, outputs_concrete));
+            let branch_idx = p_i_acc % match_count;
+            p_i_acc = p_i_acc / match_count;
+
+            let input_state_match_idx = input_state_match_start_indices[i_i] + branch_idx;
+            let s_i = input_state_matches[input_state_match_idx];
+
+            if states_matched[s_i] {
+                continue 'outer;
+            } else {
+                states_matched[s_i] = true;
+            }
+
+            if let Some(ref mut result) =
+                match_variables_with_existing(input, &state[s_i], &variables_matched)
+            {
+                variables_matched.append(result);
+            } else {
+                continue 'outer;
             }
         }
+
+        for (i_i, input) in inputs.iter().enumerate() {
+            let mut extra_matches = if input_is_backwards_pred[i_i] {
+                match_backwards_variables(input, &variables_matched)
+            } else if input_is_side_pred[i_i] {
+                match_side_variables(input, &variables_matched, side_input)
+            } else {
+                continue;
+            };
+
+            if let Some(ref mut extra_matches) = extra_matches {
+                variables_matched.append(extra_matches);
+            } else {
+                continue 'outer;
+            }
+        }
+
+        let mut forward_concrete = vec![];
+        let mut outputs_concrete = vec![];
+
+        for v in inputs.iter() {
+            if !is_backwards_pred(v) && !is_side_pred(v) {
+                forward_concrete.push(assign_vars(v, &variables_matched));
+            }
+        }
+
+        for v in outputs.iter() {
+            outputs_concrete.push(assign_vars(v, &variables_matched));
+        }
+
+        return Some(Rule::new(forward_concrete, outputs_concrete));
     }
+
+    return None;
 }
 
 fn match_backwards_variables(pred: &Phrase, existing_matches: &Vec<Match>) -> Option<Vec<Match>> {
@@ -926,6 +920,11 @@ mod tests {
                 vec![tokenize("t1 0 2")],
                 true,
             ),
+            (
+                Rule::new(vec![tokenize("t1 T1 T2"), tokenize("t1 T1 T2")], vec![]),
+                vec![tokenize("t1 0 2")],
+                false,
+            ),
             // successful match with backwards predicates at first and last position
             (
                 Rule::new(
@@ -982,6 +981,11 @@ mod tests {
                     tokenize("first"),
                 ],
                 false,
+            ),
+            (
+                Rule::new(vec![tokenize("at X Y fire"), tokenize("< 0 X")], vec![]),
+                vec![tokenize("at 0 0 fire"), tokenize("at 2 0 fire")],
+                true,
             ),
         ];
 
