@@ -209,12 +209,12 @@ where
     let rules = &context.rules;
     let state = &mut context.state;
 
+    lazy_static! {
+        static ref QUI: Phrase = vec![Token::new("qui", false, false)];
+    }
+
     loop {
         let mut matching_rule = None;
-
-        lazy_static! {
-            static ref QUI: Phrase = vec![Token::new("qui", false, false)];
-        }
 
         if context.quiescence {
             state.push(QUI.clone());
