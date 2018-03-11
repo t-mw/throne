@@ -318,11 +318,15 @@ where
         input_state_match_counts.push(count);
     }
 
+    // TODO: avoid re-matching variables that are already known from a previous permutation
+    let mut variables_matched = vec![];
+
     'outer: for p_i in 0..permutation_count {
         let mut p_i_acc = p_i;
 
+        variables_matched.clear();
+
         // TODO: avoid reallocating vector
-        let mut variables_matched = vec![];
         let mut states_matched = vec![false; state.len()];
 
         // iterate backwards across the graph of permutations from leaf to root,
