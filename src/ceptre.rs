@@ -300,6 +300,8 @@ where
             // TODO: exit early if we already know that side predicate won't match
             input_is_side_pred[i_i] = true;
         } else {
+            // iterate randomly so that a given rule with multiple potential
+            // matches to the does not always match the same permutation of state
             for (s_i, p) in state.iter_rand(rng) {
                 if match_variables_with_existing(input, p, &vec![]).is_some() {
                     input_state_matches.push(s_i);
