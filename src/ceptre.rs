@@ -206,7 +206,7 @@ pub fn update<F>(context: &mut Context, side_input: F)
 where
     F: SideInput,
 {
-    let rules = &context.rules;
+    let rules = &mut context.rules;
     let state = &mut context.state;
 
     lazy_static! {
@@ -216,11 +216,18 @@ where
     loop {
         let mut matching_rule = None;
 
+        // shuffle rules so that each has an equal chance of selection.
+        context.rng.shuffle(rules);
+
+        // shuffle state so that a given rule with multiple potential
+        // matches does not always match the same permutation of state.
+        context.rng.shuffle(state);
+
         if context.quiescence {
             state.push(QUI.clone());
         }
 
-        for (_, rule) in rules.iter_rand(&mut context.rng) {
+        for rule in rules.iter() {
             if let Some(rule) = rule_matches_state(&rule, &state, &mut context.rng, &side_input) {
                 matching_rule = Some(rule);
                 break;
@@ -300,9 +307,7 @@ where
             // TODO: exit early if we already know that side predicate won't match
             input_is_side_pred[i_i] = true;
         } else {
-            // iterate randomly so that a given rule with multiple potential
-            // matches to the does not always match the same permutation of state
-            for (s_i, p) in state.iter_rand(rng) {
+            for (s_i, p) in state.iter().enumerate() {
                 if match_variables_with_existing(input, p, &vec![]).is_some() {
                     input_state_matches.push(s_i);
                     count += 1;
