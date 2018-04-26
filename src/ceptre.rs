@@ -188,9 +188,7 @@ impl Context {
     }
 
     pub fn with_test_rng(mut self) -> Context {
-        let seed = vec![123, 123, 123, 123];
-
-        self.rng = SeedableRng::from_seed(&seed[..]);
+        self.rng = test_rng();
 
         self
     }
@@ -946,6 +944,11 @@ fn print_rule(rule: &Rule) {
     println!("{} = {}", inputs, outputs);
 }
 
+fn test_rng() -> StdRng {
+    let seed = vec![123, 123, 123, 123];
+    SeedableRng::from_seed(&seed[..])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -989,7 +992,7 @@ mod tests {
                         tokenize("at 5 6 wood"),
                         tokenize("at 7 8 wood"),
                         tokenize("#test"),
-                    ]
+                    ],
                 ),
             ]
         );
@@ -1145,8 +1148,7 @@ mod tests {
             ),
         ];
 
-        let seed = vec![123, 123, 123, 123];
-        let mut rng: StdRng = SeedableRng::from_seed(&seed[..]);
+        let mut rng = test_rng();
 
         for (rule, state, expected) in test_cases.drain(..) {
             let result = rule_matches_state(&rule, &state, &mut rng, &|_: &Phrase| None);
@@ -1179,8 +1181,7 @@ mod tests {
             ),
         ];
 
-        let seed = vec![123, 123, 123, 123];
-        let mut rng: StdRng = SeedableRng::from_seed(&seed[..]);
+        let mut rng = test_rng();
 
         for (rule, state, expected) in test_cases.drain(..) {
             let result = rule_matches_state(&rule, &state, &mut rng, &|_: &Phrase| None);
