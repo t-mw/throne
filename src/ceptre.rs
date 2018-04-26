@@ -489,6 +489,8 @@ fn is_backwards_pred(tokens: &Phrase) -> bool {
         "+" => true,
         "<" => true,
         ">" => true,
+        "<=" => true,
+        ">=" => true,
         _ => false,
     }
 }
@@ -555,6 +557,28 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
 
             return match (n1, n2) {
                 (Ok(v1), Ok(v2)) if v1 > v2 => Some(tokens.clone()),
+                _ => None,
+            };
+        }
+        "<=" => {
+            use std::str::FromStr;
+
+            let n1 = f32::from_str(&tokens[1].string);
+            let n2 = f32::from_str(&tokens[2].string);
+
+            return match (n1, n2) {
+                (Ok(v1), Ok(v2)) if v1 <= v2 => Some(tokens.clone()),
+                _ => None,
+            };
+        }
+        ">=" => {
+            use std::str::FromStr;
+
+            let n1 = f32::from_str(&tokens[1].string);
+            let n2 = f32::from_str(&tokens[2].string);
+
+            return match (n1, n2) {
+                (Ok(v1), Ok(v2)) if v1 >= v2 => Some(tokens.clone()),
                 _ => None,
             };
         }
