@@ -23,21 +23,47 @@ enum BackwardsPred {
     Gte,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Token {
     pub string: Atom,
     backwards_pred: Option<BackwardsPred>,
     is_var: bool,
+    is_negated: bool,
+    is_side: bool,
     opens_group: bool,
     closes_group: bool,
 }
 
+impl PartialEq for Token {
+    fn eq(&self, other: &Token) -> bool {
+        self.string == other.string && self.is_side == other.is_side
+            && self.opens_group == other.opens_group
+            && self.closes_group == other.closes_group
+    }
+}
+impl Eq for Token {}
+
 impl Token {
     fn new(string: &str, opens_group: bool, closes_group: bool) -> Token {
+        let mut string = string;
+
         let mut chars = string.chars();
         let first_char = chars.next();
         let is_var = first_char.expect("first_char").is_ascii_uppercase()
             && chars.all(|c| c.is_numeric() || !c.is_ascii_lowercase());
+
+        let mut is_negated = false;
+        let mut is_side = false;
+        match first_char.expect("first_char") {
+            '^' => {
+                is_negated = true;
+                string = string.get(1..).expect("get");
+            }
+            '!' => {
+                is_side = true;
+            }
+            _ => {}
+        }
 
         let backwards_pred = match string {
             "+" => Some(BackwardsPred::Plus),
@@ -52,6 +78,8 @@ impl Token {
             string: Atom::from(string),
             backwards_pred,
             is_var,
+            is_negated,
+            is_side,
             opens_group,
             closes_group,
         }
@@ -322,21 +350,26 @@ where
 
     let mut permutation_count = 1;
 
+    // per input, a list of states that match the input.
+    // indexed by input using start index and counts in the following vectors.
     let mut input_state_matches = Vec::with_capacity(inputs.len() * state.len());
+
     let mut input_state_match_start_indices = Vec::with_capacity(inputs.len());
     let mut input_state_match_counts = Vec::with_capacity(inputs.len());
 
     let mut input_is_backwards_pred = vec![false; inputs.len()];
     let mut input_is_side_pred = vec![false; inputs.len()];
+    let mut input_is_negated_pred = vec![false; inputs.len()];
 
     for (i_i, input) in inputs.iter().enumerate() {
         let mut count = 0;
-
         if is_backwards_pred(input) {
             input_is_backwards_pred[i_i] = true;
         } else if is_side_pred(input) {
             // TODO: exit early if we already know that side predicate won't match
             input_is_side_pred[i_i] = true;
+        } else if is_negated_pred(input) {
+            input_is_negated_pred[i_i] = true;
         } else {
             for (s_i, p) in state.iter().enumerate() {
                 if test_match_without_variables(input, p) {
@@ -362,7 +395,9 @@ where
     for (i, count) in input_state_match_counts
         .iter()
         .enumerate()
-        .filter(|&(i_i, _)| !input_is_backwards_pred[i_i] && !input_is_side_pred[i_i])
+        .filter(|&(i_i, _)| {
+            !input_is_backwards_pred[i_i] && !input_is_side_pred[i_i] && !input_is_negated_pred[i_i]
+        })
         .rev()
     {
         acc = acc * count;
@@ -388,17 +423,16 @@ where
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
-        for (i_i, input) in inputs
-            .iter()
-            .enumerate()
-            .filter(|&(i_i, _)| !input_is_backwards_pred[i_i] && !input_is_side_pred[i_i])
-        {
+        for (i_i, input) in inputs.iter().enumerate().filter(|&(i_i, _)| {
+            !input_is_backwards_pred[i_i] && !input_is_side_pred[i_i] && !input_is_negated_pred[i_i]
+        }) {
             let match_count = input_state_match_counts[i_i];
             let branch_idx = (p_i / input_rev_permutation_counts[i_i]) % match_count;
 
             let input_state_match_idx = input_state_match_start_indices[i_i] + branch_idx;
             let s_i = input_state_matches[input_state_match_idx];
 
+            // a previous input in this permutation has already matched the state being checked
             if states_matched_bool[s_i] {
                 continue 'outer;
             } else {
@@ -420,6 +454,18 @@ where
                 match_backwards_variables(input, &variables_matched)
             } else if input_is_side_pred[i_i] {
                 match_side_variables(input, &variables_matched, side_input)
+            } else if input_is_negated_pred[i_i] {
+                if state
+                    .iter()
+                    .enumerate()
+                    .filter(|&(s_i, _)| !states_matched_bool[s_i])
+                    .any(|(_, s)| {
+                        match_variables_with_existing(input, s, &variables_matched).is_some()
+                    }) {
+                    None
+                } else {
+                    continue;
+                }
             } else {
                 continue;
             };
@@ -435,7 +481,7 @@ where
         let mut outputs_concrete = vec![];
 
         for v in inputs.iter() {
-            if !is_backwards_pred(v) && !is_side_pred(v) {
+            if !is_backwards_pred(v) && !is_side_pred(v) && !is_negated_pred(v) {
                 forward_concrete.push(assign_vars(v, &variables_matched));
             }
         }
@@ -516,10 +562,15 @@ fn is_side_pred(tokens: &Phrase) -> bool {
         return false;
     }
 
-    match tokens[0].string.chars().next().expect("char") {
-        '!' => true,
-        _ => false,
+    return tokens[0].is_side;
+}
+
+fn is_negated_pred(tokens: &Phrase) -> bool {
+    if tokens.len() == 0 {
+        return false;
     }
+
+    return tokens[0].is_negated;
 }
 
 fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
@@ -1163,6 +1214,59 @@ mod tests {
                 Rule::new(vec![tokenize("at X Y fire"), tokenize("< 0 X")], vec![]),
                 vec![tokenize("at 0 0 fire"), tokenize("at 2 0 fire")],
                 true,
+            ),
+        ];
+
+        let mut rng = test_rng();
+
+        for (rule, state, expected) in test_cases.drain(..) {
+            let result = rule_matches_state(&rule, &state, &mut rng, &|_: &Phrase| None);
+
+            if expected {
+                assert!(result.is_some());
+            } else {
+                assert!(result.is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn rule_matches_state_truthiness_negated_test() {
+        let mut test_cases = vec![
+            (
+                Rule::new(vec![tokenize("^test")], vec![]),
+                vec![tokenize("foo"), tokenize("bar")],
+                true,
+            ),
+            (
+                Rule::new(vec![tokenize("^test")], vec![]),
+                vec![tokenize("foo"), tokenize("test"), tokenize("bar")],
+                false,
+            ),
+            (
+                Rule::new(vec![tokenize("test"), tokenize("^test")], vec![]),
+                vec![tokenize("foo"), tokenize("test"), tokenize("bar")],
+                true,
+            ),
+            (
+                Rule::new(vec![tokenize("test"), tokenize("^test")], vec![]),
+                vec![
+                    tokenize("foo"),
+                    tokenize("test"),
+                    tokenize("test"),
+                    tokenize("bar"),
+                ],
+                false,
+            ),
+            (
+                Rule::new(vec![tokenize("^test A B"), tokenize("foo A B")], vec![]),
+                vec![tokenize("foo 1 2"), tokenize("test 1 3")],
+                true,
+            ),
+            (
+                Rule::new(vec![tokenize("^test A B"), tokenize("foo A B")], vec![]),
+                vec![tokenize("foo 1 2"), tokenize("test 1 2")],
+                false,
             ),
         ];
 
