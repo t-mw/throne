@@ -4,6 +4,7 @@ extern crate lazy_static;
 extern crate minifb;
 extern crate rand;
 extern crate regex;
+extern crate string_cache;
 
 use minifb::{Key, Window, WindowOptions};
 
@@ -30,6 +31,10 @@ fn main() {
     file.read_to_string(&mut contents).expect("read_to_string");
     let mut context = ceptre::Context::from_text(&contents);
 
+    let kd = context.to_atom("!kd");
+    let ku = context.to_atom("!ku");
+    let right = context.to_atom("right");
+
     while window.is_open() && !window.is_key_down(Key::Escape) {
         context.append_state("#update");
 
@@ -38,10 +43,10 @@ fn main() {
                 return None;
             }
 
-            match p[0].string.as_str() {
-                "!kd" => {
-                    let key = match p[1].string.as_str() {
-                        "right" => Some(Key::Right),
+            match &p[0].string {
+                a if *a == kd => {
+                    let key = match &p[1].string {
+                        b if *b == right => Some(Key::Right),
                         _ => None,
                     };
 
@@ -53,9 +58,9 @@ fn main() {
                         }
                     })
                 }
-                "!ku" => {
-                    let key = match p[1].string.as_str() {
-                        "right" => Some(Key::Right),
+                a if *a == ku => {
+                    let key = match &p[1].string {
+                        b if *b == right => Some(Key::Right),
                         _ => None,
                     };
 
@@ -79,10 +84,10 @@ fn main() {
             use std::str::FromStr;
 
             match (
-                p.get(0).map(|t| t.string.as_str()),
-                p.get(1).map(|t| t.string.as_str()),
-                p.get(2).map(|t| t.string.as_str()),
-                p.get(3).map(|t| t.string.as_str()),
+                p.get(0).map(|t| &*t.string),
+                p.get(1).map(|t| &*t.string),
+                p.get(2).map(|t| &*t.string),
+                p.get(3).map(|t| &*t.string),
             ) {
                 (Some("at"), Some(x), Some(y), Some("fire")) => {
                     let x = usize::from_str(x);

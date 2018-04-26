@@ -1,6 +1,7 @@
 use rand;
 use rand::{Rng, SeedableRng, StdRng};
 use regex::Regex;
+use string_cache::DefaultAtom as Atom;
 
 use std::iter::Iterator;
 use std::vec::Vec;
@@ -14,8 +15,19 @@ macro_rules! dump {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+enum BackwardsPred {
+    Plus,
+    Minus,
+    Lt,
+    Gt,
+    Lte,
+    Gte,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Token {
-    pub string: String,
+    pub string: Atom,
+    backwards_pred: Option<BackwardsPred>,
     is_var: bool,
     opens_group: bool,
     closes_group: bool,
@@ -28,8 +40,18 @@ impl Token {
         let is_var = first_char.expect("first_char").is_ascii_uppercase()
             && chars.all(|c| c.is_numeric() || !c.is_ascii_lowercase());
 
+        let backwards_pred = match string {
+            "+" => Some(BackwardsPred::Plus),
+            "<" => Some(BackwardsPred::Lt),
+            ">" => Some(BackwardsPred::Gt),
+            "<=" => Some(BackwardsPred::Lte),
+            ">=" => Some(BackwardsPred::Gte),
+            _ => None,
+        };
+
         Token {
-            string: string.to_string(),
+            string: Atom::from(string),
+            backwards_pred,
             is_var,
             opens_group,
             closes_group,
@@ -38,7 +60,7 @@ impl Token {
 }
 
 pub type Phrase = Vec<Token>;
-type Match = (String, Phrase);
+type Match = (Atom, Phrase);
 
 // https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
 pub trait SideInput: Fn(&Phrase) -> Option<Phrase> {}
@@ -195,6 +217,10 @@ impl Context {
 
     pub fn append_state(&mut self, text: &str) {
         self.state.push(tokenize(text));
+    }
+
+    pub fn to_atom(&self, text: &str) -> Atom {
+        Atom::from(text)
     }
 
     pub fn print(&self) {
@@ -483,14 +509,7 @@ fn is_backwards_pred(tokens: &Phrase) -> bool {
         return false;
     }
 
-    match tokens[0].string.as_str() {
-        "+" => true,
-        "<" => true,
-        ">" => true,
-        "<=" => true,
-        ">=" => true,
-        _ => false,
-    }
+    return tokens[0].backwards_pred.is_some();
 }
 
 fn is_side_pred(tokens: &Phrase) -> bool {
@@ -505,8 +524,8 @@ fn is_side_pred(tokens: &Phrase) -> bool {
 }
 
 fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
-    match tokens[0].string.as_str() {
-        "+" => {
+    match tokens[0].backwards_pred {
+        Some(BackwardsPred::Plus) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(&tokens[1].string);
@@ -536,7 +555,7 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
                 _ => None,
             };
         }
-        "<" => {
+        Some(BackwardsPred::Lt) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(&tokens[1].string);
@@ -547,7 +566,7 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
                 _ => None,
             };
         }
-        ">" => {
+        Some(BackwardsPred::Gt) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(&tokens[1].string);
@@ -558,7 +577,7 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
                 _ => None,
             };
         }
-        "<=" => {
+        Some(BackwardsPred::Lte) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(&tokens[1].string);
@@ -569,7 +588,7 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
                 _ => None,
             };
         }
-        ">=" => {
+        Some(BackwardsPred::Gte) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(&tokens[1].string);
@@ -1211,16 +1230,16 @@ mod tests {
             (
                 tokenize("+ T1 T2 T3"),
                 vec![
-                    ("T1".to_string(), tokenize("1")),
-                    ("T2".to_string(), tokenize("2")),
+                    (Atom::from("T1"), tokenize("1")),
+                    (Atom::from("T2"), tokenize("2")),
                 ],
                 tokenize("+ 1 2 T3"),
             ),
             (
                 tokenize("T1 (T2 T3)"),
                 vec![
-                    ("T1".to_string(), tokenize("(t11 t12)")),
-                    ("T3".to_string(), tokenize("t31 (t32 t33)")),
+                    (Atom::from("T1"), tokenize("(t11 t12)")),
+                    (Atom::from("T3"), tokenize("t31 (t32 t33)")),
                 ],
                 tokenize("(t11 t12) (T2 (t31 (t32 t33)))"),
             ),
@@ -1238,37 +1257,37 @@ mod tests {
                 tokenize("t1 T2 T3"),
                 tokenize("t1 t2 t3"),
                 Some(vec![
-                    ("T2".to_string(), tokenize("t2")),
-                    ("T3".to_string(), tokenize("t3")),
+                    (Atom::from("T2"), tokenize("t2")),
+                    (Atom::from("T3"), tokenize("t3")),
                 ]),
             ),
             (
                 tokenize("t1 T2"),
                 tokenize("t1 (t21 t22)"),
-                Some(vec![("T2".to_string(), tokenize("t21 t22"))]),
+                Some(vec![(Atom::from("T2"), tokenize("t21 t22"))]),
             ),
             (
                 tokenize("t1 (t21 T22 t23) T3"),
                 tokenize("t1 (t21 (t221 t222 t223) t23) t3"),
                 Some(vec![
-                    ("T22".to_string(), tokenize("t221 t222 t223")),
-                    ("T3".to_string(), tokenize("t3")),
+                    (Atom::from("T22"), tokenize("t221 t222 t223")),
+                    (Atom::from("T3"), tokenize("t3")),
                 ]),
             ),
             (
                 tokenize("t1 T2 T3"),
                 tokenize("t1 t2 (t3 t2)"),
                 Some(vec![
-                    ("T2".to_string(), tokenize("t2")),
-                    ("T3".to_string(), tokenize("t3 t2")),
+                    (Atom::from("T2"), tokenize("t2")),
+                    (Atom::from("T3"), tokenize("t3 t2")),
                 ]),
             ),
             (
                 tokenize("t1 T2 T3"),
                 tokenize("t1 (t2 t3) (t3 t2)"),
                 Some(vec![
-                    ("T2".to_string(), tokenize("t2 t3")),
-                    ("T3".to_string(), tokenize("t3 t2")),
+                    (Atom::from("T2"), tokenize("t2 t3")),
+                    (Atom::from("T3"), tokenize("t3 t2")),
                 ]),
             ),
             (tokenize("t1 t3"), tokenize("t1 t3"), Some(vec![])),
@@ -1279,7 +1298,7 @@ mod tests {
             (
                 tokenize("t1 T3 T3"),
                 tokenize("t1 t3 t3"),
-                Some(vec![("T3".to_string(), tokenize("t3"))]),
+                Some(vec![(Atom::from("T3"), tokenize("t3"))]),
             ),
         ];
 
@@ -1292,15 +1311,15 @@ mod tests {
     fn match_variables_with_existing_test() {
         let input_tokens = tokenize("T1 T2 T3");
         let pred_tokens = tokenize("t1 t2 t3");
-        let existing_matches = vec![("T2".to_string(), tokenize("t2"))];
+        let existing_matches = vec![(Atom::from("T2"), tokenize("t2"))];
 
         let result = match_variables_with_existing(&input_tokens, &pred_tokens, &existing_matches);
 
         assert_eq!(
             result,
             Some(vec![
-                ("T1".to_string(), tokenize("t1")),
-                ("T3".to_string(), tokenize("t3")),
+                (Atom::from("T1"), tokenize("t1")),
+                (Atom::from("T3"), tokenize("t3")),
             ])
         )
     }
