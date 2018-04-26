@@ -9,7 +9,8 @@ use minifb::{Key, Window, WindowOptions};
 
 mod ceptre;
 
-use std::{thread, time};
+use std::io::Read;
+use std::{fs, thread, time};
 
 const WIDTH: usize = 640;
 const HEIGHT: usize = 360;
@@ -24,21 +25,10 @@ fn main() {
         panic!("{}", e);
     });
 
-    let mut context = ceptre::Context::from_text("\
-at 1 1 wood . at 1 1 wood . at 1 1 wood . at 1 1 wood . at 1 1 wood\n\
-\n\
-#update:\n\
-  at X Y wood . + X 1 X' . + Y 1 Y' . + X'' 1 X . + Y'' 1 Y = at X' Y' fire . at X' Y'' fire . at X'' Y' fire . at X'' Y'' fire\n\
-  !kd right . at X Y fire . + X 1 X' . < X 100 = at' X' Y fire\n\
-  !kd right . at X Y fire . + Y 1 Y' . < Y 100 = at' X Y' fire\n\
-  !ku right . at X Y fire . + X' 1 X . < 0 X = at' X' Y fire\n\
-  !ku right . at X Y fire . + Y' 1 Y . < 0 Y = at' X Y' fire\n\
-  () = #process\n\
-\n\
-#process:\n\
-  at' X Y I = at X Y I\n\
-  () =
-");
+    let mut file = fs::File::open("test.ceptre").expect("file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).expect("read_to_string");
+    let mut context = ceptre::Context::from_text(&contents);
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         context.append_state("#update");
