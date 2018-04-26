@@ -3,7 +3,7 @@ use rand::{Rng, SeedableRng, StdRng};
 use regex::Regex;
 use string_cache::DefaultAtom as Atom;
 
-use std::iter::Iterator;
+use std::iter;
 use std::vec::Vec;
 
 macro_rules! dump {
@@ -99,13 +99,22 @@ where
 
 #[derive(Debug, Eq, PartialEq)]
 struct Rule {
+    id: i32,
     inputs: Vec<Phrase>,
     outputs: Vec<Phrase>,
 }
 
 impl Rule {
     fn new(inputs: Vec<Phrase>, outputs: Vec<Phrase>) -> Rule {
-        Rule { inputs, outputs }
+        Rule::new_with_id(0, inputs, outputs)
+    }
+
+    fn new_with_id(id: i32, inputs: Vec<Phrase>, outputs: Vec<Phrase>) -> Rule {
+        Rule {
+            id,
+            inputs,
+            outputs,
+        }
     }
 }
 
@@ -121,8 +130,8 @@ impl Context {
         let text = text.replace("()", "qui");
         let lines = text.split("\n");
 
-        let parse_rule = |string: &str| {
-            let mut r = string.split("=");
+        let parse_rule = |id: i32, string: &str| {
+            let mut r = string.split(" =");
 
             let (dollars, inputs): (Vec<_>, Vec<_>) = r.next()
                 .expect("r[0]")
@@ -131,8 +140,7 @@ impl Context {
                 .filter(|s| !s.is_empty())
                 .partition(|s| s.chars().next().expect("char") == '$');
 
-            let outputs = r.next()
-                .expect("r[1]")
+            let outputs = if let Some(r1) = r.next() { r1 } else { "" }
                 .split(".")
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty());
@@ -148,7 +156,7 @@ impl Context {
 
             let outputs = outputs.chain(dollars).map(tokenize).collect();
 
-            return Rule::new(inputs, outputs);
+            return Rule::new_with_id(id, inputs, outputs);
         };
 
         let get_label = |line| {
@@ -168,9 +176,9 @@ impl Context {
             }
         };
 
-        let get_rule = |line: &String| {
+        let get_rule = |(i, line): (usize, &String)| {
             if line.contains("=") && !line.is_empty() {
-                return Some(parse_rule(line));
+                return Some(parse_rule(i as i32, line));
             } else {
                 return None;
             }
@@ -214,6 +222,7 @@ impl Context {
 
         let rules = out_lines
             .iter()
+            .enumerate()
             .map(get_rule)
             .filter(|v| v.is_some())
             .map(|v| v.expect("v"))
@@ -255,8 +264,11 @@ impl Context {
         print_state(&self.state);
 
         println!("\nrules:");
-        for r in self.rules.iter() {
-            print_rule(&r);
+        let mut rules = self.rules.iter().map(rule_to_string).collect::<Vec<_>>();
+        rules.sort();
+
+        for r in rules {
+            println!("{}", r);
         }
     }
 }
@@ -490,7 +502,7 @@ where
             outputs_concrete.push(assign_vars(v, &variables_matched));
         }
 
-        return Some(Rule::new(forward_concrete, outputs_concrete));
+        return Some(Rule::new_with_id(r.id, forward_concrete, outputs_concrete));
     }
 
     return None;
@@ -951,7 +963,7 @@ impl<T> IterRand for [T] {
     }
 }
 
-impl<'a, T> Iterator for IterRandState<'a, T> {
+impl<'a, T> iter::Iterator for IterRandState<'a, T> {
     type Item = (usize, &'a T);
 
     fn next(&mut self) -> Option<(usize, &'a T)> {
@@ -981,8 +993,9 @@ fn build_phrase(phrase: &Phrase) -> String {
 
     for t in phrase.iter() {
         tokens.push(format!(
-            "{}{}{}",
+            "{}{}{}{}",
             if t.opens_group { "(" } else { "" },
+            if t.is_negated { "^" } else { "" },
             t.string,
             if t.closes_group { ")" } else { "" },
         ));
@@ -997,7 +1010,7 @@ fn print_state(state: &Vec<Phrase>) {
     }
 }
 
-fn print_rule(rule: &Rule) {
+fn rule_to_string(rule: &Rule) -> String {
     let inputs = rule.inputs
         .iter()
         .map(|p| build_phrase(p))
@@ -1010,7 +1023,7 @@ fn print_rule(rule: &Rule) {
         .collect::<Vec<_>>()
         .join(" . ");
 
-    println!("{} = {}", inputs, outputs);
+    format!("{:5}: {} = {}", rule.id, inputs, outputs)
 }
 
 fn test_rng() -> StdRng {

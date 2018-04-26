@@ -26,17 +26,20 @@ fn main() {
         panic!("{}", e);
     });
 
-    let mut file = fs::File::open("test.ceptre").expect("file");
+    let mut file = fs::File::open("blocks.ceptre").expect("file");
     let mut contents = String::new();
     file.read_to_string(&mut contents).expect("read_to_string");
     let mut context = ceptre::Context::from_text(&contents);
 
     let kd = context.to_atom("!kd");
     let ku = context.to_atom("!ku");
+    let left = context.to_atom("left");
     let right = context.to_atom("right");
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        context.append_state("#update");
+        context.append_state("#tick");
+        context.append_state("dt 0.03");
+        context.print();
 
         ceptre::update(&mut context, |p: &ceptre::Phrase| {
             if p.len() != 2 {
@@ -46,6 +49,7 @@ fn main() {
             match &p[0].string {
                 a if *a == kd => {
                     let key = match &p[1].string {
+                        b if *b == left => Some(Key::Left),
                         b if *b == right => Some(Key::Right),
                         _ => None,
                     };
@@ -60,6 +64,7 @@ fn main() {
                 }
                 a if *a == ku => {
                     let key = match &p[1].string {
+                        b if *b == left => Some(Key::Left),
                         b if *b == right => Some(Key::Right),
                         _ => None,
                     };
@@ -89,7 +94,8 @@ fn main() {
                 p.get(2).map(|t| &*t.string),
                 p.get(3).map(|t| &*t.string),
             ) {
-                (Some("at"), Some(x), Some(y), Some("fire")) => {
+                (Some("block-falling"), Some(_id), Some(x), Some(y))
+                | (Some("block-set"), Some(_id), Some(x), Some(y)) => {
                     let x = usize::from_str(x);
                     let y = usize::from_str(y);
 

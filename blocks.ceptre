@@ -1,0 +1,33 @@
+timer 1 . block-id 0
+}
+#tick . timer TIMER . > TIMER 0 . dt DT . + TIMER2 DT TIMER . > TIMER2 0 = timer TIMER2 . #clean
+#tick . timer TIMER . > TIMER 0 . dt DT . + TIMER2 DT TIMER . <= TIMER2 0 = timer TIMER2 . #new-block
+#tick . timer TIMER . <= TIMER 0 . ^block-falling ID X Y = timer 1 . #clean
+#tick . $block-falling ID X Y = #collision
+
+#new-block . block-id ID . + ID 1 ID1 . + ID 2 ID2 . + ID 3 ID3 . + ID 4 ID4 = block-falling ID 5 20 . block-falling ID1 6 20 . block-falling ID2 5 19 . block-falling ID3 6 19 . block-id ID4 . #collision
+
+#collision:
+  block-falling ID X Y . + Y1 1 Y . $block-set ID2 X Y1 = block-setting ID X Y
+  block-falling ID X Y . + Y1 1 Y . < Y1 0 = block-setting ID X Y
+  $block-setting ID X Y . block-falling ID2 X1 Y1 = block-setting ID2 X1 Y1
+  () = #set
+
+#set:
+  block-setting ID X Y = block-set ID X Y
+  () = #input
+
+#input:
+  !kd left . !ku right . block-falling ID X Y . ^block-moved ID . + X1 1 X = block-falling ID X1 Y . block-moved ID
+  !ku left . !kd right . block-falling ID X Y . ^block-moved ID . + X 1 X1 = block-falling ID X1 Y . block-moved ID
+  () = #fall
+
+#fall:
+  block-falling ID X Y . ^block-moved ID . + Y1 1 Y = block-falling ID X Y1 . block-moved ID
+  () = #clean
+
+#clean:
+  block-moved ID =
+  #tick =
+  dt DT =
+  () =
