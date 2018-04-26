@@ -17,7 +17,6 @@ macro_rules! dump {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum BackwardsPred {
     Plus,
-    Minus,
     Lt,
     Gt,
     Lte,
