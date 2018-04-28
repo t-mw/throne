@@ -1,11 +1,40 @@
-timer 1 . block-id 0
+fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-height 10
 
-#tick . timer TIMER . > TIMER 0 . dt DT . + TIMER2 DT TIMER . > TIMER2 0 = timer TIMER2 . #clean
-#tick . timer TIMER . > TIMER 0 . dt DT . + TIMER2 DT TIMER . <= TIMER2 0 = timer TIMER2 . #new-block
-#tick . timer TIMER . <= TIMER 0 . ^block-falling ID X Y = timer 1 . #clean
-#tick . $block-falling ID X Y = #collision
+#tick . ^block-falling ID X Y = #new-block
+#tick . $block-falling ID X Y = #input-lr
 
-#new-block . block-id ID . + ID 1 ID1 . + ID 2 ID2 . + ID 3 ID3 . + ID 4 ID4 = block-falling ID 5 20 . block-falling ID1 6 20 . block-falling ID2 5 19 . block-falling ID3 6 19 . block-id ID4 . #collision
+#new-block . block-id ID . + ID 1 ID1 . + ID 2 ID2 . + ID 3 ID3 . + ID 4 ID4 = block-falling ID 5 10 . block-falling ID1 5 11 . block-falling ID2 5 12 . block-falling ID3 5 13 . block-id ID4 . #input-lr
+#new-block . block-id ID . + ID 1 ID1 . + ID 2 ID2 . + ID 3 ID3 . + ID 4 ID4 = block-falling ID 5 10 . block-falling ID1 6 10 . block-falling ID2 5 9 . block-falling ID3 6 9 . block-id ID4 . #input-lr
+#new-block . block-id ID . + ID 1 ID1 . + ID 2 ID2 . + ID 3 ID3 . + ID 4 ID4 = block-falling ID 5 10 . block-falling ID1 6 10 . block-falling ID2 7 10 . block-falling ID3 6 11 . block-id ID4 . #input-lr
+
+#input-lr . !kd left = #check-border-l
+#input-lr . !kd right = #check-border-r
+#input-lr . () = #input-d
+
+#check-border-l . ^block-falling ID 0 Y = #check-collision-l
+#check-border-l . () = #input-d
+
+#check-border-r . ^block-falling ID W2 Y . $max-width W . + W2 1 W = #check-collision-r
+#check-border-r . () = #input-d
+
+#check-collision-l . $block-falling ID X Y . + X1 1 X . $block-set ID2 X1 Y = #input-d
+#check-collision-l . () = #move-l
+
+#check-collision-r . $block-falling ID X Y . + X 1 X1 . $block-set ID2 X1 Y = #input-d
+#check-collision-r . () = #move-r
+
+#move-l:
+  block-falling ID X Y . + X1 1 X . ^block-moved ID = block-falling ID X1 Y . block-moved ID
+  () = #input-d
+
+#move-r:
+  block-falling ID X Y . + X 1 X1 . ^block-moved ID = block-falling ID X1 Y . block-moved ID
+  () = #input-d
+
+#input-d:
+  !kd down . default-fall-timer 0.25 . fall-timer TIMER = default-fall-timer 0.05 . fall-timer 0
+  !ku down . default-fall-timer 0.05 . fall-timer TIMER = default-fall-timer 0.25 . fall-timer 0
+  () = #collision
 
 #collision:
   block-falling ID X Y . + Y1 1 Y . $block-set ID2 X Y1 = block-setting ID X Y
@@ -15,19 +44,33 @@ timer 1 . block-id 0
 
 #set:
   block-setting ID X Y = block-set ID X Y
-  () = #input
+  $max-width W . () = #score-x . score-counter W 0
 
-#input:
-  !kd left . !ku right . block-falling ID X Y . ^block-moved ID . + X1 1 X = block-falling ID X1 Y . block-moved ID
-  !ku left . !kd right . block-falling ID X Y . ^block-moved ID . + X 1 X1 = block-falling ID X1 Y . block-moved ID
-  () = #fall
+#score-x . score-counter X Y . + X1 1 X . $block-set ID X1 Y = score-counter X1 Y . #score-x
+#score-x . score-counter 0 Y = #clear . clear-y Y
+#score-x . $score-counter X Y . () = #score-y
+
+#score-y . score-counter X Y . + Y 1 Y1 . $max-width W . $max-height H . < Y1 H = score-counter W Y1 . #score-x
+#score-y . score-counter X Y . () = #fall-tick
+
+#clear:
+  $clear-y Y . block-set ID X Y =
+  block-clear-move ID =
+  () = #clear-move
+
+#clear-move:
+  $clear-y Y . block-set ID X Y1 . ^block-clear-move ID . > Y1 Y . + Y2 1 Y1 = block-set ID X Y2 . block-clear-move ID
+  $max-width W . clear-y Y . () = #score-x . score-counter W 0
+
+#fall-tick . fall-timer TIMER . >= TIMER 0 . $dt DT . + TIMER2 DT TIMER . >= TIMER2 0 = fall-timer TIMER2 . #clean
+#fall-tick . fall-timer TIMER . >= TIMER 0 . $dt DT . + TIMER2 DT TIMER . < TIMER2 0 . $default-fall-timer D = fall-timer D . #fall
 
 #fall:
-  block-falling ID X Y . ^block-moved ID . + Y1 1 Y = block-falling ID X Y1 . block-moved ID
+  block-falling ID X Y . ^block-fell ID . + Y1 1 Y = block-falling ID X Y1 . block-fell ID
   () = #clean
 
 #clean:
   block-moved ID =
-  #tick =
+  block-fell ID =
   dt DT =
   () =

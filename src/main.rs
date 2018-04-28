@@ -13,8 +13,8 @@ mod ceptre;
 use std::io::Read;
 use std::{fs, thread, time};
 
-const WIDTH: usize = 640;
-const HEIGHT: usize = 360;
+const WIDTH: usize = 100;
+const HEIGHT: usize = 100;
 
 fn main() {
     let mut window = Window::new(
@@ -35,6 +35,7 @@ fn main() {
     let ku = context.to_atom("!ku");
     let left = context.to_atom("left");
     let right = context.to_atom("right");
+    let down = context.to_atom("down");
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         context.append_state("#tick");
@@ -51,6 +52,7 @@ fn main() {
                     let key = match &p[1].string {
                         b if *b == left => Some(Key::Left),
                         b if *b == right => Some(Key::Right),
+                        b if *b == down => Some(Key::Down),
                         _ => None,
                     };
 
@@ -66,6 +68,7 @@ fn main() {
                     let key = match &p[1].string {
                         b if *b == left => Some(Key::Left),
                         b if *b == right => Some(Key::Right),
+                        b if *b == down => Some(Key::Down),
                         _ => None,
                     };
 
@@ -112,7 +115,7 @@ fn main() {
                             for y in y0..y1 {
                                 for x in x0..x1 {
                                     if is_valid_pos(x, y) {
-                                        let idx = x + WIDTH * y;
+                                        let idx = x + WIDTH * (HEIGHT - 1 - y);
                                         buffer[idx] = color;
                                     }
                                 }

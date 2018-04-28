@@ -135,13 +135,13 @@ impl Context {
 
             let (dollars, inputs): (Vec<_>, Vec<_>) = r.next()
                 .expect("r[0]")
-                .split(".")
+                .split(" . ")
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty())
                 .partition(|s| s.chars().next().expect("char") == '$');
 
             let outputs = if let Some(r1) = r.next() { r1 } else { "" }
-                .split(".")
+                .split(" . ")
                 .map(|s| s.trim())
                 .filter(|s| !s.is_empty());
 
@@ -169,15 +169,15 @@ impl Context {
         };
 
         let get_init = |line: &String| {
-            if !line.contains("=") && !line.is_empty() {
-                return Some(line.split(".").map(tokenize).collect::<Vec<_>>());
+            if !line.contains(" =") && !line.is_empty() {
+                return Some(line.split(" . ").map(tokenize).collect::<Vec<_>>());
             } else {
                 return None;
             }
         };
 
         let get_rule = |(i, line): (usize, &String)| {
-            if line.contains("=") && !line.is_empty() {
+            if line.contains(" =") && !line.is_empty() {
                 return Some(parse_rule(i as i32, line));
             } else {
                 return None;
