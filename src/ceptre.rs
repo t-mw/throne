@@ -461,18 +461,6 @@ where
                 match_backwards_variables(input, &variables_matched)
             } else if input_is_side_pred[i_i] {
                 match_side_variables(input, &variables_matched, side_input)
-            } else if input_is_negated_pred[i_i] {
-                if state
-                    .iter()
-                    .enumerate()
-                    .filter(|&(s_i, _)| !states_matched_bool[s_i])
-                    .any(|(_, s)| {
-                        match_variables_with_existing(input, s, &variables_matched).is_some()
-                    }) {
-                    None
-                } else {
-                    continue;
-                }
             } else {
                 continue;
             };
@@ -481,6 +469,24 @@ where
                 variables_matched.append(extra_matches);
             } else {
                 continue 'outer;
+            }
+        }
+
+        // check negated predicates last, so that we know about all variables
+        // from the backwards and side predicates
+        for (i_i, input) in inputs.iter().enumerate() {
+            if input_is_negated_pred[i_i] {
+                if state
+                    .iter()
+                    .enumerate()
+                    .filter(|&(s_i, _)| !states_matched_bool[s_i])
+                    .any(|(_, s)| {
+                        match_variables_with_existing(input, s, &variables_matched).is_some()
+                    }) {
+                    continue 'outer;
+                } else {
+                    continue;
+                }
             }
         }
 
