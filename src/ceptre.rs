@@ -369,19 +369,19 @@ where
     let mut input_state_match_start_indices = Vec::with_capacity(inputs.len());
     let mut input_state_match_counts = Vec::with_capacity(inputs.len());
 
-    let mut input_is_backwards_pred = vec![false; inputs.len()];
-    let mut input_is_side_pred = vec![false; inputs.len()];
-    let mut input_is_negated_pred = vec![false; inputs.len()];
+    let mut backwards_pred = vec![];
+    let mut side_pred = vec![];
+    let mut negated_pred = vec![];
 
     for (i_i, input) in inputs.iter().enumerate() {
         let mut count = 0;
         if is_backwards_pred(input) {
-            input_is_backwards_pred[i_i] = true;
+            backwards_pred.push(i_i);
         } else if is_side_pred(input) {
             // TODO: exit early if we already know that side predicate won't match
-            input_is_side_pred[i_i] = true;
+            side_pred.push(i_i);
         } else if is_negated_pred(input) {
-            input_is_negated_pred[i_i] = true;
+            negated_pred.push(i_i);
         } else {
             for (s_i, p) in state.iter().enumerate() {
                 if test_match_without_variables(input, p) {
@@ -430,10 +430,13 @@ where
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
-        for (i_i, input) in inputs.iter().enumerate().filter(|&(i_i, _)| {
-            !input_is_backwards_pred[i_i] && !input_is_side_pred[i_i] && !input_is_negated_pred[i_i]
-        }) {
+        for (i_i, input) in inputs.iter().enumerate() {
             let match_count = input_state_match_counts[i_i];
+
+            if match_count == 0 {
+                continue;
+            }
+
             let branch_idx = (p_i / input_rev_permutation_counts[i_i]) % match_count;
 
             let input_state_match_idx = input_state_match_start_indices[i_i] + branch_idx;
@@ -456,14 +459,8 @@ where
             }
         }
 
-        for (i_i, input) in inputs.iter().enumerate() {
-            let mut extra_matches = if input_is_backwards_pred[i_i] {
-                match_backwards_variables(input, &variables_matched)
-            } else if input_is_side_pred[i_i] {
-                match_side_variables(input, &variables_matched, side_input)
-            } else {
-                continue;
-            };
+        for input in backwards_pred.iter().map(|&i| &inputs[i]) {
+            let mut extra_matches = match_backwards_variables(input, &variables_matched);
 
             if let Some(ref mut extra_matches) = extra_matches {
                 variables_matched.append(extra_matches);
@@ -472,21 +469,26 @@ where
             }
         }
 
-        // check negated predicates last, so that we know about all variables
-        // from the backwards and side predicates
-        for (i_i, input) in inputs.iter().enumerate() {
-            if input_is_negated_pred[i_i] {
-                if state
-                    .iter()
-                    .enumerate()
-                    .filter(|&(s_i, _)| !states_matched_bool[s_i])
-                    .any(|(_, s)| {
-                        match_variables_with_existing(input, s, &variables_matched).is_some()
-                    }) {
-                    continue 'outer;
-                } else {
-                    continue;
-                }
+        for input in side_pred.iter().map(|&i| &inputs[i]) {
+            let mut extra_matches = match_side_variables(input, &variables_matched, side_input);
+
+            if let Some(ref mut extra_matches) = extra_matches {
+                variables_matched.append(extra_matches);
+            } else {
+                continue 'outer;
+            }
+        }
+
+        for input in negated_pred.iter().map(|&i| &inputs[i]) {
+            // check negated predicates last, so that we know about all variables
+            // from the backwards and side predicates
+            if state
+                .iter()
+                .enumerate()
+                .filter(|&(s_i, _)| !states_matched_bool[s_i])
+                .any(|(_, s)| match_variables_with_existing(input, s, &variables_matched).is_some())
+            {
+                continue 'outer;
             }
         }
 
