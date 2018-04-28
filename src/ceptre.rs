@@ -973,10 +973,10 @@ fn build_phrase(phrase: &Phrase) -> String {
     for t in phrase.iter() {
         tokens.push(format!(
             "{}{}{}{}",
-            if t.open_depth > 0 { "(" } else { "" },
+            String::from("(").repeat(t.open_depth as usize),
             if t.is_negated { "^" } else { "" },
             t.string,
-            if t.close_depth > 0 { ")" } else { "" },
+            String::from(")").repeat(t.close_depth as usize)
         ));
     }
 
