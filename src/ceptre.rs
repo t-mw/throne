@@ -30,21 +30,20 @@ pub struct Token {
     is_var: bool,
     is_negated: bool,
     is_side: bool,
-    opens_group: bool,
-    closes_group: bool,
+    open_depth: i32,
+    close_depth: i32,
 }
 
 impl PartialEq for Token {
     fn eq(&self, other: &Token) -> bool {
         self.string == other.string && self.is_side == other.is_side
-            && self.opens_group == other.opens_group
-            && self.closes_group == other.closes_group
+            && self.open_depth == other.open_depth && self.close_depth == other.close_depth
     }
 }
 impl Eq for Token {}
 
 impl Token {
-    fn new(string: &str, opens_group: bool, closes_group: bool) -> Token {
+    fn new(string: &str, open_depth: i32, close_depth: i32) -> Token {
         let mut string = string;
 
         let mut chars = string.chars();
@@ -80,8 +79,8 @@ impl Token {
             is_var,
             is_negated,
             is_side,
-            opens_group,
-            closes_group,
+            open_depth,
+            close_depth,
         }
     }
 }
@@ -281,7 +280,7 @@ where
     let state = &mut context.state;
 
     lazy_static! {
-        static ref QUI: Phrase = vec![Token::new("qui", false, false)];
+        static ref QUI: Phrase = vec![Token::new("qui", 0, 0)];
     }
 
     loop {
@@ -544,12 +543,15 @@ fn assign_vars(tokens: &Phrase, matches: &Vec<Match>) -> Phrase {
                 let len = tokens.len();
 
                 if len == 1 {
-                    tokens[0].opens_group = token.opens_group;
-                    tokens[len - 1].closes_group = token.closes_group;
+                    tokens[0].open_depth = token.open_depth;
+                    tokens[len - 1].close_depth = token.close_depth;
                 } else {
-                    tokens[0].opens_group = tokens[0].opens_group || token.opens_group;
-                    tokens[len - 1].closes_group =
-                        tokens[len - 1].closes_group || token.closes_group;
+                    if token.open_depth > 0 {
+                        tokens[0].open_depth += token.open_depth
+                    }
+                    if token.close_depth > 0 {
+                        tokens[len - 1].close_depth += token.close_depth
+                    }
                 }
 
                 result.append(&mut tokens);
@@ -602,17 +604,17 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
                     tokens[0].clone(),
                     tokens[1].clone(),
                     tokens[2].clone(),
-                    Token::new(&(v1 + v2).to_string(), false, true),
+                    Token::new(&(v1 + v2).to_string(), 0, 1),
                 ]),
                 (Ok(v1), Err(_), Ok(v3)) => Some(vec![
                     tokens[0].clone(),
                     tokens[1].clone(),
-                    Token::new(&(v3 - v1).to_string(), false, false),
+                    Token::new(&(v3 - v1).to_string(), 0, 0),
                     tokens[3].clone(),
                 ]),
                 (Err(_), Ok(v2), Ok(v3)) => Some(vec![
                     tokens[0].clone(),
-                    Token::new(&(v3 - v2).to_string(), false, false),
+                    Token::new(&(v3 - v2).to_string(), 0, 0),
                     tokens[2].clone(),
                     tokens[3].clone(),
                 ]),
@@ -684,37 +686,29 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
     for token in input_tokens.iter() {
         let pred_token = pred_token_iter.next();
 
-        if token.opens_group {
-            input_depth += 1;
-        }
+        input_depth += token.open_depth;
 
         if let Some(pred_token) = pred_token {
-            if pred_token.opens_group {
-                pred_depth += 1;
-            }
+            pred_depth += pred_token.open_depth;
 
             if !token.is_var {
                 if token != pred_token || input_depth != pred_depth {
                     return false;
                 }
             } else {
-                while input_depth != pred_depth {
+                while input_depth < pred_depth {
                     if pred_token_iter.next().is_none() {
                         return false;
                     }
                 }
             }
 
-            if pred_token.closes_group {
-                pred_depth -= 1;
-            }
+            pred_depth -= pred_token.close_depth;
         } else {
             return false;
         }
 
-        if token.closes_group {
-            input_depth -= 1;
-        }
+        input_depth -= token.close_depth;
     }
 
     if let Some(_) = pred_token_iter.next() {
@@ -742,14 +736,10 @@ fn match_variables_with_existing(
     for token in input_tokens.iter() {
         let pred_token = pred_token_iter.next();
 
-        if token.opens_group {
-            input_depth += 1;
-        }
+        input_depth += token.open_depth;
 
         if let Some(pred_token) = pred_token {
-            if pred_token.opens_group {
-                pred_depth += 1;
-            }
+            pred_depth += pred_token.open_depth;
 
             if !token.is_var {
                 if token != pred_token || input_depth != pred_depth {
@@ -757,15 +747,12 @@ fn match_variables_with_existing(
                 }
             } else {
                 let mut matches = vec![pred_token.clone()];
+                let pred_depth0 = pred_depth;
 
-                while input_depth != pred_depth {
+                while input_depth < pred_depth {
                     if let Some(pred_token) = pred_token_iter.next() {
-                        if pred_token.opens_group {
-                            pred_depth += 1;
-                        }
-                        if pred_token.closes_group {
-                            pred_depth -= 1;
-                        }
+                        pred_depth += pred_token.open_depth;
+                        pred_depth -= pred_token.close_depth;
 
                         matches.push(pred_token.clone());
                     } else {
@@ -775,11 +762,14 @@ fn match_variables_with_existing(
 
                 let len = matches.len();
                 if len == 1 {
-                    matches[0].opens_group = false;
-                    matches[0].closes_group = false;
+                    matches[0].open_depth = 0;
+                    matches[0].close_depth = 0;
                 } else {
-                    matches[0].opens_group = true;
-                    matches[len - 1].closes_group = true;
+                    matches[0].open_depth = 1;
+                    // equivalent to summing depths of all matches between first and
+                    // last, not including open depth of first and close depth of last
+                    matches[len - 1].close_depth =
+                        pred_depth - pred_depth0 + matches[len - 1].close_depth + 1;
                 }
 
                 let has_existing_matches = if let Some(&(_, ref existing_matches)) = result
@@ -801,16 +791,12 @@ fn match_variables_with_existing(
                 }
             }
 
-            if pred_token.closes_group {
-                pred_depth -= 1;
-            }
+            pred_depth -= pred_token.close_depth;
         } else {
             return None;
         }
 
-        if token.closes_group {
-            input_depth -= 1;
-        }
+        input_depth -= token.close_depth;
     }
 
     if let Some(_) = pred_token_iter.next() {
@@ -821,10 +807,10 @@ fn match_variables_with_existing(
 }
 
 fn tokenize(string: &str) -> Phrase {
-    let mut string = String::from(string);
+    let mut string = format!("({})", string);
 
     lazy_static! {
-        static ref RE1: Regex = Regex::new(r"\(\s*(\w+)\s*\)").unwrap();
+        static ref RE1: Regex = Regex::new(r"\(\s*(\S+)\s*\)").unwrap();
     }
 
     loop {
@@ -848,44 +834,32 @@ fn tokenize(string: &str) -> Phrase {
         .filter(|s| !s.trim().is_empty())
         .collect::<Vec<_>>();
 
-    return tokenize_internal(tokens.as_slice(), 0);
-}
-
-fn tokenize_internal(tokens: &[&str], mut depth: i32) -> Phrase {
     let mut result = vec![];
 
-    let start_depth = depth;
-    let mut depth_start_i = None;
+    let mut open_depth = 0;
+    let mut close_depth = 0;
 
     for (i, token) in tokens.iter().enumerate() {
         if *token == "(" {
-            if depth == start_depth {
-                depth_start_i = Some(i + 1);
-            }
-
-            depth += 1;
+            open_depth += 1;
             continue;
+        }
+
+        for j in i + 1..tokens.len() {
+            if tokens[j] == ")" {
+                close_depth += 1;
+            } else {
+                break;
+            }
         }
 
         if *token == ")" {
-            depth -= 1;
-
-            if depth == start_depth {
-                let range = depth_start_i.expect("depth_start_i")..i;
-                result.append(&mut tokenize_internal(&tokens[range], depth + 1));
-            }
-
             continue;
         }
 
-        if depth == start_depth {
-            let len = tokens.len();
-
-            let opens_group = len > 1 && i == 0;
-            let closes_group = len > 1 && i == tokens.len() - 1;
-
-            result.push(Token::new(token, opens_group, closes_group));
-        }
+        result.push(Token::new(token, open_depth, close_depth));
+        open_depth = 0;
+        close_depth = 0;
     }
 
     return result;
@@ -997,10 +971,10 @@ fn build_phrase(phrase: &Phrase) -> String {
     for t in phrase.iter() {
         tokens.push(format!(
             "{}{}{}{}",
-            if t.opens_group { "(" } else { "" },
+            if t.open_depth > 0 { "(" } else { "" },
             if t.is_negated { "^" } else { "" },
             t.string,
-            if t.closes_group { ")" } else { "" },
+            if t.close_depth > 0 { ")" } else { "" },
         ));
     }
 
@@ -1124,13 +1098,13 @@ mod tests {
 
     #[test]
     fn token_test() {
-        assert!(!Token::new("tt1", true, true).is_var);
-        assert!(!Token::new("tT1", true, true).is_var);
-        assert!(!Token::new("1", true, true).is_var);
-        assert!(!Token::new("1Tt", true, true).is_var);
-        assert!(Token::new("T", true, true).is_var);
-        assert!(Token::new("TT1", true, true).is_var);
-        assert!(Token::new("TT1'", true, true).is_var);
+        assert!(!Token::new("tt1", 1, 1).is_var);
+        assert!(!Token::new("tT1", 1, 1).is_var);
+        assert!(!Token::new("1", 1, 1).is_var);
+        assert!(!Token::new("1Tt", 1, 1).is_var);
+        assert!(Token::new("T", 1, 1).is_var);
+        assert!(Token::new("TT1", 1, 1).is_var);
+        assert!(Token::new("TT1'", 1, 1).is_var);
     }
 
     #[test]
@@ -1395,7 +1369,7 @@ mod tests {
             (
                 tokenize("T1 (T2 T3)"),
                 vec![
-                    (Atom::from("T1"), tokenize("(t11 t12)")),
+                    (Atom::from("T1"), tokenize("t11 t12")),
                     (Atom::from("T3"), tokenize("t31 (t32 t33)")),
                 ],
                 tokenize("(t11 t12) (T2 (t31 (t32 t33)))"),
@@ -1438,6 +1412,11 @@ mod tests {
                     (Atom::from("T2"), tokenize("t2")),
                     (Atom::from("T3"), tokenize("t3 t2")),
                 ]),
+            ),
+            (
+                tokenize("t1 T2"),
+                tokenize("t1 (t2 t3 (t3 t2))"),
+                Some(vec![(Atom::from("T2"), tokenize("t2 t3 (t3 t2)"))]),
             ),
             (
                 tokenize("t1 T2 T3"),
@@ -1483,48 +1462,48 @@ mod tests {
 
     #[test]
     fn tokenize_test() {
-        assert_eq!(tokenize("t1"), [Token::new("t1", false, false)]);
+        assert_eq!(tokenize("t1"), [Token::new("t1", 0, 0)]);
 
         assert_eq!(
             tokenize("t1 (t21 (t221 t222 t223) t23) t3"),
             [
-                Token::new("t1", true, false),
-                Token::new("t21", true, false),
-                Token::new("t221", true, false),
-                Token::new("t222", false, false),
-                Token::new("t223", false, true),
-                Token::new("t23", false, true),
-                Token::new("t3", false, true),
+                Token::new("t1", 1, 0),
+                Token::new("t21", 1, 0),
+                Token::new("t221", 1, 0),
+                Token::new("t222", 0, 0),
+                Token::new("t223", 0, 1),
+                Token::new("t23", 0, 1),
+                Token::new("t3", 0, 1),
             ]
         );
 
         assert_eq!(
             tokenize("t1 t2 (((t3 )) t4)"),
             [
-                Token::new("t1", true, false),
-                Token::new("t2", false, false),
-                Token::new("t3", true, false),
-                Token::new("t4", false, true),
+                Token::new("t1", 1, 0),
+                Token::new("t2", 0, 0),
+                Token::new("t3", 1, 0),
+                Token::new("t4", 0, 2),
             ]
         );
 
         assert_eq!(
             tokenize("(t1 t2) (t3 t4)"),
             [
-                Token::new("t1", true, false),
-                Token::new("t2", false, true),
-                Token::new("t3", true, false),
-                Token::new("t4", false, true),
+                Token::new("t1", 2, 0),
+                Token::new("t2", 0, 1),
+                Token::new("t3", 1, 0),
+                Token::new("t4", 0, 2),
             ]
         );
 
         assert_eq!(
             tokenize("t1 t2 (t3'' t4')"),
             [
-                Token::new("t1", true, false),
-                Token::new("t2", false, false),
-                Token::new("t3''", true, false),
-                Token::new("t4'", false, true),
+                Token::new("t1", 1, 0),
+                Token::new("t2", 0, 0),
+                Token::new("t3''", 1, 0),
+                Token::new("t4'", 0, 2),
             ]
         );
     }
