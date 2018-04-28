@@ -1,5 +1,5 @@
 timer 1 . block-id 0
-}
+
 #tick . timer TIMER . > TIMER 0 . dt DT . + TIMER2 DT TIMER . > TIMER2 0 = timer TIMER2 . #clean
 #tick . timer TIMER . > TIMER 0 . dt DT . + TIMER2 DT TIMER . <= TIMER2 0 = timer TIMER2 . #new-block
 #tick . timer TIMER . <= TIMER 0 . ^block-falling ID X Y = timer 1 . #clean

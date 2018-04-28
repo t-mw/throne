@@ -404,15 +404,10 @@ where
     // precompute values required for deriving branch indices.
     let mut input_rev_permutation_counts = vec![1; inputs.len()];
     let mut acc = 1;
-    for (i, count) in input_state_match_counts
-        .iter()
-        .enumerate()
-        .filter(|&(i_i, _)| {
-            !input_is_backwards_pred[i_i] && !input_is_side_pred[i_i] && !input_is_negated_pred[i_i]
-        })
-        .rev()
-    {
-        acc = acc * count;
+    for (i, count) in input_state_match_counts.iter().enumerate().rev() {
+        if *count > 0 {
+            acc = acc * count;
+        }
 
         if i > 0 {
             input_rev_permutation_counts[i - 1] = acc;
@@ -1064,11 +1059,13 @@ mod tests {
         assert_eq!(
             context.rules,
             [
-                Rule::new(
+                Rule::new_with_id(
+                    0,
                     vec![tokenize("at 0 0 wood"), tokenize("at 1 2 wood")],
                     vec![tokenize("at 1 0 wood")]
                 ),
-                Rule::new(
+                Rule::new_with_id(
+                    1,
                     vec![tokenize("#test"), tokenize("at 3 4 wood")],
                     vec![
                         tokenize("at 5 6 wood"),
@@ -1312,6 +1309,42 @@ mod tests {
                 Rule::new(
                     vec![tokenize("t1 3 4")],
                     vec![tokenize("t3 7"), tokenize("t4 1")],
+                ),
+            ),
+            (
+                Rule::new(
+                    vec![
+                        tokenize("#collision"),
+                        tokenize("block-falling ID X Y"),
+                        tokenize("+ Y1 1 Y"),
+                        tokenize("block-set ID2 X Y1"),
+                    ],
+                    vec![
+                        tokenize("block-setting ID X Y"),
+                        tokenize("#collision"),
+                        tokenize("block-set ID2 X Y1"),
+                    ],
+                ),
+                vec![
+                    tokenize("block-set 0 5 1"),
+                    tokenize("block-set 1 6 1"),
+                    tokenize("block-set 3 6 0"),
+                    tokenize("block-falling 7 6 2"),
+                    tokenize("#collision"),
+                    tokenize("block-falling 6 5 2"),
+                    tokenize("block-set 2 5 0"),
+                ],
+                Rule::new(
+                    vec![
+                        tokenize("#collision"),
+                        tokenize("block-falling 7 6 2"),
+                        tokenize("block-set 1 6 1"),
+                    ],
+                    vec![
+                        tokenize("block-setting 7 6 2"),
+                        tokenize("#collision"),
+                        tokenize("block-set 1 6 1"),
+                    ],
                 ),
             ),
         ];
