@@ -46,14 +46,9 @@ impl Token {
     fn new(string: &str, open_depth: i32, close_depth: i32) -> Token {
         let mut string = string;
 
-        let mut chars = string.chars();
-        let first_char = chars.next();
-        let is_var = first_char.expect("first_char").is_ascii_uppercase()
-            && chars.all(|c| c.is_numeric() || !c.is_ascii_lowercase());
-
         let mut is_negated = false;
         let mut is_side = false;
-        match first_char.expect("first_char") {
+        match string.chars().next().expect("first_char") {
             '^' => {
                 is_negated = true;
                 string = string.get(1..).expect("get");
@@ -63,6 +58,11 @@ impl Token {
             }
             _ => {}
         }
+
+        let mut chars = string.chars();
+        let first_char = chars.next();
+        let is_var = first_char.expect("first_char").is_ascii_uppercase()
+            && chars.all(|c| c.is_numeric() || !c.is_ascii_lowercase());
 
         let backwards_pred = match string {
             "+" => Some(BackwardsPred::Plus),
@@ -543,9 +543,11 @@ fn assign_vars(tokens: &Phrase, matches: &Vec<Match>) -> Phrase {
                 let len = tokens.len();
 
                 if len == 1 {
+                    tokens[0].is_negated = token.is_negated;
                     tokens[0].open_depth = token.open_depth;
                     tokens[len - 1].close_depth = token.close_depth;
                 } else {
+                    tokens[0].is_negated = token.is_negated;
                     if token.open_depth > 0 {
                         tokens[0].open_depth += token.open_depth
                     }
@@ -1373,6 +1375,11 @@ mod tests {
                     (Atom::from("T3"), tokenize("t31 (t32 t33)")),
                 ],
                 tokenize("(t11 t12) (T2 (t31 (t32 t33)))"),
+            ),
+            (
+                tokenize("T1 ^T2"),
+                vec![(Atom::from("T2"), tokenize("t11 t12"))],
+                tokenize("T1 (^t11 t12)"),
             ),
         ];
 
