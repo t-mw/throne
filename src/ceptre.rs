@@ -699,7 +699,10 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
                 }
             } else {
                 while input_depth < pred_depth {
-                    if pred_token_iter.next().is_none() {
+                    if let Some(pred_token) = pred_token_iter.next() {
+                        pred_depth += pred_token.open_depth;
+                        pred_depth -= pred_token.close_depth;
+                    } else {
                         return false;
                     }
                 }
@@ -749,7 +752,6 @@ fn match_variables_with_existing(
                 }
             } else {
                 let mut matches = vec![pred_token.clone()];
-                let pred_depth0 = pred_depth;
 
                 while input_depth < pred_depth {
                     if let Some(pred_token) = pred_token_iter.next() {
@@ -767,11 +769,8 @@ fn match_variables_with_existing(
                     matches[0].open_depth = 0;
                     matches[0].close_depth = 0;
                 } else {
-                    matches[0].open_depth = 1;
-                    // equivalent to summing depths of all matches between first and
-                    // last, not including open depth of first and close depth of last
-                    matches[len - 1].close_depth =
-                        pred_depth - pred_depth0 + matches[len - 1].close_depth + 1;
+                    matches[0].open_depth -= token.open_depth;
+                    matches[len - 1].close_depth -= token.close_depth;
                 }
 
                 let has_existing_matches = if let Some(&(_, ref existing_matches)) = result
@@ -1424,6 +1423,21 @@ mod tests {
                 tokenize("t1 T2"),
                 tokenize("t1 (t2 t3 (t3 t2))"),
                 Some(vec![(Atom::from("T2"), tokenize("t2 t3 (t3 t2)"))]),
+            ),
+            (
+                tokenize("t1 T2"),
+                tokenize("t1 ((t2 t3) t3 t2)"),
+                Some(vec![(Atom::from("T2"), tokenize("(t2 t3) t3 t2"))]),
+            ),
+            (
+                tokenize("t1 (t2 t3 T2)"),
+                tokenize("t1 (t2 t3 (t3 t2))"),
+                Some(vec![(Atom::from("T2"), tokenize("t3 t2"))]),
+            ),
+            (
+                tokenize("t1 (T2 t3 t2)"),
+                tokenize("t1 ((t2 t3) t3 t2)"),
+                Some(vec![(Atom::from("T2"), tokenize("t2 t3"))]),
             ),
             (
                 tokenize("t1 T2 T3"),
