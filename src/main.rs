@@ -6,7 +6,7 @@ extern crate rand;
 extern crate regex;
 extern crate string_cache;
 
-use minifb::{Key, Window, WindowOptions};
+use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
 mod ceptre;
 
@@ -33,6 +33,7 @@ fn main() {
 
     let kd = context.to_atom("!kd");
     let ku = context.to_atom("!ku");
+    let kp = context.to_atom("!kp");
     let left = context.to_atom("left");
     let right = context.to_atom("right");
     let up = context.to_atom("up");
@@ -43,46 +44,41 @@ fn main() {
         context.append_state("dt 0.03");
         context.print();
 
+        let string_to_key = |s: &str| match s {
+            s if *s == left => Some(Key::Left),
+            s if *s == right => Some(Key::Right),
+            s if *s == up => Some(Key::Up),
+            s if *s == down => Some(Key::Down),
+            _ => None,
+        };
+
         ceptre::update(&mut context, |p: &ceptre::Phrase| {
             if p.len() != 2 {
                 return None;
             }
 
             match &p[0].string {
-                a if *a == kd => {
-                    let key = match &p[1].string {
-                        b if *b == left => Some(Key::Left),
-                        b if *b == right => Some(Key::Right),
-                        b if *b == up => Some(Key::Up),
-                        b if *b == down => Some(Key::Down),
-                        _ => None,
-                    };
-
-                    key.and_then(|k| {
-                        if window.is_key_down(k) {
-                            Some(p.clone())
-                        } else {
-                            None
-                        }
-                    })
-                }
-                a if *a == ku => {
-                    let key = match &p[1].string {
-                        b if *b == left => Some(Key::Left),
-                        b if *b == right => Some(Key::Right),
-                        b if *b == up => Some(Key::Up),
-                        b if *b == down => Some(Key::Down),
-                        _ => None,
-                    };
-
-                    key.and_then(|k| {
-                        if !window.is_key_down(k) {
-                            Some(p.clone())
-                        } else {
-                            None
-                        }
-                    })
-                }
+                a if *a == kd => string_to_key(&p[1].string).and_then(|k| {
+                    if window.is_key_down(k) {
+                        Some(p.clone())
+                    } else {
+                        None
+                    }
+                }),
+                a if *a == ku => string_to_key(&p[1].string).and_then(|k| {
+                    if !window.is_key_down(k) {
+                        Some(p.clone())
+                    } else {
+                        None
+                    }
+                }),
+                a if *a == kp => string_to_key(&p[1].string).and_then(|k| {
+                    if window.is_key_pressed(k, KeyRepeat::Yes) {
+                        Some(p.clone())
+                    } else {
+                        None
+                    }
+                }),
                 _ => None,
             }
         });

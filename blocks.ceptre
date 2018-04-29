@@ -29,7 +29,7 @@ fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-heig
   new-shape X Y BLOCKS =
   $shape X Y BLOCKS . () = new-shape X Y BLOCKS . #shape-to-blocks RETURN
 
-#input-u . !kd up = #rotate-shape
+#input-u . !kp up = #rotate-shape
 #input-u . () = #input-lr
 
 #rotate-shape:
@@ -37,8 +37,8 @@ fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-heig
   new-shape X Y ((block DX DY) BLOCKS) . new-blocks BLOCKS2 . + DX2 DX 0 = new-shape X Y BLOCKS . new-blocks ((block DY DX2) BLOCKS2)
   new-shape X Y BLOCKS . new-blocks BLOCKS2 . () = new-shape X Y BLOCKS2 . #shape-to-blocks (#input-d)
 
-#input-lr . !kd left . $shape X Y BLOCKS . + X1 1 X = new-shape X1 Y BLOCKS . #shape-to-blocks (#input-d)
-#input-lr . !kd right . $shape X Y BLOCKS . + X 1 X1 = new-shape X1 Y BLOCKS . #shape-to-blocks (#input-d)
+#input-lr . !kp left . $shape X Y BLOCKS . + X1 1 X = new-shape X1 Y BLOCKS . #shape-to-blocks (#input-d)
+#input-lr . !kp right . $shape X Y BLOCKS . + X 1 X1 = new-shape X1 Y BLOCKS . #shape-to-blocks (#input-d)
 #input-lr . () = #input-d
 
 #input-d:
