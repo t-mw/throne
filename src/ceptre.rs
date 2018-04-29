@@ -30,6 +30,7 @@ pub struct Token {
     is_var: bool,
     is_negated: bool,
     is_side: bool,
+    is_stage: bool,
     open_depth: i32,
     close_depth: i32,
 }
@@ -48,6 +49,7 @@ impl Token {
 
         let mut is_negated = false;
         let mut is_side = false;
+        let mut is_stage = false;
         match string.chars().next().expect("first_char") {
             '!' => {
                 is_negated = true;
@@ -55,6 +57,9 @@ impl Token {
             }
             '^' => {
                 is_side = true;
+            }
+            '#' => {
+                is_stage = true;
             }
             _ => {}
         }
@@ -79,6 +84,7 @@ impl Token {
             is_var,
             is_negated,
             is_side,
+            is_stage,
             open_depth,
             close_depth,
         }
@@ -297,10 +303,27 @@ where
             state.push(QUI.clone());
         }
 
-        for rule in rules.iter() {
-            if let Some(rule) = rule_matches_state(&rule, &state, &mut context.rng, &side_input) {
-                matching_rule = Some(rule);
-                break;
+        {
+            let state_stages = state.iter().filter(|p| p[0].is_stage).collect::<Vec<_>>();
+            for rule in rules.iter() {
+                // early exit if rule stages can't match state
+                for input in rule.inputs
+                    .iter()
+                    .filter(|p| p[0].is_stage && !p[0].is_negated)
+                {
+                    if !state_stages
+                        .iter()
+                        .any(|p| test_match_without_variables(input, p))
+                    {
+                        continue;
+                    }
+                }
+
+                if let Some(rule) = rule_matches_state(&rule, &state, &mut context.rng, &side_input)
+                {
+                    matching_rule = Some(rule);
+                    break;
+                }
             }
         }
 
