@@ -31,9 +31,9 @@ fn main() {
     file.read_to_string(&mut contents).expect("read_to_string");
     let mut context = ceptre::Context::from_text(&contents);
 
-    let kd = context.to_atom("!kd");
-    let ku = context.to_atom("!ku");
-    let kp = context.to_atom("!kp");
+    let kd = context.to_atom("^kd");
+    let ku = context.to_atom("^ku");
+    let kp = context.to_atom("^kp");
     let left = context.to_atom("left");
     let right = context.to_atom("right");
     let up = context.to_atom("up");

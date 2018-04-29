@@ -2,10 +2,10 @@ at 1 1 wood . at 1 1 wood . at 1 1 wood . at 1 1 wood . at 1 1 wood
 
 #update:
   at X Y wood . + X 1 X' . + Y 1 Y' . + X'' 1 X . + Y'' 1 Y = at X' Y' fire . at X' Y'' fire . at X'' Y' fire . at X'' Y'' fire
-  !kd right . at X Y fire . + X 1 X' . < X 100 = at' X' Y fire
-  !kd right . at X Y fire . + Y 1 Y' . < Y 100 = at' X Y' fire
-  !ku right . at X Y fire . + X' 1 X . < 0 X = at' X' Y fire
-  !ku right . at X Y fire . + Y' 1 Y . < 0 Y = at' X Y' fire
+  ^kd right . at X Y fire . + X 1 X' . < X 100 = at' X' Y fire
+  ^kd right . at X Y fire . + Y 1 Y' . < Y 100 = at' X Y' fire
+  ^ku right . at X Y fire . + X' 1 X . < 0 X = at' X' Y fire
+  ^ku right . at X Y fire . + Y' 1 Y . < 0 Y = at' X Y' fire
   () = #process
 
 #process:

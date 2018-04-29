@@ -49,11 +49,11 @@ impl Token {
         let mut is_negated = false;
         let mut is_side = false;
         match string.chars().next().expect("first_char") {
-            '^' => {
+            '!' => {
                 is_negated = true;
                 string = string.get(1..).expect("get");
             }
-            '!' => {
+            '^' => {
                 is_side = true;
             }
             _ => {}
@@ -973,7 +973,7 @@ fn build_phrase(phrase: &Phrase) -> String {
         tokens.push(format!(
             "{}{}{}{}",
             String::from("(").repeat(t.open_depth as usize),
-            if t.is_negated { "^" } else { "" },
+            if t.is_negated { "!" } else { "" },
             t.string,
             String::from(")").repeat(t.close_depth as usize)
         ));
@@ -1227,22 +1227,22 @@ mod tests {
     fn rule_matches_state_truthiness_negated_test() {
         let mut test_cases = vec![
             (
-                Rule::new(vec![tokenize("^test")], vec![]),
+                Rule::new(vec![tokenize("!test")], vec![]),
                 vec![tokenize("foo"), tokenize("bar")],
                 true,
             ),
             (
-                Rule::new(vec![tokenize("^test")], vec![]),
+                Rule::new(vec![tokenize("!test")], vec![]),
                 vec![tokenize("foo"), tokenize("test"), tokenize("bar")],
                 false,
             ),
             (
-                Rule::new(vec![tokenize("test"), tokenize("^test")], vec![]),
+                Rule::new(vec![tokenize("test"), tokenize("!test")], vec![]),
                 vec![tokenize("foo"), tokenize("test"), tokenize("bar")],
                 true,
             ),
             (
-                Rule::new(vec![tokenize("test"), tokenize("^test")], vec![]),
+                Rule::new(vec![tokenize("test"), tokenize("!test")], vec![]),
                 vec![
                     tokenize("foo"),
                     tokenize("test"),
@@ -1252,12 +1252,12 @@ mod tests {
                 false,
             ),
             (
-                Rule::new(vec![tokenize("^test A B"), tokenize("foo A B")], vec![]),
+                Rule::new(vec![tokenize("!test A B"), tokenize("foo A B")], vec![]),
                 vec![tokenize("foo 1 2"), tokenize("test 1 3")],
                 true,
             ),
             (
-                Rule::new(vec![tokenize("^test A B"), tokenize("foo A B")], vec![]),
+                Rule::new(vec![tokenize("!test A B"), tokenize("foo A B")], vec![]),
                 vec![tokenize("foo 1 2"), tokenize("test 1 2")],
                 false,
             ),
@@ -1376,9 +1376,9 @@ mod tests {
                 tokenize("(t11 t12) (T2 (t31 (t32 t33)))"),
             ),
             (
-                tokenize("T1 ^T2"),
+                tokenize("T1 !T2"),
                 vec![(Atom::from("T2"), tokenize("t11 t12"))],
-                tokenize("T1 (^t11 t12)"),
+                tokenize("T1 (!t11 t12)"),
             ),
         ];
 
