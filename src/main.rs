@@ -35,6 +35,7 @@ fn main() {
     let ku = context.to_atom("!ku");
     let left = context.to_atom("left");
     let right = context.to_atom("right");
+    let up = context.to_atom("up");
     let down = context.to_atom("down");
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
@@ -52,6 +53,7 @@ fn main() {
                     let key = match &p[1].string {
                         b if *b == left => Some(Key::Left),
                         b if *b == right => Some(Key::Right),
+                        b if *b == up => Some(Key::Up),
                         b if *b == down => Some(Key::Down),
                         _ => None,
                     };
@@ -68,6 +70,7 @@ fn main() {
                     let key = match &p[1].string {
                         b if *b == left => Some(Key::Left),
                         b if *b == right => Some(Key::Right),
+                        b if *b == up => Some(Key::Up),
                         b if *b == down => Some(Key::Down),
                         _ => None,
                     };
