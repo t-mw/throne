@@ -1,35 +1,37 @@
 fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-height 10
 
-#tick . ^block-falling ID X Y = #new-block
-#tick . $block-falling ID X Y = #input-lr
+#tick . ^shape X Y BLOCKS = #new-shape
+#tick . $shape X Y BLOCKS = #input-lr
 
-#new-block . block-id ID . + ID 1 ID1 . + ID 2 ID2 . + ID 3 ID3 . + ID 4 ID4 = block-falling ID 5 10 . block-falling ID1 5 11 . block-falling ID2 5 12 . block-falling ID3 5 13 . block-id ID4 . #input-lr
-#new-block . block-id ID . + ID 1 ID1 . + ID 2 ID2 . + ID 3 ID3 . + ID 4 ID4 = block-falling ID 5 10 . block-falling ID1 6 10 . block-falling ID2 5 9 . block-falling ID3 6 9 . block-id ID4 . #input-lr
-#new-block . block-id ID . + ID 1 ID1 . + ID 2 ID2 . + ID 3 ID3 . + ID 4 ID4 = block-falling ID 5 10 . block-falling ID1 6 10 . block-falling ID2 7 10 . block-falling ID3 6 11 . block-id ID4 . #input-lr
+#new-shape = new-shape 6 10 ((block -1 0) ((block 0 0) ((block 1 0) ((block 0 1) (cons))))) . #shape-to-blocks (#input-lr)
+#new-shape = new-shape 6 10 ((block 0 1) ((block 0 2) ((block 0 3) ((block 0 4) (cons))))) . #shape-to-blocks (#input-lr)
+#new-shape = new-shape 6 10 ((block -1 0) ((block 0 0) ((block -1 1) ((block 0 1) (cons))))) . #shape-to-blocks (#input-lr)
 
-#input-lr . !kd left = #check-border-l
-#input-lr . !kd right = #check-border-r
+#shape-to-blocks RETURN:
+  block-falling ID X Y =
+  $new-shape X Y BLOCKS . ^BLOCKS = BLOCKS
+  () = #shape-to-blocks-create RETURN
+
+#shape-to-blocks-create RETURN:
+  $new-shape X Y BLOCKS . (block DX DY) BLOCK . block-id ID . + ID 1 ID2 . + X DX X1 . + Y DY Y1 = block-falling ID X1 Y1 . block-id ID2 . BLOCK
+  () = #shape-to-blocks-check RETURN
+
+#shape-to-blocks-check RETURN . block-falling ID X Y . $block-set ID2 X Y = #shape-to-blocks-fail RETURN
+#shape-to-blocks-check RETURN . block-falling ID X Y . < X 0 = #shape-to-blocks-fail RETURN
+#shape-to-blocks-check RETURN . block-falling ID X Y . $max-width W . >= X W = #shape-to-blocks-fail RETURN
+#shape-to-blocks-check RETURN . () = #shape-to-blocks-ok RETURN
+
+#shape-to-blocks-ok RETURN:
+  shape X Y BLOCKS =
+  new-shape X Y BLOCKS . () = shape X Y BLOCKS . RETURN
+
+#shape-to-blocks-fail RETURN:
+  new-shape X Y BLOCKS =
+  $shape X Y BLOCKS . () = new-shape X Y BLOCKS . #shape-to-blocks RETURN
+
+#input-lr . !kd left . $shape X Y BLOCKS . + X1 1 X = new-shape X1 Y BLOCKS . #shape-to-blocks (#input-d)
+#input-lr . !kd right . $shape X Y BLOCKS . + X 1 X1 = new-shape X1 Y BLOCKS . #shape-to-blocks (#input-d)
 #input-lr . () = #input-d
-
-#check-border-l . ^block-falling ID 0 Y = #check-collision-l
-#check-border-l . () = #input-d
-
-#check-border-r . ^block-falling ID W2 Y . $max-width W . + W2 1 W = #check-collision-r
-#check-border-r . () = #input-d
-
-#check-collision-l . $block-falling ID X Y . + X1 1 X . $block-set ID2 X1 Y = #input-d
-#check-collision-l . () = #move-l
-
-#check-collision-r . $block-falling ID X Y . + X 1 X1 . $block-set ID2 X1 Y = #input-d
-#check-collision-r . () = #move-r
-
-#move-l:
-  block-falling ID X Y . + X1 1 X . ^block-moved ID = block-falling ID X1 Y . block-moved ID
-  () = #input-d
-
-#move-r:
-  block-falling ID X Y . + X 1 X1 . ^block-moved ID = block-falling ID X1 Y . block-moved ID
-  () = #input-d
 
 #input-d:
   !kd down . default-fall-timer 0.25 . fall-timer TIMER = default-fall-timer 0.05 . fall-timer 0
@@ -40,6 +42,7 @@ fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-heig
   block-falling ID X Y . + Y1 1 Y . $block-set ID2 X Y1 = block-setting ID X Y
   block-falling ID X Y . + Y1 1 Y . < Y1 0 = block-setting ID X Y
   $block-setting ID X Y . block-falling ID2 X1 Y1 = block-setting ID2 X1 Y1
+  $block-setting ID X Y . shape X1 Y1 BLOCKS =
   () = #set
 
 #set:
@@ -65,12 +68,10 @@ fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-heig
 #fall-tick . fall-timer TIMER . >= TIMER 0 . $dt DT . + TIMER2 DT TIMER . >= TIMER2 0 = fall-timer TIMER2 . #clean
 #fall-tick . fall-timer TIMER . >= TIMER 0 . $dt DT . + TIMER2 DT TIMER . < TIMER2 0 . $default-fall-timer D = fall-timer D . #fall
 
-#fall:
-  block-falling ID X Y . ^block-fell ID . + Y1 1 Y = block-falling ID X Y1 . block-fell ID
-  () = #clean
+#fall . shape X Y BLOCKS . + Y1 1 Y = new-shape X Y1 BLOCKS . #shape-to-blocks (#clean)
+#fall . () = #clean
 
 #clean:
-  block-moved ID =
-  block-fell ID =
   dt DT =
+  cons =
   () =
