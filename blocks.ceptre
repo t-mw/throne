@@ -1,11 +1,11 @@
-fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-height 10
+fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-height 20
 
 #tick . !shape X Y BLOCKS = #new-shape
 #tick . $shape X Y BLOCKS = #input-u
 
-#new-shape = new-shape 6 10 ((block -1 0) ((block 0 0) ((block 1 0) ((block 0 1) (cons))))) . #shape-to-blocks (#input-lr)
-#new-shape = new-shape 6 10 ((block 0 -1) ((block 0 0) ((block 0 1) (cons)))) . #shape-to-blocks (#input-lr)
-#new-shape = new-shape 6 10 ((block 0 -1) ((block 0 0) ((block 0 1) ((block 1 1) (cons))))) . #shape-to-blocks (#input-lr)
+#new-shape . $max-height H = new-shape 4 H ((block -1 0) ((block 0 0) ((block 1 0) ((block 0 1) (cons))))) . #shape-to-blocks (#input-lr)
+#new-shape . $max-height H = new-shape 4 H ((block 0 -1) ((block 0 0) ((block 0 1) (cons)))) . #shape-to-blocks (#input-lr)
+#new-shape . $max-height H = new-shape 4 H ((block 0 -1) ((block 0 0) ((block 0 1) ((block 1 1) (cons))))) . #shape-to-blocks (#input-lr)
 
 #shape-to-blocks RETURN:
   block-falling ID X Y =

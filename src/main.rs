@@ -14,7 +14,7 @@ use std::io::Read;
 use std::{fs, thread, time};
 
 const WIDTH: usize = 100;
-const HEIGHT: usize = 100;
+const HEIGHT: usize = 200;
 
 fn main() {
     let mut window = Window::new(
