@@ -1,8 +1,8 @@
 use rand;
 use rand::{Rng, SeedableRng, StdRng};
 use regex::Regex;
-use string_cache::DefaultAtom as Atom;
 
+use std::collections::HashMap;
 use std::iter;
 use std::vec::Vec;
 
@@ -12,6 +12,11 @@ macro_rules! dump {
         $({txt += &format!("\t{}={:?};", stringify!($a), $a)});*;
         println!("DEBUG: {}", txt);
     })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Atom {
+    idx: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,7 +51,12 @@ impl PartialEq for Token {
 impl Eq for Token {}
 
 impl Token {
-    fn new(string: &str, open_depth: i32, close_depth: i32) -> Token {
+    fn new(
+        string: &str,
+        open_depth: i32,
+        close_depth: i32,
+        string_cache: &mut StringCache,
+    ) -> Token {
         let mut string = string;
 
         let mut is_negated = false;
@@ -80,8 +90,10 @@ impl Token {
             _ => None,
         };
 
+        let atom = string_cache.to_atom(string);
+
         Token {
-            string: Atom::from(string),
+            string: atom,
             backwards_pred,
             is_var,
             is_negated,
@@ -90,6 +102,10 @@ impl Token {
             open_depth,
             close_depth,
         }
+    }
+
+    pub fn as_str<'a>(&self, string_cache: &'a StringCache) -> &'a str {
+        string_cache.from_atom(self.string)
     }
 }
 
@@ -124,8 +140,41 @@ impl Rule {
 pub struct Context {
     rules: Vec<Rule>,
     pub state: Vec<Phrase>,
+    pub string_cache: StringCache,
     quiescence: bool,
     rng: StdRng,
+}
+
+pub struct StringCache {
+    atom_to_string: Vec<String>,
+    string_to_atom: HashMap<String, Atom>,
+}
+
+impl StringCache {
+    pub fn new() -> StringCache {
+        StringCache {
+            atom_to_string: vec![],
+            string_to_atom: HashMap::new(),
+        }
+    }
+
+    pub fn to_atom(&mut self, text: &str) -> Atom {
+        if let Some(atom) = self.string_to_atom.get(text) {
+            return *atom;
+        }
+
+        let idx = self.atom_to_string.len();
+        let atom = Atom { idx };
+
+        self.atom_to_string.push(text.to_string());
+        self.string_to_atom.insert(text.to_string(), atom);
+
+        atom
+    }
+
+    pub fn from_atom<'a>(&'a self, atom: Atom) -> &'a str {
+        &self.atom_to_string[atom.idx]
+    }
 }
 
 impl Context {
@@ -133,7 +182,9 @@ impl Context {
         let text = text.replace("()", "qui");
         let lines = text.split("\n");
 
-        let parse_rule = |id: i32, string: &str| {
+        let mut string_cache = StringCache::new();
+
+        let parse_rule = |id: i32, string: &str, string_cache: &mut StringCache| {
             let mut r = string.split(" =");
 
             let (dollars, inputs): (Vec<_>, Vec<_>) = r
@@ -155,10 +206,13 @@ impl Context {
                 .iter()
                 .chain(dollars.iter())
                 .cloned()
-                .map(tokenize)
+                .map(|s| tokenize(s, string_cache))
                 .collect();
 
-            let outputs = outputs.chain(dollars).map(tokenize).collect();
+            let outputs = outputs
+                .chain(dollars)
+                .map(|s| tokenize(s, string_cache))
+                .collect();
 
             return Rule::new_with_id(id, inputs, outputs);
         };
@@ -172,17 +226,21 @@ impl Context {
                 .map(|caps| caps.get(1).unwrap().as_str().trim())
         };
 
-        let get_init = |line: &String| {
+        let get_init = |line: &String, string_cache: &mut StringCache| {
             if !line.contains(" =") && !line.is_empty() {
-                return Some(line.split(" . ").map(tokenize).collect::<Vec<_>>());
+                return Some(
+                    line.split(" . ")
+                        .map(|s| tokenize(s, string_cache))
+                        .collect::<Vec<_>>(),
+                );
             } else {
                 return None;
             }
         };
 
-        let get_rule = |(i, line): (usize, &String)| {
+        let get_rule = |(i, line): (usize, &String), string_cache: &mut StringCache| {
             if line.contains(" =") && !line.is_empty() {
-                return Some(parse_rule(i as i32, line));
+                return Some(parse_rule(i as i32, line, string_cache));
             } else {
                 return None;
             }
@@ -220,7 +278,7 @@ impl Context {
 
         let state = out_lines
             .iter()
-            .map(get_init)
+            .map(|l| get_init(l, &mut string_cache))
             .filter(|v| v.is_some())
             .flat_map(|v| v.expect("v"))
             .collect::<Vec<_>>();
@@ -228,7 +286,7 @@ impl Context {
         let rules = out_lines
             .iter()
             .enumerate()
-            .map(get_rule)
+            .map(|l| get_rule(l, &mut string_cache))
             .filter(|v| v.is_some())
             .map(|v| v.expect("v"))
             .collect::<Vec<_>>();
@@ -245,9 +303,14 @@ impl Context {
         Context {
             state,
             rules,
+            string_cache,
             quiescence: false,
             rng,
         }
+    }
+
+    pub fn to_atom(&mut self, text: &str) -> Atom {
+        self.string_cache.to_atom(text)
     }
 
     pub fn with_test_rng(mut self) -> Context {
@@ -257,19 +320,19 @@ impl Context {
     }
 
     pub fn append_state(&mut self, text: &str) {
-        self.state.push(tokenize(text));
-    }
-
-    pub fn to_atom(&self, text: &str) -> Atom {
-        Atom::from(text)
+        self.state.push(tokenize(text, &mut self.string_cache));
     }
 
     pub fn print(&self) {
         println!("state:");
-        print_state(&self.state);
+        print_state(&self.state, &self.string_cache);
 
         println!("\nrules:");
-        let mut rules = self.rules.iter().map(rule_to_string).collect::<Vec<_>>();
+        let mut rules = self
+            .rules
+            .iter()
+            .map(|r| rule_to_string(r, &self.string_cache))
+            .collect::<Vec<_>>();
         rules.sort();
 
         for r in rules {
@@ -285,9 +348,7 @@ where
     let rules = &mut context.rules;
     let state = &mut context.state;
 
-    lazy_static! {
-        static ref QUI: Phrase = vec![Token::new("qui", 0, 0)];
-    }
+    let qui: Phrase = vec![Token::new("qui", 0, 0, &mut context.string_cache)];
 
     loop {
         let mut matching_rule = None;
@@ -300,7 +361,7 @@ where
         context.rng.shuffle(state);
 
         if context.quiescence {
-            state.push(QUI.clone());
+            state.push(qui.clone());
         }
 
         {
@@ -320,8 +381,13 @@ where
                     }
                 }
 
-                if let Some(rule) = rule_matches_state(&rule, &state, &mut context.rng, &side_input)
-                {
+                if let Some(rule) = rule_matches_state(
+                    &rule,
+                    &state,
+                    &mut context.rng,
+                    &side_input,
+                    &mut context.string_cache,
+                ) {
                     matching_rule = Some(rule);
                     break;
                 }
@@ -336,9 +402,9 @@ where
                     state
                         .iter()
                         .enumerate()
-                        .filter(|&(_, p)| **p == QUI[..])
+                        .filter(|&(_, p)| **p == qui[..])
                         .collect::<Vec<_>>()
-                        == vec![(state.len() - 1, &QUI.clone())],
+                        == vec![(state.len() - 1, &qui.clone())],
                     "expected 1 * () at end of state"
                 );
 
@@ -375,6 +441,7 @@ fn rule_matches_state<R, F>(
     state: &Vec<Phrase>,
     rng: &mut R,
     side_input: &F,
+    string_cache: &mut StringCache,
 ) -> Option<Rule>
 where
     R: Rng,
@@ -483,7 +550,8 @@ where
         }
 
         for input in backwards_pred.iter().map(|&i| &inputs[i]) {
-            let mut extra_matches = match_backwards_variables(input, &variables_matched);
+            let mut extra_matches =
+                match_backwards_variables(input, &variables_matched, string_cache);
 
             if let Some(ref mut extra_matches) = extra_matches {
                 variables_matched.append(extra_matches);
@@ -534,10 +602,14 @@ where
     return None;
 }
 
-fn match_backwards_variables(pred: &Phrase, existing_matches: &Vec<Match>) -> Option<Vec<Match>> {
+fn match_backwards_variables(
+    pred: &Phrase,
+    existing_matches: &Vec<Match>,
+    string_cache: &mut StringCache,
+) -> Option<Vec<Match>> {
     let pred = assign_vars(pred, existing_matches);
 
-    evaluate_backwards_pred(&pred).and_then(|eval_result| {
+    evaluate_backwards_pred(&pred, string_cache).and_then(|eval_result| {
         match_variables_with_existing(&pred, &eval_result, existing_matches)
     })
 }
@@ -616,31 +688,31 @@ fn is_negated_pred(tokens: &Phrase) -> bool {
     return tokens[0].is_negated;
 }
 
-fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
+fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> Option<Phrase> {
     match tokens[0].backwards_pred {
         Some(BackwardsPred::Plus) => {
             use std::str::FromStr;
 
-            let n1 = f32::from_str(&tokens[1].string);
-            let n2 = f32::from_str(&tokens[2].string);
-            let n3 = f32::from_str(&tokens[3].string);
+            let n1 = f32::from_str(tokens[1].as_str(string_cache));
+            let n2 = f32::from_str(tokens[2].as_str(string_cache));
+            let n3 = f32::from_str(tokens[3].as_str(string_cache));
 
             return match (n1, n2, n3) {
                 (Ok(v1), Ok(v2), Err(_)) => Some(vec![
                     tokens[0].clone(),
                     tokens[1].clone(),
                     tokens[2].clone(),
-                    Token::new(&(v1 + v2).to_string(), 0, 1),
+                    Token::new(&(v1 + v2).to_string(), 0, 1, string_cache),
                 ]),
                 (Ok(v1), Err(_), Ok(v3)) => Some(vec![
                     tokens[0].clone(),
                     tokens[1].clone(),
-                    Token::new(&(v3 - v1).to_string(), 0, 0),
+                    Token::new(&(v3 - v1).to_string(), 0, 0, string_cache),
                     tokens[3].clone(),
                 ]),
                 (Err(_), Ok(v2), Ok(v3)) => Some(vec![
                     tokens[0].clone(),
-                    Token::new(&(v3 - v2).to_string(), 0, 0),
+                    Token::new(&(v3 - v2).to_string(), 0, 0, string_cache),
                     tokens[2].clone(),
                     tokens[3].clone(),
                 ]),
@@ -651,8 +723,8 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
         Some(BackwardsPred::Lt) => {
             use std::str::FromStr;
 
-            let n1 = f32::from_str(&tokens[1].string);
-            let n2 = f32::from_str(&tokens[2].string);
+            let n1 = f32::from_str(tokens[1].as_str(string_cache));
+            let n2 = f32::from_str(tokens[2].as_str(string_cache));
 
             return match (n1, n2) {
                 (Ok(v1), Ok(v2)) if v1 < v2 => Some(tokens.clone()),
@@ -662,8 +734,8 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
         Some(BackwardsPred::Gt) => {
             use std::str::FromStr;
 
-            let n1 = f32::from_str(&tokens[1].string);
-            let n2 = f32::from_str(&tokens[2].string);
+            let n1 = f32::from_str(tokens[1].as_str(string_cache));
+            let n2 = f32::from_str(tokens[2].as_str(string_cache));
 
             return match (n1, n2) {
                 (Ok(v1), Ok(v2)) if v1 > v2 => Some(tokens.clone()),
@@ -673,8 +745,8 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
         Some(BackwardsPred::Lte) => {
             use std::str::FromStr;
 
-            let n1 = f32::from_str(&tokens[1].string);
-            let n2 = f32::from_str(&tokens[2].string);
+            let n1 = f32::from_str(tokens[1].as_str(string_cache));
+            let n2 = f32::from_str(tokens[2].as_str(string_cache));
 
             return match (n1, n2) {
                 (Ok(v1), Ok(v2)) if v1 <= v2 => Some(tokens.clone()),
@@ -684,8 +756,8 @@ fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
         Some(BackwardsPred::Gte) => {
             use std::str::FromStr;
 
-            let n1 = f32::from_str(&tokens[1].string);
-            let n2 = f32::from_str(&tokens[2].string);
+            let n1 = f32::from_str(tokens[1].as_str(string_cache));
+            let n2 = f32::from_str(tokens[2].as_str(string_cache));
 
             return match (n1, n2) {
                 (Ok(v1), Ok(v2)) if v1 >= v2 => Some(tokens.clone()),
@@ -831,7 +903,7 @@ fn match_variables_with_existing(
     return Some(result);
 }
 
-fn tokenize(string: &str) -> Phrase {
+fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
     let mut string = format!("({})", string);
 
     lazy_static! {
@@ -883,7 +955,7 @@ fn tokenize(string: &str) -> Phrase {
             continue;
         }
 
-        result.push(Token::new(token, open_depth, close_depth));
+        result.push(Token::new(token, open_depth, close_depth, string_cache));
         open_depth = 0;
         close_depth = 0;
     }
@@ -991,15 +1063,17 @@ struct IterRandState<'a, T: 'a> {
     _slice: &'a [T],
 }
 
-fn build_phrase(phrase: &Phrase) -> String {
+fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
     let mut tokens = vec![];
 
     for t in phrase.iter() {
+        let string = t.as_str(string_cache);
+
         tokens.push(format!(
             "{}{}{}{}",
             String::from("(").repeat(t.open_depth as usize),
             if t.is_negated { "!" } else { "" },
-            t.string,
+            string,
             String::from(")").repeat(t.close_depth as usize)
         ));
     }
@@ -1007,24 +1081,28 @@ fn build_phrase(phrase: &Phrase) -> String {
     return tokens.join(" ");
 }
 
-fn print_state(state: &Vec<Phrase>) {
-    for s in state.iter().map(|p| build_phrase(p)).collect::<Vec<_>>() {
+fn print_state(state: &Vec<Phrase>, string_cache: &StringCache) {
+    for s in state
+        .iter()
+        .map(|p| build_phrase(p, string_cache))
+        .collect::<Vec<_>>()
+    {
         println!("{}", s);
     }
 }
 
-fn rule_to_string(rule: &Rule) -> String {
+fn rule_to_string(rule: &Rule, string_cache: &StringCache) -> String {
     let inputs = rule
         .inputs
         .iter()
-        .map(|p| build_phrase(p))
+        .map(|p| build_phrase(p, string_cache))
         .collect::<Vec<_>>()
         .join(" . ");
 
     let outputs = rule
         .outputs
         .iter()
-        .map(|p| build_phrase(p))
+        .map(|p| build_phrase(p, string_cache))
         .collect::<Vec<_>>()
         .join(" . ");
 
@@ -1042,7 +1120,7 @@ mod tests {
 
     #[test]
     fn context_from_text_state_test() {
-        let context = Context::from_text(
+        let mut context = Context::from_text(
             "at 0 0 wood . at 0 0 wood . #update \n\
              at 1 2 wood",
         );
@@ -1050,17 +1128,17 @@ mod tests {
         assert_eq!(
             context.state,
             [
-                tokenize("at 0 0 wood"),
-                tokenize("at 0 0 wood"),
-                tokenize("#update"),
-                tokenize("at 1 2 wood"),
+                tokenize("at 0 0 wood", &mut context.string_cache),
+                tokenize("at 0 0 wood", &mut context.string_cache),
+                tokenize("#update", &mut context.string_cache),
+                tokenize("at 1 2 wood", &mut context.string_cache),
             ]
         );
     }
 
     #[test]
     fn context_from_text_rules_test() {
-        let context = Context::from_text(
+        let mut context = Context::from_text(
             "at 0 0 wood . at 1 2 wood = at 1 0 wood \n\
              #test: \n\
              at 3 4 wood = at 5 6 wood . at 7 8 wood",
@@ -1071,16 +1149,22 @@ mod tests {
             [
                 Rule::new_with_id(
                     0,
-                    vec![tokenize("at 0 0 wood"), tokenize("at 1 2 wood")],
-                    vec![tokenize("at 1 0 wood")]
+                    vec![
+                        tokenize("at 0 0 wood", &mut context.string_cache),
+                        tokenize("at 1 2 wood", &mut context.string_cache),
+                    ],
+                    vec![tokenize("at 1 0 wood", &mut context.string_cache)]
                 ),
                 Rule::new_with_id(
                     1,
-                    vec![tokenize("#test"), tokenize("at 3 4 wood")],
                     vec![
-                        tokenize("at 5 6 wood"),
-                        tokenize("at 7 8 wood"),
-                        tokenize("#test"),
+                        tokenize("#test", &mut context.string_cache),
+                        tokenize("at 3 4 wood", &mut context.string_cache),
+                    ],
+                    vec![
+                        tokenize("at 5 6 wood", &mut context.string_cache),
+                        tokenize("at 7 8 wood", &mut context.string_cache),
+                        tokenize("#test", &mut context.string_cache),
                     ],
                 ),
             ]
@@ -1095,7 +1179,10 @@ mod tests {
 
         assert_eq!(
             context.state,
-            vec![tokenize("test 1 2"), tokenize("test 3 4")]
+            vec![
+                tokenize("test 1 2", &mut context.string_cache),
+                tokenize("test 3 4", &mut context.string_cache),
+            ]
         );
     }
 
@@ -1115,124 +1202,187 @@ mod tests {
         assert_eq!(
             context.state,
             [
-                tokenize("at 1 1 fire"),
-                tokenize("at 1 1 wood"),
-                tokenize("at 0 0 fire"),
-                tokenize("at 0 0 wood"),
-                tokenize("at 0 1 fire"),
+                tokenize("at 1 1 fire", &mut context.string_cache),
+                tokenize("at 1 1 wood", &mut context.string_cache),
+                tokenize("at 0 0 fire", &mut context.string_cache),
+                tokenize("at 0 0 wood", &mut context.string_cache),
+                tokenize("at 0 1 fire", &mut context.string_cache),
             ]
         );
     }
 
     #[test]
     fn token_test() {
-        assert!(!Token::new("tt1", 1, 1).is_var);
-        assert!(!Token::new("tT1", 1, 1).is_var);
-        assert!(!Token::new("1", 1, 1).is_var);
-        assert!(!Token::new("1Tt", 1, 1).is_var);
-        assert!(Token::new("T", 1, 1).is_var);
-        assert!(Token::new("TT1", 1, 1).is_var);
-        assert!(Token::new("TT1'", 1, 1).is_var);
+        let mut string_cache = StringCache::new();
+        assert!(!Token::new("tt1", 1, 1, &mut string_cache).is_var);
+        assert!(!Token::new("tT1", 1, 1, &mut string_cache).is_var);
+        assert!(!Token::new("1", 1, 1, &mut string_cache).is_var);
+        assert!(!Token::new("1Tt", 1, 1, &mut string_cache).is_var);
+        assert!(Token::new("T", 1, 1, &mut string_cache).is_var);
+        assert!(Token::new("TT1", 1, 1, &mut string_cache).is_var);
+        assert!(Token::new("TT1'", 1, 1, &mut string_cache).is_var);
     }
 
     #[test]
     fn rule_matches_state_truthiness_test() {
+        let mut string_cache = StringCache::new();
+
         let mut test_cases = vec![
             (
-                Rule::new(vec![tokenize("t1 t3 t2"), tokenize("t1 t2 t3")], vec![]),
-                vec![tokenize("t1 t3 t2"), tokenize("t1 t2 t3")],
+                Rule::new(
+                    vec![
+                        tokenize("t1 t3 t2", &mut string_cache),
+                        tokenize("t1 t2 t3", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("t1 t3 t2", &mut string_cache),
+                    tokenize("t1 t2 t3", &mut string_cache),
+                ],
                 true,
             ),
             (
-                Rule::new(vec![tokenize("t1 T2 T3")], vec![]),
-                vec![tokenize("t1 t2 t3")],
+                Rule::new(vec![tokenize("t1 T2 T3", &mut string_cache)], vec![]),
+                vec![tokenize("t1 t2 t3", &mut string_cache)],
                 true,
             ),
             (
-                Rule::new(vec![tokenize("t1 T3 T2"), tokenize("t1 T2 T3")], vec![]),
-                vec![tokenize("t1 t2 t3"), tokenize("t1 t2 t3")],
+                Rule::new(
+                    vec![
+                        tokenize("t1 T3 T2", &mut string_cache),
+                        tokenize("t1 T2 T3", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("t1 t2 t3", &mut string_cache),
+                    tokenize("t1 t2 t3", &mut string_cache),
+                ],
                 false,
             ),
             (
-                Rule::new(vec![tokenize("t1 T3 T2"), tokenize("t1 T2 T3")], vec![]),
-                vec![tokenize("t1 t3 t2"), tokenize("t1 t2 t3")],
+                Rule::new(
+                    vec![
+                        tokenize("t1 T3 T2", &mut string_cache),
+                        tokenize("t1 T2 T3", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("t1 t3 t2", &mut string_cache),
+                    tokenize("t1 t2 t3", &mut string_cache),
+                ],
                 true,
             ),
             (
-                Rule::new(vec![tokenize("t1 T1 T2"), tokenize("+ T1 T2 T2")], vec![]),
-                vec![tokenize("t1 1 2")],
+                Rule::new(
+                    vec![
+                        tokenize("t1 T1 T2", &mut string_cache),
+                        tokenize("+ T1 T2 T2", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![tokenize("t1 1 2", &mut string_cache)],
                 false,
             ),
             (
-                Rule::new(vec![tokenize("t1 T1 T2"), tokenize("+ T1 T2 T2")], vec![]),
-                vec![tokenize("t1 0 2")],
+                Rule::new(
+                    vec![
+                        tokenize("t1 T1 T2", &mut string_cache),
+                        tokenize("+ T1 T2 T2", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![tokenize("t1 0 2", &mut string_cache)],
                 true,
             ),
             (
-                Rule::new(vec![tokenize("t1 T1 T2"), tokenize("t1 T1 T2")], vec![]),
-                vec![tokenize("t1 0 2")],
+                Rule::new(
+                    vec![
+                        tokenize("t1 T1 T2", &mut string_cache),
+                        tokenize("t1 T1 T2", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![tokenize("t1 0 2", &mut string_cache)],
                 false,
             ),
             // successful match with backwards predicates at first and last position
             (
                 Rule::new(
                     vec![
-                        tokenize("+ T1 T2 T2"),
-                        tokenize("t1 T1 T2"),
-                        tokenize("t3 T3 T4"),
-                        tokenize("+ T3 T4 T2"),
+                        tokenize("+ T1 T2 T2", &mut string_cache),
+                        tokenize("t1 T1 T2", &mut string_cache),
+                        tokenize("t3 T3 T4", &mut string_cache),
+                        tokenize("+ T3 T4 T2", &mut string_cache),
                     ],
                     vec![],
                 ),
-                vec![tokenize("t1 0 2"), tokenize("t3 -2 4")],
+                vec![
+                    tokenize("t1 0 2", &mut string_cache),
+                    tokenize("t3 -2 4", &mut string_cache),
+                ],
                 true,
             ),
             // unsuccessful match with backwards predicates at first and last position
             (
                 Rule::new(
                     vec![
-                        tokenize("+ T1 T2 T2"),
-                        tokenize("t1 T1 T2"),
-                        tokenize("t3 T3 T4"),
-                        tokenize("+ T3 T4 0"),
+                        tokenize("+ T1 T2 T2", &mut string_cache),
+                        tokenize("t1 T1 T2", &mut string_cache),
+                        tokenize("t3 T3 T4", &mut string_cache),
+                        tokenize("+ T3 T4 0", &mut string_cache),
                     ],
                     vec![],
                 ),
-                vec![tokenize("t1 0 2"), tokenize("t3 -2 4")],
+                vec![
+                    tokenize("t1 0 2", &mut string_cache),
+                    tokenize("t3 -2 4", &mut string_cache),
+                ],
                 false,
             ),
             (
                 Rule::new(
                     vec![
-                        tokenize("+ T1 1 T2"),
-                        tokenize("+ T3 1 T4"),
-                        tokenize("t1 T1 T4"),
+                        tokenize("+ T1 1 T2", &mut string_cache),
+                        tokenize("+ T3 1 T4", &mut string_cache),
+                        tokenize("t1 T1 T4", &mut string_cache),
                     ],
                     vec![],
                 ),
-                vec![tokenize("t1 0 1")],
+                vec![tokenize("t1 0 1", &mut string_cache)],
                 true,
             ),
             (
                 Rule::new(
                     vec![
-                        tokenize("first"),
+                        tokenize("first", &mut string_cache),
                         // failing backwards predicate
-                        tokenize("+ 3 4 5"),
-                        tokenize("at X Y fire"),
+                        tokenize("+ 3 4 5", &mut string_cache),
+                        tokenize("at X Y fire", &mut string_cache),
                     ],
                     vec![],
                 ),
                 vec![
-                    tokenize("at 1 1 fire"),
-                    tokenize("at 1 -1 fire"),
-                    tokenize("first"),
+                    tokenize("at 1 1 fire", &mut string_cache),
+                    tokenize("at 1 -1 fire", &mut string_cache),
+                    tokenize("first", &mut string_cache),
                 ],
                 false,
             ),
             (
-                Rule::new(vec![tokenize("at X Y fire"), tokenize("< 0 X")], vec![]),
-                vec![tokenize("at 0 0 fire"), tokenize("at 2 0 fire")],
+                Rule::new(
+                    vec![
+                        tokenize("at X Y fire", &mut string_cache),
+                        tokenize("< 0 X", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("at 0 0 fire", &mut string_cache),
+                    tokenize("at 2 0 fire", &mut string_cache),
+                ],
                 true,
             ),
         ];
@@ -1240,7 +1390,13 @@ mod tests {
         let mut rng = test_rng();
 
         for (rule, state, expected) in test_cases.drain(..) {
-            let result = rule_matches_state(&rule, &state, &mut rng, &|_: &Phrase| None);
+            let result = rule_matches_state(
+                &rule,
+                &state,
+                &mut rng,
+                &|_: &Phrase| None,
+                &mut string_cache,
+            );
 
             if expected {
                 assert!(result.is_some());
@@ -1252,40 +1408,83 @@ mod tests {
 
     #[test]
     fn rule_matches_state_truthiness_negated_test() {
+        let mut string_cache = StringCache::new();
+
         let mut test_cases = vec![
             (
-                Rule::new(vec![tokenize("!test")], vec![]),
-                vec![tokenize("foo"), tokenize("bar")],
-                true,
-            ),
-            (
-                Rule::new(vec![tokenize("!test")], vec![]),
-                vec![tokenize("foo"), tokenize("test"), tokenize("bar")],
-                false,
-            ),
-            (
-                Rule::new(vec![tokenize("test"), tokenize("!test")], vec![]),
-                vec![tokenize("foo"), tokenize("test"), tokenize("bar")],
-                true,
-            ),
-            (
-                Rule::new(vec![tokenize("test"), tokenize("!test")], vec![]),
+                Rule::new(vec![tokenize("!test", &mut string_cache)], vec![]),
                 vec![
-                    tokenize("foo"),
-                    tokenize("test"),
-                    tokenize("test"),
-                    tokenize("bar"),
+                    tokenize("foo", &mut string_cache),
+                    tokenize("bar", &mut string_cache),
+                ],
+                true,
+            ),
+            (
+                Rule::new(vec![tokenize("!test", &mut string_cache)], vec![]),
+                vec![
+                    tokenize("foo", &mut string_cache),
+                    tokenize("test", &mut string_cache),
+                    tokenize("bar", &mut string_cache),
                 ],
                 false,
             ),
             (
-                Rule::new(vec![tokenize("!test A B"), tokenize("foo A B")], vec![]),
-                vec![tokenize("foo 1 2"), tokenize("test 1 3")],
+                Rule::new(
+                    vec![
+                        tokenize("test", &mut string_cache),
+                        tokenize("!test", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("foo", &mut string_cache),
+                    tokenize("test", &mut string_cache),
+                    tokenize("bar", &mut string_cache),
+                ],
                 true,
             ),
             (
-                Rule::new(vec![tokenize("!test A B"), tokenize("foo A B")], vec![]),
-                vec![tokenize("foo 1 2"), tokenize("test 1 2")],
+                Rule::new(
+                    vec![
+                        tokenize("test", &mut string_cache),
+                        tokenize("!test", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("foo", &mut string_cache),
+                    tokenize("test", &mut string_cache),
+                    tokenize("test", &mut string_cache),
+                    tokenize("bar", &mut string_cache),
+                ],
+                false,
+            ),
+            (
+                Rule::new(
+                    vec![
+                        tokenize("!test A B", &mut string_cache),
+                        tokenize("foo A B", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("foo 1 2", &mut string_cache),
+                    tokenize("test 1 3", &mut string_cache),
+                ],
+                true,
+            ),
+            (
+                Rule::new(
+                    vec![
+                        tokenize("!test A B", &mut string_cache),
+                        tokenize("foo A B", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("foo 1 2", &mut string_cache),
+                    tokenize("test 1 2", &mut string_cache),
+                ],
                 false,
             ),
         ];
@@ -1293,7 +1492,13 @@ mod tests {
         let mut rng = test_rng();
 
         for (rule, state, expected) in test_cases.drain(..) {
-            let result = rule_matches_state(&rule, &state, &mut rng, &|_: &Phrase| None);
+            let result = rule_matches_state(
+                &rule,
+                &state,
+                &mut rng,
+                &|_: &Phrase| None,
+                &mut string_cache,
+            );
 
             if expected {
                 assert!(result.is_some());
@@ -1305,55 +1510,63 @@ mod tests {
 
     #[test]
     fn rule_matches_state_output_test() {
+        let mut string_cache = StringCache::new();
+
         let mut test_cases = vec![
             (
                 Rule::new(
                     vec![
-                        tokenize("t1 T1 T2"),
-                        tokenize("+ T1 T2 T3'"),
-                        tokenize("+ T1 T4' T2"),
+                        tokenize("t1 T1 T2", &mut string_cache),
+                        tokenize("+ T1 T2 T3'", &mut string_cache),
+                        tokenize("+ T1 T4' T2", &mut string_cache),
                     ],
-                    vec![tokenize("t3 T3'"), tokenize("t4 T4'")],
+                    vec![
+                        tokenize("t3 T3'", &mut string_cache),
+                        tokenize("t4 T4'", &mut string_cache),
+                    ],
                 ),
-                vec![tokenize("t1 3 4")],
+                vec![tokenize("t1 3 4", &mut string_cache)],
                 Rule::new(
-                    vec![tokenize("t1 3 4")],
-                    vec![tokenize("t3 7"), tokenize("t4 1")],
+                    vec![tokenize("t1 3 4", &mut string_cache)],
+                    vec![
+                        tokenize("t3 7", &mut string_cache),
+                        tokenize("t4 1", &mut string_cache),
+                    ],
                 ),
             ),
             (
                 Rule::new(
                     vec![
-                        tokenize("#collision"),
-                        tokenize("block-falling ID X Y"),
-                        tokenize("+ Y1 1 Y"),
-                        tokenize("block-set ID2 X Y1"),
+                        tokenize("#collision", &mut string_cache),
+                        tokenize("block-falling ID X Y", &mut string_cache),
+                        tokenize("+ Y1 1 Y", &mut string_cache),
+                        tokenize("block-set ID2 X Y1", &mut string_cache),
                     ],
                     vec![
-                        tokenize("block-setting ID X Y"),
-                        tokenize("#collision"),
-                        tokenize("block-set ID2 X Y1"),
+                        tokenize("block-setting ID X Y", &mut string_cache),
+                        tokenize("#collision", &mut string_cache),
+                        tokenize("block-set ID2 X Y1", &mut string_cache),
                     ],
                 ),
                 vec![
-                    tokenize("block-set 0 5 1"),
-                    tokenize("block-set 1 6 1"),
-                    tokenize("block-set 3 6 0"),
-                    tokenize("block-falling 7 6 2"),
-                    tokenize("#collision"),
-                    tokenize("block-falling 6 5 2"),
-                    tokenize("block-set 2 5 0"),
+                    tokenize("block-set 0 5 1", &mut string_cache),
+                    tokenize("block-set 1 6 1", &mut string_cache),
+                    tokenize("block-set 3 6 0", &mut string_cache),
+                    tokenize("block-falling 7 6 2", &mut string_cache),
+                    tokenize("#collision", &mut string_cache),
+                    tokenize("block-falling 6 5 2", &mut string_cache),
+                    tokenize("block-set 2 5 0", &mut string_cache),
                 ],
                 Rule::new(
                     vec![
-                        tokenize("#collision"),
-                        tokenize("block-falling 7 6 2"),
-                        tokenize("block-set 1 6 1"),
+                        tokenize("#collision", &mut string_cache),
+                        tokenize("block-falling 7 6 2", &mut string_cache),
+                        tokenize("block-set 1 6 1", &mut string_cache),
                     ],
                     vec![
-                        tokenize("block-setting 7 6 2"),
-                        tokenize("#collision"),
-                        tokenize("block-set 1 6 1"),
+                        tokenize("block-setting 7 6 2", &mut string_cache),
+                        tokenize("#collision", &mut string_cache),
+                        tokenize("block-set 1 6 1", &mut string_cache),
                     ],
                 ),
             ),
@@ -1362,7 +1575,13 @@ mod tests {
         let mut rng = test_rng();
 
         for (rule, state, expected) in test_cases.drain(..) {
-            let result = rule_matches_state(&rule, &state, &mut rng, &|_: &Phrase| None);
+            let result = rule_matches_state(
+                &rule,
+                &state,
+                &mut rng,
+                &|_: &Phrase| None,
+                &mut string_cache,
+            );
 
             assert!(result.is_some());
             assert_eq!(result.unwrap(), expected);
@@ -1371,41 +1590,63 @@ mod tests {
 
     #[test]
     fn evaluate_backwards_pred_test() {
+        let mut string_cache = StringCache::new();
+
         let mut test_cases = vec![
-            (tokenize("+ A 2 3"), Some(tokenize("+ 1 2 3"))),
-            (tokenize("+ 1 B 3"), Some(tokenize("+ 1 2 3"))),
-            (tokenize("+ 1 2 C"), Some(tokenize("+ 1 2 3"))),
-            (tokenize("+ 1 2 4"), None),
+            (
+                tokenize("+ A 2 3", &mut string_cache),
+                Some(tokenize("+ 1 2 3", &mut string_cache)),
+            ),
+            (
+                tokenize("+ 1 B 3", &mut string_cache),
+                Some(tokenize("+ 1 2 3", &mut string_cache)),
+            ),
+            (
+                tokenize("+ 1 2 C", &mut string_cache),
+                Some(tokenize("+ 1 2 3", &mut string_cache)),
+            ),
+            (tokenize("+ 1 2 4", &mut string_cache), None),
         ];
 
         for (input, expected) in test_cases.drain(..) {
-            assert_eq!(evaluate_backwards_pred(&input), expected);
+            assert_eq!(evaluate_backwards_pred(&input, &mut string_cache), expected);
         }
     }
 
     #[test]
     fn assign_vars_test() {
+        let mut string_cache = StringCache::new();
+
         let mut test_cases = vec![
             (
-                tokenize("+ T1 T2 T3"),
+                tokenize("+ T1 T2 T3", &mut string_cache),
                 vec![
-                    (Atom::from("T1"), tokenize("1")),
-                    (Atom::from("T2"), tokenize("2")),
+                    (string_cache.to_atom("T1"), tokenize("1", &mut string_cache)),
+                    (string_cache.to_atom("T2"), tokenize("2", &mut string_cache)),
                 ],
-                tokenize("+ 1 2 T3"),
+                tokenize("+ 1 2 T3", &mut string_cache),
             ),
             (
-                tokenize("T1 (T2 T3)"),
+                tokenize("T1 (T2 T3)", &mut string_cache),
                 vec![
-                    (Atom::from("T1"), tokenize("t11 t12")),
-                    (Atom::from("T3"), tokenize("t31 (t32 t33)")),
+                    (
+                        string_cache.to_atom("T1"),
+                        tokenize("t11 t12", &mut string_cache),
+                    ),
+                    (
+                        string_cache.to_atom("T3"),
+                        tokenize("t31 (t32 t33)", &mut string_cache),
+                    ),
                 ],
-                tokenize("(t11 t12) (T2 (t31 (t32 t33)))"),
+                tokenize("(t11 t12) (T2 (t31 (t32 t33)))", &mut string_cache),
             ),
             (
-                tokenize("T1 !T2"),
-                vec![(Atom::from("T2"), tokenize("t11 t12"))],
-                tokenize("T1 (!t11 t12)"),
+                tokenize("T1 !T2", &mut string_cache),
+                vec![(
+                    string_cache.to_atom("T2"),
+                    tokenize("t11 t12", &mut string_cache),
+                )],
+                tokenize("T1 (!t11 t12)", &mut string_cache),
             ),
         ];
 
@@ -1416,73 +1657,137 @@ mod tests {
 
     #[test]
     fn match_variables_test() {
+        let mut string_cache = StringCache::new();
+
         let mut test_cases = vec![
             (
-                tokenize("t1 T2 T3"),
-                tokenize("t1 t2 t3"),
+                tokenize("t1 T2 T3", &mut string_cache),
+                tokenize("t1 t2 t3", &mut string_cache),
                 Some(vec![
-                    (Atom::from("T2"), tokenize("t2")),
-                    (Atom::from("T3"), tokenize("t3")),
+                    (
+                        string_cache.to_atom("T2"),
+                        tokenize("t2", &mut string_cache),
+                    ),
+                    (
+                        string_cache.to_atom("T3"),
+                        tokenize("t3", &mut string_cache),
+                    ),
                 ]),
             ),
             (
-                tokenize("t1 T2"),
-                tokenize("t1 (t21 t22)"),
-                Some(vec![(Atom::from("T2"), tokenize("t21 t22"))]),
+                tokenize("t1 T2", &mut string_cache),
+                tokenize("t1 (t21 t22)", &mut string_cache),
+                Some(vec![(
+                    string_cache.to_atom("T2"),
+                    tokenize("t21 t22", &mut string_cache),
+                )]),
             ),
             (
-                tokenize("t1 (t21 T22 t23) T3"),
-                tokenize("t1 (t21 (t221 t222 t223) t23) t3"),
+                tokenize("t1 (t21 T22 t23) T3", &mut string_cache),
+                tokenize("t1 (t21 (t221 t222 t223) t23) t3", &mut string_cache),
                 Some(vec![
-                    (Atom::from("T22"), tokenize("t221 t222 t223")),
-                    (Atom::from("T3"), tokenize("t3")),
+                    (
+                        string_cache.to_atom("T22"),
+                        tokenize("t221 t222 t223", &mut string_cache),
+                    ),
+                    (
+                        string_cache.to_atom("T3"),
+                        tokenize("t3", &mut string_cache),
+                    ),
                 ]),
             ),
             (
-                tokenize("t1 T2 T3"),
-                tokenize("t1 t2 (t3 t2)"),
+                tokenize("t1 T2 T3", &mut string_cache),
+                tokenize("t1 t2 (t3 t2)", &mut string_cache),
                 Some(vec![
-                    (Atom::from("T2"), tokenize("t2")),
-                    (Atom::from("T3"), tokenize("t3 t2")),
+                    (
+                        string_cache.to_atom("T2"),
+                        tokenize("t2", &mut string_cache),
+                    ),
+                    (
+                        string_cache.to_atom("T3"),
+                        tokenize("t3 t2", &mut string_cache),
+                    ),
                 ]),
             ),
             (
-                tokenize("t1 T2"),
-                tokenize("t1 (t2 t3 (t3 t2))"),
-                Some(vec![(Atom::from("T2"), tokenize("t2 t3 (t3 t2)"))]),
+                tokenize("t1 T2", &mut string_cache),
+                tokenize("t1 (t2 t3 (t3 t2))", &mut string_cache),
+                Some(vec![(
+                    string_cache.to_atom("T2"),
+                    tokenize("t2 t3 (t3 t2)", &mut string_cache),
+                )]),
             ),
             (
-                tokenize("t1 T2"),
-                tokenize("t1 ((t2 t3) t3 t2)"),
-                Some(vec![(Atom::from("T2"), tokenize("(t2 t3) t3 t2"))]),
+                tokenize("t1 T2", &mut string_cache),
+                tokenize("t1 ((t2 t3) t3 t2)", &mut string_cache),
+                Some(vec![(
+                    string_cache.to_atom("T2"),
+                    tokenize("(t2 t3) t3 t2", &mut string_cache),
+                )]),
             ),
             (
-                tokenize("t1 (t2 t3 T2)"),
-                tokenize("t1 (t2 t3 (t3 t2))"),
-                Some(vec![(Atom::from("T2"), tokenize("t3 t2"))]),
+                tokenize("t1 (t2 t3 T2)", &mut string_cache),
+                tokenize("t1 (t2 t3 (t3 t2))", &mut string_cache),
+                Some(vec![(
+                    string_cache.to_atom("T2"),
+                    tokenize("t3 t2", &mut string_cache),
+                )]),
             ),
             (
-                tokenize("t1 (T2 t3 t2)"),
-                tokenize("t1 ((t2 t3) t3 t2)"),
-                Some(vec![(Atom::from("T2"), tokenize("t2 t3"))]),
+                tokenize("t1 (T2 t3 t2)", &mut string_cache),
+                tokenize("t1 ((t2 t3) t3 t2)", &mut string_cache),
+                Some(vec![(
+                    string_cache.to_atom("T2"),
+                    tokenize("t2 t3", &mut string_cache),
+                )]),
             ),
             (
-                tokenize("t1 T2 T3"),
-                tokenize("t1 (t2 t3) (t3 t2)"),
+                tokenize("t1 T2 T3", &mut string_cache),
+                tokenize("t1 (t2 t3) (t3 t2)", &mut string_cache),
                 Some(vec![
-                    (Atom::from("T2"), tokenize("t2 t3")),
-                    (Atom::from("T3"), tokenize("t3 t2")),
+                    (
+                        string_cache.to_atom("T2"),
+                        tokenize("t2 t3", &mut string_cache),
+                    ),
+                    (
+                        string_cache.to_atom("T3"),
+                        tokenize("t3 t2", &mut string_cache),
+                    ),
                 ]),
             ),
-            (tokenize("t1 t3"), tokenize("t1 t3"), Some(vec![])),
-            (tokenize("t1 t3"), tokenize("t1 (t21 t23)"), None),
-            (tokenize("t1 T3"), tokenize("t1 t2 t3"), None),
-            (tokenize("t1 T3 t3"), tokenize("t1 t2"), None),
-            (tokenize("t1 T3 T3"), tokenize("t1 t2 t3"), None),
             (
-                tokenize("t1 T3 T3"),
-                tokenize("t1 t3 t3"),
-                Some(vec![(Atom::from("T3"), tokenize("t3"))]),
+                tokenize("t1 t3", &mut string_cache),
+                tokenize("t1 t3", &mut string_cache),
+                Some(vec![]),
+            ),
+            (
+                tokenize("t1 t3", &mut string_cache),
+                tokenize("t1 (t21 t23)", &mut string_cache),
+                None,
+            ),
+            (
+                tokenize("t1 T3", &mut string_cache),
+                tokenize("t1 t2 t3", &mut string_cache),
+                None,
+            ),
+            (
+                tokenize("t1 T3 t3", &mut string_cache),
+                tokenize("t1 t2", &mut string_cache),
+                None,
+            ),
+            (
+                tokenize("t1 T3 T3", &mut string_cache),
+                tokenize("t1 t2 t3", &mut string_cache),
+                None,
+            ),
+            (
+                tokenize("t1 T3 T3", &mut string_cache),
+                tokenize("t1 t3 t3", &mut string_cache),
+                Some(vec![(
+                    string_cache.to_atom("T3"),
+                    tokenize("t3", &mut string_cache),
+                )]),
             ),
         ];
 
@@ -1493,65 +1798,81 @@ mod tests {
 
     #[test]
     fn match_variables_with_existing_test() {
-        let input_tokens = tokenize("T1 T2 T3");
-        let pred_tokens = tokenize("t1 t2 t3");
-        let existing_matches = vec![(Atom::from("T2"), tokenize("t2"))];
+        let mut string_cache = StringCache::new();
+
+        let input_tokens = tokenize("T1 T2 T3", &mut string_cache);
+        let pred_tokens = tokenize("t1 t2 t3", &mut string_cache);
+        let existing_matches = vec![(
+            string_cache.to_atom("T2"),
+            tokenize("t2", &mut string_cache),
+        )];
 
         let result = match_variables_with_existing(&input_tokens, &pred_tokens, &existing_matches);
 
         assert_eq!(
             result,
             Some(vec![
-                (Atom::from("T1"), tokenize("t1")),
-                (Atom::from("T3"), tokenize("t3")),
+                (
+                    string_cache.to_atom("T1"),
+                    tokenize("t1", &mut string_cache),
+                ),
+                (
+                    string_cache.to_atom("T3"),
+                    tokenize("t3", &mut string_cache),
+                ),
             ])
         )
     }
 
     #[test]
     fn tokenize_test() {
-        assert_eq!(tokenize("t1"), [Token::new("t1", 0, 0)]);
+        let mut string_cache = StringCache::new();
 
         assert_eq!(
-            tokenize("t1 (t21 (t221 t222 t223) t23) t3"),
+            tokenize("t1", &mut string_cache),
+            [Token::new("t1", 0, 0, &mut string_cache)]
+        );
+
+        assert_eq!(
+            tokenize("t1 (t21 (t221 t222 t223) t23) t3", &mut string_cache),
             [
-                Token::new("t1", 1, 0),
-                Token::new("t21", 1, 0),
-                Token::new("t221", 1, 0),
-                Token::new("t222", 0, 0),
-                Token::new("t223", 0, 1),
-                Token::new("t23", 0, 1),
-                Token::new("t3", 0, 1),
+                Token::new("t1", 1, 0, &mut string_cache),
+                Token::new("t21", 1, 0, &mut string_cache),
+                Token::new("t221", 1, 0, &mut string_cache),
+                Token::new("t222", 0, 0, &mut string_cache),
+                Token::new("t223", 0, 1, &mut string_cache),
+                Token::new("t23", 0, 1, &mut string_cache),
+                Token::new("t3", 0, 1, &mut string_cache),
             ]
         );
 
         assert_eq!(
-            tokenize("t1 t2 (((t3 )) t4)"),
+            tokenize("t1 t2 (((t3 )) t4)", &mut string_cache),
             [
-                Token::new("t1", 1, 0),
-                Token::new("t2", 0, 0),
-                Token::new("t3", 1, 0),
-                Token::new("t4", 0, 2),
+                Token::new("t1", 1, 0, &mut string_cache),
+                Token::new("t2", 0, 0, &mut string_cache),
+                Token::new("t3", 1, 0, &mut string_cache),
+                Token::new("t4", 0, 2, &mut string_cache),
             ]
         );
 
         assert_eq!(
-            tokenize("(t1 t2) (t3 t4)"),
+            tokenize("(t1 t2) (t3 t4)", &mut string_cache),
             [
-                Token::new("t1", 2, 0),
-                Token::new("t2", 0, 1),
-                Token::new("t3", 1, 0),
-                Token::new("t4", 0, 2),
+                Token::new("t1", 2, 0, &mut string_cache),
+                Token::new("t2", 0, 1, &mut string_cache),
+                Token::new("t3", 1, 0, &mut string_cache),
+                Token::new("t4", 0, 2, &mut string_cache),
             ]
         );
 
         assert_eq!(
-            tokenize("t1 t2 (t3'' t4')"),
+            tokenize("t1 t2 (t3'' t4')", &mut string_cache),
             [
-                Token::new("t1", 1, 0),
-                Token::new("t2", 0, 0),
-                Token::new("t3''", 1, 0),
-                Token::new("t4'", 0, 2),
+                Token::new("t1", 1, 0, &mut string_cache),
+                Token::new("t2", 0, 0, &mut string_cache),
+                Token::new("t3''", 1, 0, &mut string_cache),
+                Token::new("t4'", 0, 2, &mut string_cache),
             ]
         );
     }

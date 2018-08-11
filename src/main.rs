@@ -4,7 +4,6 @@ extern crate lazy_static;
 extern crate minifb;
 extern crate rand;
 extern crate regex;
-extern crate string_cache;
 
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
@@ -44,7 +43,7 @@ fn main() {
         context.append_state("dt 0.03");
         context.print();
 
-        let string_to_key = |s: &str| match s {
+        let string_to_key = |s: &ceptre::Atom| match s {
             s if *s == left => Some(Key::Left),
             s if *s == right => Some(Key::Right),
             s if *s == up => Some(Key::Up),
@@ -91,10 +90,10 @@ fn main() {
             use std::str::FromStr;
 
             match (
-                p.get(0).map(|t| &*t.string),
-                p.get(1).map(|t| &*t.string),
-                p.get(2).map(|t| &*t.string),
-                p.get(3).map(|t| &*t.string),
+                p.get(0).map(|t| context.string_cache.from_atom(t.string)),
+                p.get(1).map(|t| context.string_cache.from_atom(t.string)),
+                p.get(2).map(|t| context.string_cache.from_atom(t.string)),
+                p.get(3).map(|t| context.string_cache.from_atom(t.string)),
             ) {
                 (Some("block-falling"), Some(_id), Some(x), Some(y))
                 | (Some("block-set"), Some(_id), Some(x), Some(y)) => {
