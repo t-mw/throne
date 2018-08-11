@@ -37,8 +37,10 @@ pub struct Token {
 
 impl PartialEq for Token {
     fn eq(&self, other: &Token) -> bool {
-        self.string == other.string && self.is_side == other.is_side
-            && self.open_depth == other.open_depth && self.close_depth == other.close_depth
+        self.string == other.string
+            && self.is_side == other.is_side
+            && self.open_depth == other.open_depth
+            && self.close_depth == other.close_depth
     }
 }
 impl Eq for Token {}
@@ -96,11 +98,7 @@ type Match = (Atom, Phrase);
 
 // https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
 pub trait SideInput: Fn(&Phrase) -> Option<Phrase> {}
-impl<F> SideInput for F
-where
-    F: Fn(&Phrase) -> Option<Phrase>,
-{
-}
+impl<F> SideInput for F where F: Fn(&Phrase) -> Option<Phrase> {}
 
 #[derive(Debug, Eq, PartialEq)]
 struct Rule {
@@ -138,7 +136,8 @@ impl Context {
         let parse_rule = |id: i32, string: &str| {
             let mut r = string.split(" =");
 
-            let (dollars, inputs): (Vec<_>, Vec<_>) = r.next()
+            let (dollars, inputs): (Vec<_>, Vec<_>) = r
+                .next()
                 .expect("r[0]")
                 .split(" . ")
                 .map(|s| s.trim())
@@ -205,7 +204,8 @@ impl Context {
                     attach = label;
                 } else if let Some(attach) = attach {
                     // discard the current label on quiescence
-                    if line.split(|c| c == '.' || c == '=')
+                    if line
+                        .split(|c| c == '.' || c == '=')
                         .any(|s| s.trim() == "qui")
                     {
                         out_lines.push(format!("{} . {}", attach, line));
@@ -307,7 +307,8 @@ where
             let state_stages = state.iter().filter(|p| p[0].is_stage).collect::<Vec<_>>();
             for rule in rules.iter() {
                 // early exit if rule stages can't match state
-                for input in rule.inputs
+                for input in rule
+                    .inputs
                     .iter()
                     .filter(|p| p[0].is_stage && !p[0].is_negated)
                 {
@@ -853,7 +854,8 @@ fn tokenize(string: &str) -> Phrase {
         static ref RE2: Regex = Regex::new(r"\(|\)|\s+|[^\(\)\s]+").unwrap();
     }
 
-    let tokens = RE2.find_iter(&string)
+    let tokens = RE2
+        .find_iter(&string)
         .map(|m| m.as_str())
         .filter(|s| !s.trim().is_empty())
         .collect::<Vec<_>>();
@@ -1012,13 +1014,15 @@ fn print_state(state: &Vec<Phrase>) {
 }
 
 fn rule_to_string(rule: &Rule) -> String {
-    let inputs = rule.inputs
+    let inputs = rule
+        .inputs
         .iter()
         .map(|p| build_phrase(p))
         .collect::<Vec<_>>()
         .join(" . ");
 
-    let outputs = rule.outputs
+    let outputs = rule
+        .outputs
         .iter()
         .map(|p| build_phrase(p))
         .collect::<Vec<_>>()
