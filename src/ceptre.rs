@@ -609,7 +609,13 @@ where
         }
 
         for v in outputs.iter() {
-            outputs_concrete.push(assign_vars(v, &variables_matched));
+            if is_side_pred(v) {
+                let pred = assign_vars(v, &variables_matched);
+
+                evaluate_side_pred(&pred, side_input);
+            } else {
+                outputs_concrete.push(assign_vars(v, &variables_matched));
+            }
         }
 
         return Some(Rule::new_with_id(r.id, forward_concrete, outputs_concrete));
