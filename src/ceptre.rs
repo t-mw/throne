@@ -3,6 +3,7 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use regex::Regex;
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::iter;
 use std::vec::Vec;
@@ -15,9 +16,37 @@ macro_rules! dump {
     })
 }
 
+pub trait OptionFilter<T> {
+    fn option_filter<P: FnOnce(&T) -> bool>(self, predicate: P) -> Self;
+}
+
+// copy of nightly-only method Option::filter
+impl<T> OptionFilter<T> for Option<T> {
+    fn option_filter<P: FnOnce(&T) -> bool>(self, predicate: P) -> Self {
+        if let Some(x) = self {
+            if predicate(&x) {
+                return Some(x);
+            }
+        }
+        None
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Atom {
     idx: usize,
+}
+
+impl PartialOrd for Atom {
+    fn partial_cmp(&self, other: &Atom) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Atom {
+    fn cmp(&self, other: &Atom) -> Ordering {
+        self.idx.cmp(&other.idx)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -148,6 +177,7 @@ pub struct Context {
     pub string_cache: StringCache,
     quiescence: bool,
     rng: SmallRng,
+    first_atoms_state: Vec<FirstAtomsState>,
 }
 
 pub struct StringCache {
@@ -321,13 +351,18 @@ impl Context {
 
         let rng = SmallRng::from_seed(seed);
 
-        Context {
+        let mut context = Context {
             state,
             rules,
             string_cache,
             quiescence: false,
             rng,
-        }
+            first_atoms_state: vec![],
+        };
+
+        context.on_state_change();
+
+        context
     }
 
     pub fn to_atom(&mut self, text: &str) -> Atom {
@@ -346,6 +381,11 @@ impl Context {
 
     pub fn append_state(&mut self, text: &str) {
         self.state.push(tokenize(text, &mut self.string_cache));
+        self.on_state_change();
+    }
+
+    fn on_state_change(&mut self) {
+        self.first_atoms_state = extract_first_atoms_state(&self.state);
     }
 
     pub fn print(&self) {
@@ -579,48 +619,37 @@ pub fn update<F>(context: &mut Context, mut side_input: F)
 where
     F: SideInput,
 {
-    let rules = &mut context.rules;
-    let state = &mut context.state;
-
     let qui: Phrase = vec![Token::new("qui", 0, 0, &mut context.string_cache)];
 
     loop {
         let mut matching_rule = None;
 
         // shuffle rules so that each has an equal chance of selection.
-        context.rng.shuffle(rules);
+        context.rng.shuffle(&mut context.rules);
 
         // shuffle state so that a given rule with multiple potential
         // matches does not always match the same permutation of state.
-        context.rng.shuffle(state);
+        context.rng.shuffle(&mut context.state);
 
         if context.quiescence {
-            state.push(qui.clone());
+            context.state.push(qui.clone());
         }
 
-        {
-            let state_stages = state.iter().filter(|p| p[0].is_stage).collect::<Vec<_>>();
-            for rule in rules.iter() {
-                // early exit if rule stages can't match state
-                for input in rule
-                    .inputs
-                    .iter()
-                    .filter(|p| p[0].is_stage && !p[0].is_negated)
-                {
-                    if !state_stages
-                        .iter()
-                        .any(|p| test_match_without_variables(input, p))
-                    {
-                        continue;
-                    }
-                }
+        // state changed with shuffle + qui
+        context.on_state_change();
 
+        {
+            let rules = &context.rules;
+            let state = &context.state;
+
+            for rule in rules.iter() {
                 if let Some(rule) = rule_matches_state(
                     &rule,
                     &state,
                     &mut context.rng,
                     &mut side_input,
                     &mut context.string_cache,
+                    &context.first_atoms_state,
                 ) {
                     matching_rule = Some(rule);
                     break;
@@ -632,6 +661,8 @@ where
             context.quiescence = false;
 
             if matching_rule.is_none() {
+                let state = &mut context.state;
+
                 assert!(
                     state
                         .iter()
@@ -653,14 +684,20 @@ where
             let inputs = &matching_rule.inputs;
             let outputs = &matching_rule.outputs;
 
-            for input in inputs.iter() {
-                let remove_idx = state.iter().position(|v| v == input);
-                state.swap_remove(remove_idx.expect("remove_idx"));
+            {
+                let state = &mut context.state;
+
+                for input in inputs.iter() {
+                    let remove_idx = state.iter().position(|v| v == input);
+                    state.swap_remove(remove_idx.expect("remove_idx"));
+                }
+
+                for output in outputs.iter() {
+                    state.push(output.clone());
+                }
             }
 
-            for output in outputs.iter() {
-                state.push(output.clone());
-            }
+            context.on_state_change();
         } else {
             context.quiescence = true;
         }
@@ -676,6 +713,7 @@ fn rule_matches_state<R, F>(
     rng: &mut R,
     side_input: &mut F,
     string_cache: &mut StringCache,
+    state_first_atoms: &Vec<FirstAtomsState>,
 ) -> Option<Rule>
 where
     R: Rng,
@@ -707,9 +745,40 @@ where
         } else if is_negated_pred(input) {
             negated_pred.push(i_i);
         } else {
-            for (s_i, p) in state.iter().enumerate() {
-                if test_match_without_variables(input, p) {
-                    input_state_matches.push(s_i);
+            assert!(is_concrete_pred(input));
+
+            let rule_first_atoms = extract_first_atoms_rule_input(input);
+
+            let start_idx = if let Some(first) = rule_first_atoms {
+                if let Some(idx) = state_first_atoms
+                    .binary_search_by(|probe| probe.1.cmp(&first))
+                    .ok()
+                {
+                    // binary search won't always find the first match,
+                    // so search backwards until we find it
+                    state_first_atoms
+                        .iter()
+                        .enumerate()
+                        .rev()
+                        .skip(state_first_atoms.len() - 1 - idx)
+                        .take_while(|(_, a)| a.1 == first)
+                        .last()
+                        .expect("start_idx")
+                        .0
+                } else {
+                    return None;
+                }
+            } else {
+                0
+            };
+
+            for (s_i, s) in state_first_atoms
+                .iter()
+                .skip(start_idx)
+                .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
+            {
+                if test_match_without_variables(input, &state[*s_i]) {
+                    input_state_matches.push(*s_i);
                     count += 1;
                 }
             }
@@ -821,7 +890,7 @@ where
         let mut outputs_concrete = vec![];
 
         for v in inputs.iter() {
-            if !is_backwards_pred(v) && !is_side_pred(v) && !is_negated_pred(v) {
+            if is_concrete_pred(v) {
                 forward_concrete.push(assign_vars(v, &variables_matched));
             }
         }
@@ -914,6 +983,10 @@ fn is_side_pred(tokens: &Phrase) -> bool {
 
 fn is_negated_pred(tokens: &Phrase) -> bool {
     return tokens[0].is_negated;
+}
+
+fn is_concrete_pred(tokens: &Phrase) -> bool {
+    !is_backwards_pred(tokens) && !is_side_pred(tokens) && !is_negated_pred(tokens)
 }
 
 fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> Option<Phrase> {
@@ -1310,6 +1383,37 @@ struct IterRandState<'a, T: 'a> {
     _slice: &'a [T],
 }
 
+type FirstAtoms = Option<Atom>;
+type FirstAtomsState = (usize, Atom);
+
+fn extract_first_atoms_rule_input(phrase: &Phrase) -> FirstAtoms {
+    if is_concrete_pred(phrase) {
+        phrase.get(0).option_filter(|t| !t.is_var).map(|t| t.string)
+    } else {
+        None
+    }
+}
+
+fn extract_first_atoms_state(state: &Vec<Phrase>) -> Vec<FirstAtomsState> {
+    let mut atoms: Vec<FirstAtomsState> = state
+        .iter()
+        .enumerate()
+        .map(|(s_i, s)| extract_first_atoms_state_phrase(s_i, s))
+        .collect();
+
+    atoms.sort_by(|a, b| a.1.cmp(&b.1));
+
+    atoms
+}
+
+fn extract_first_atoms_state_phrase(s_i: usize, phrase: &Phrase) -> FirstAtomsState {
+    (s_i, phrase[0].string)
+}
+
+fn are_first_atoms_equal(state_atoms: FirstAtomsState, rule_input_atoms: FirstAtoms) -> bool {
+    state_atoms.1 == rule_input_atoms.unwrap()
+}
+
 fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
     let mut tokens = vec![];
 
@@ -1646,6 +1750,7 @@ mod tests {
                 &mut rng,
                 &mut |_: &Phrase| None,
                 &mut string_cache,
+                &extract_first_atoms_state(&state),
             );
 
             if expected {
@@ -1748,6 +1853,7 @@ mod tests {
                 &mut rng,
                 &mut |_: &Phrase| None,
                 &mut string_cache,
+                &extract_first_atoms_state(&state),
             );
 
             if expected {
@@ -1831,6 +1937,7 @@ mod tests {
                 &mut rng,
                 &mut |_: &Phrase| None,
                 &mut string_cache,
+                &extract_first_atoms_state(&state),
             );
 
             assert!(result.is_some());
