@@ -1,5 +1,6 @@
 use rand;
-use rand::{Rng, SeedableRng, StdRng};
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 use regex::Regex;
 
 use std::collections::HashMap;
@@ -142,7 +143,7 @@ pub struct Context {
     pub state: Vec<Phrase>,
     pub string_cache: StringCache,
     quiescence: bool,
-    rng: StdRng,
+    rng: SmallRng,
 }
 
 pub struct StringCache {
@@ -291,14 +292,26 @@ impl Context {
             .map(|v| v.expect("v"))
             .collect::<Vec<_>>();
 
-        let seed = vec![
-            rand::random::<usize>(),
-            rand::random::<usize>(),
-            rand::random::<usize>(),
-            rand::random::<usize>(),
+        let seed = [
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
+            rand::random::<u8>(),
         ];
 
-        let rng = SeedableRng::from_seed(&seed[..]);
+        let rng = SmallRng::from_seed(seed);
 
         Context {
             state,
@@ -1109,9 +1122,12 @@ fn rule_to_string(rule: &Rule, string_cache: &StringCache) -> String {
     format!("{:5}: {} = {}", rule.id, inputs, outputs)
 }
 
-fn test_rng() -> StdRng {
-    let seed = vec![123, 123, 123, 123];
-    SeedableRng::from_seed(&seed[..])
+fn test_rng() -> SmallRng {
+    let seed = [
+        123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123,
+    ];
+
+    SmallRng::from_seed(seed)
 }
 
 #[cfg(test)]
@@ -1202,11 +1218,11 @@ mod tests {
         assert_eq!(
             context.state,
             [
-                tokenize("at 1 1 fire", &mut context.string_cache),
-                tokenize("at 1 1 wood", &mut context.string_cache),
                 tokenize("at 0 0 fire", &mut context.string_cache),
-                tokenize("at 0 0 wood", &mut context.string_cache),
                 tokenize("at 0 1 fire", &mut context.string_cache),
+                tokenize("at 1 1 fire", &mut context.string_cache),
+                tokenize("at 0 0 wood", &mut context.string_cache),
+                tokenize("at 1 1 wood", &mut context.string_cache),
             ]
         );
     }
