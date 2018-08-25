@@ -904,26 +904,14 @@ fn assign_vars(tokens: &Phrase, matches: &Vec<Match>) -> Phrase {
 }
 
 fn is_backwards_pred(tokens: &Phrase) -> bool {
-    if tokens.len() == 0 {
-        return false;
-    }
-
     return tokens[0].backwards_pred.is_some();
 }
 
 fn is_side_pred(tokens: &Phrase) -> bool {
-    if tokens.len() == 0 {
-        return false;
-    }
-
     return tokens[0].is_side;
 }
 
 fn is_negated_pred(tokens: &Phrase) -> bool {
-    if tokens.len() == 0 {
-        return false;
-    }
-
     return tokens[0].is_negated;
 }
 
