@@ -6,24 +6,20 @@ extern crate criterion;
 use criterion::Criterion;
 
 fn criterion_benchmark(c: &mut Criterion) {
-    let mut context = ceptre::Context::from_text("\
-at 1 1 wood . at 1 1 wood . at 1 1 wood . at 1 1 wood . at 1 1 wood\n\
-\n\
-#update:\n\
-  at X Y wood . + X 1 X' . + Y 1 Y' . + X'' 1 X . + Y'' 1 Y = at X' Y' fire . at X' Y'' fire . at X'' Y' fire . at X'' Y'' fire\n\
-  at X Y fire . + X 1 X' = at' X' Y fire\n\
-  at X Y fire . + Y 1 Y' = at' X Y' fire\n\
-  () = #process\n\
-\n\
-#process:\n\
-  at' X Y I = at X Y I\n\
-  () =
-");
+    c.bench_function("update/context1", |b| {
+        let mut context1 = ceptre::Context::from_text(include_str!("wood.ceptre"));
 
-    c.bench_function("update", |b| {
         b.iter(|| {
-            context.append_state("#update");
-            ceptre::update(&mut context, |_: &ceptre::Phrase| None);
+            context1.append_state("#update");
+            ceptre::update(&mut context1, |_: &ceptre::Phrase| None);
+        })
+    });
+
+    c.bench_function("update/context2", |b| {
+        let mut context2 = ceptre::Context::from_text(include_str!("spaceopera.ceptre"));
+
+        b.iter(|| {
+            ceptre::update(&mut context2, |_: &ceptre::Phrase| None);
         })
     });
 }
