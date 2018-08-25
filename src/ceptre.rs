@@ -163,8 +163,8 @@ impl StringCache {
     }
 
     pub fn to_atom(&mut self, text: &str) -> Atom {
-        if let Some(atom) = self.string_to_atom.get(text) {
-            return *atom;
+        if let Some(atom) = self.to_existing_atom(text) {
+            return atom;
         }
 
         let idx = self.atom_to_string.len();
@@ -174,6 +174,10 @@ impl StringCache {
         self.string_to_atom.insert(text.to_string(), atom);
 
         atom
+    }
+
+    pub fn to_existing_atom(&self, text: &str) -> Option<Atom> {
+        self.string_to_atom.get(text).cloned()
     }
 
     pub fn from_atom<'a>(&'a self, atom: Atom) -> &'a str {
@@ -327,6 +331,10 @@ impl Context {
 
     pub fn to_atom(&mut self, text: &str) -> Atom {
         self.string_cache.to_atom(text)
+    }
+
+    pub fn to_existing_atom(&self, text: &str) -> Option<Atom> {
+        self.string_cache.to_existing_atom(text)
     }
 
     pub fn with_test_rng(mut self) -> Context {
