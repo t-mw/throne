@@ -749,32 +749,34 @@ where
 
             let rule_first_atoms = extract_first_atoms_rule_input(input);
 
-            let start_idx = if let Some(idx) = state_first_atoms
-                .binary_search_by(|probe| cmp_first_atoms(&probe.1, &rule_first_atoms))
-                .ok()
-            {
-                // binary search won't always find the first match,
-                // so search backwards until we find it
-                state_first_atoms
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .skip(state_first_atoms.len() - 1 - idx)
-                    .take_while(|(_, a)| are_first_atoms_equal(&a.1, &rule_first_atoms))
-                    .last()
-                    .expect("start_idx")
-                    .0
+            let start_idx = if let Some(first) = rule_first_atoms {
+                if let Some(idx) = state_first_atoms
+                    .binary_search_by(|probe| probe.1.cmp(&first))
+                    .ok()
+                {
+                    // binary search won't always find the first match,
+                    // so search backwards until we find it
+                    state_first_atoms
+                        .iter()
+                        .enumerate()
+                        .rev()
+                        .skip(state_first_atoms.len() - 1 - idx)
+                        .take_while(|(_, a)| a.1 == first)
+                        .last()
+                        .expect("start_idx")
+                        .0
+                } else {
+                    return None;
+                }
             } else {
-                return None;
+                0
             };
 
-            let mut n = 0;
             for (s_i, s) in state_first_atoms
                 .iter()
                 .skip(start_idx)
-                .take_while(|a| are_first_atoms_equal(&a.1, &rule_first_atoms))
+                .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
             {
-                n += 1;
                 if test_match_without_variables(input, &state[*s_i]) {
                     input_state_matches.push(*s_i);
                     count += 1;
@@ -1381,47 +1383,14 @@ struct IterRandState<'a, T: 'a> {
     _slice: &'a [T],
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
-enum FirstAtom {
-    None,
-    Wildcard,
-    Atom(Atom),
-}
-
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
-struct FirstAtoms {
-    a0: FirstAtom,
-    a1: FirstAtom,
-    a2: FirstAtom,
-}
-
-type FirstAtomsState = (usize, FirstAtoms);
+type FirstAtoms = Option<Atom>;
+type FirstAtomsState = (usize, Atom);
 
 fn extract_first_atoms_rule_input(phrase: &Phrase) -> FirstAtoms {
-    let map = |t: Option<&Token>| {
-        if let Some(t) = t {
-            if t.is_var {
-                FirstAtom::Wildcard
-            } else {
-                FirstAtom::Atom(t.string)
-            }
-        } else {
-            FirstAtom::None
-        }
-    };
-
     if is_concrete_pred(phrase) {
-        FirstAtoms {
-            a0: map(phrase.get(0)),
-            a1: map(phrase.get(1)),
-            a2: map(phrase.get(2)),
-        }
+        phrase.get(0).option_filter(|t| !t.is_var).map(|t| t.string)
     } else {
-        FirstAtoms {
-            a0: FirstAtom::Wildcard,
-            a1: FirstAtom::Wildcard,
-            a2: FirstAtom::Wildcard,
-        }
+        None
     }
 }
 
@@ -1438,72 +1407,11 @@ fn extract_first_atoms_state(state: &Vec<Phrase>) -> Vec<FirstAtomsState> {
 }
 
 fn extract_first_atoms_state_phrase(s_i: usize, phrase: &Phrase) -> FirstAtomsState {
-    let map = |t: Option<&Token>| {
-        if let Some(t) = t {
-            FirstAtom::Atom(t.string)
-        } else {
-            FirstAtom::None
-        }
-    };
-
-    (
-        s_i,
-        FirstAtoms {
-            a0: map(phrase.get(0)),
-            a1: map(phrase.get(1)),
-            a2: map(phrase.get(2)),
-        },
-    )
+    (s_i, phrase[0].string)
 }
 
-fn are_first_atoms_equal(state_atoms: &FirstAtoms, rule_input_atoms: &FirstAtoms) -> bool {
-    cmp_first_atoms(state_atoms, rule_input_atoms) == Ordering::Equal
-}
-
-fn cmp_first_atoms(state_atoms: &FirstAtoms, rule_input_atoms: &FirstAtoms) -> Ordering {
-    match (&state_atoms.a0, &rule_input_atoms.a0) {
-        (&FirstAtom::Atom(a1), &FirstAtom::Atom(a2)) => if a1 != a2 {
-            return a1.cmp(&a2);
-        },
-        (&FirstAtom::Atom(_), &FirstAtom::Wildcard) => (),
-        _ => unreachable!(),
-    }
-
-    match (&state_atoms.a1, &rule_input_atoms.a1) {
-        (&FirstAtom::Atom(a1), &FirstAtom::Atom(a2)) => if a1 != a2 {
-            return a1.cmp(&a2);
-        },
-        (&FirstAtom::Atom(_), &FirstAtom::Wildcard) => (),
-        (&FirstAtom::None, &FirstAtom::None) => {
-            return (FirstAtom::None).cmp(&FirstAtom::None);
-        }
-        (&FirstAtom::None, a2) => {
-            return (FirstAtom::None).cmp(a2);
-        }
-        (a1, &FirstAtom::None) => {
-            return a1.cmp(&FirstAtom::None);
-        }
-        _ => unreachable!(),
-    }
-
-    match (&state_atoms.a2, &rule_input_atoms.a2) {
-        (&FirstAtom::Atom(a1), &FirstAtom::Atom(a2)) => if a1 != a2 {
-            return a1.cmp(&a2);
-        },
-        (&FirstAtom::Atom(_), &FirstAtom::Wildcard) => (),
-        (&FirstAtom::None, &FirstAtom::None) => {
-            return (FirstAtom::None).cmp(&FirstAtom::None);
-        }
-        (&FirstAtom::None, a2) => {
-            return (FirstAtom::None).cmp(a2);
-        }
-        (a1, &FirstAtom::None) => {
-            return a1.cmp(&FirstAtom::None);
-        }
-        _ => unreachable!(),
-    }
-
-    return Ordering::Equal;
+fn are_first_atoms_equal(state_atoms: FirstAtomsState, rule_input_atoms: FirstAtoms) -> bool {
+    state_atoms.1 == rule_input_atoms.unwrap()
 }
 
 fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
