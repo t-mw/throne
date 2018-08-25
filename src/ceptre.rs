@@ -363,6 +363,215 @@ impl Context {
             println!("{}", r);
         }
     }
+
+    pub fn find_phrase<'a>(&'a self, s1: Option<&str>) -> Option<&'a Phrase> {
+        self.find_phrase2(s1, None)
+    }
+
+    pub fn find_phrase2<'a>(&'a self, s1: Option<&str>, s2: Option<&str>) -> Option<&'a Phrase> {
+        self.find_phrase3(s1, s2, None)
+    }
+
+    pub fn find_phrase3<'a>(
+        &'a self,
+        s1: Option<&str>,
+        s2: Option<&str>,
+        s3: Option<&str>,
+    ) -> Option<&'a Phrase> {
+        self.find_phrase4(s1, s2, s3, None)
+    }
+
+    pub fn find_phrase4<'a>(
+        &'a self,
+        s1: Option<&str>,
+        s2: Option<&str>,
+        s3: Option<&str>,
+        s4: Option<&str>,
+    ) -> Option<&'a Phrase> {
+        self.find_phrase5(s1, s2, s3, s4, None)
+    }
+
+    pub fn find_phrase5<'a>(
+        &'a self,
+        s1: Option<&str>,
+        s2: Option<&str>,
+        s3: Option<&str>,
+        s4: Option<&str>,
+        s5: Option<&str>,
+    ) -> Option<&'a Phrase> {
+        let mut atom1 = None;
+        let mut atom2 = None;
+        let mut atom3 = None;
+        let mut atom4 = None;
+        let mut atom5 = None;
+
+        if let Some(s) = s1 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom1 = Some(atom);
+            } else {
+                return None;
+            }
+        };
+
+        if let Some(s) = s2 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom2 = Some(atom);
+            } else {
+                return None;
+            }
+        };
+
+        if let Some(s) = s3 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom3 = Some(atom);
+            } else {
+                return None;
+            }
+        };
+
+        if let Some(s) = s4 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom4 = Some(atom);
+            } else {
+                return None;
+            }
+        };
+
+        if let Some(s) = s5 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom5 = Some(atom);
+            } else {
+                return None;
+            }
+        };
+
+        for p in self.state.iter() {
+            match (
+                p.get(0).map(|t| &t.string),
+                p.get(1).map(|t| &t.string),
+                p.get(2).map(|t| &t.string),
+                p.get(3).map(|t| &t.string),
+                p.get(4).map(|t| &t.string),
+            ) {
+                (s1, s2, s3, s4, s5)
+                    if (atom1.is_none() || s1 == atom1.as_ref())
+                        && (atom2.is_none() || s2 == atom2.as_ref())
+                        && (atom3.is_none() || s3 == atom3.as_ref())
+                        && (atom4.is_none() || s4 == atom4.as_ref())
+                        && (atom5.is_none() || s5 == atom5.as_ref()) =>
+                {
+                    return Some(p);
+                }
+                _ => (),
+            };
+        }
+
+        return None;
+    }
+
+    pub fn find_phrases<'a>(&'a self, s1: Option<&str>) -> Vec<&'a Phrase> {
+        self.find_phrases2(s1, None)
+    }
+
+    pub fn find_phrases2<'a>(&'a self, s1: Option<&str>, s2: Option<&str>) -> Vec<&'a Phrase> {
+        self.find_phrases3(s1, s2, None)
+    }
+
+    pub fn find_phrases3<'a>(
+        &'a self,
+        s1: Option<&str>,
+        s2: Option<&str>,
+        s3: Option<&str>,
+    ) -> Vec<&'a Phrase> {
+        self.find_phrases4(s1, s2, s3, None)
+    }
+
+    pub fn find_phrases4<'a>(
+        &'a self,
+        s1: Option<&str>,
+        s2: Option<&str>,
+        s3: Option<&str>,
+        s4: Option<&str>,
+    ) -> Vec<&'a Phrase> {
+        self.find_phrases5(s1, s2, s3, s4, None)
+    }
+
+    pub fn find_phrases5<'a>(
+        &'a self,
+        s1: Option<&str>,
+        s2: Option<&str>,
+        s3: Option<&str>,
+        s4: Option<&str>,
+        s5: Option<&str>,
+    ) -> Vec<&'a Phrase> {
+        let mut atom1 = None;
+        let mut atom2 = None;
+        let mut atom3 = None;
+        let mut atom4 = None;
+        let mut atom5 = None;
+
+        if let Some(s) = s1 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom1 = Some(atom);
+            } else {
+                return vec![];
+            }
+        };
+
+        if let Some(s) = s2 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom2 = Some(atom);
+            } else {
+                return vec![];
+            }
+        };
+
+        if let Some(s) = s3 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom3 = Some(atom);
+            } else {
+                return vec![];
+            }
+        };
+
+        if let Some(s) = s4 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom4 = Some(atom);
+            } else {
+                return vec![];
+            }
+        };
+
+        if let Some(s) = s5 {
+            if let Some(atom) = self.to_existing_atom(s) {
+                atom5 = Some(atom);
+            } else {
+                return vec![];
+            }
+        };
+
+        return self
+            .state
+            .iter()
+            .filter(|p| {
+                match (
+                    p.get(0).map(|t| &t.string),
+                    p.get(1).map(|t| &t.string),
+                    p.get(2).map(|t| &t.string),
+                    p.get(3).map(|t| &t.string),
+                    p.get(4).map(|t| &t.string),
+                ) {
+                    (s1, s2, s3, s4, s5) => {
+                        (atom1.is_none() || s1 == atom1.as_ref())
+                            && (atom2.is_none() || s2 == atom2.as_ref())
+                            && (atom3.is_none() || s3 == atom3.as_ref())
+                            && (atom4.is_none() || s4 == atom4.as_ref())
+                            && (atom5.is_none() || s5 == atom5.as_ref())
+                    }
+                }
+            })
+            .collect();
+    }
 }
 
 pub fn update<F>(context: &mut Context, mut side_input: F)
