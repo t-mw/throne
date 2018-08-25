@@ -44,8 +44,9 @@ pub struct Token {
 
 impl PartialEq for Token {
     fn eq(&self, other: &Token) -> bool {
+        // properties not included here can be derived from string
         self.string == other.string
-            && self.is_side == other.is_side
+            && self.is_negated == other.is_negated
             && self.open_depth == other.open_depth
             && self.close_depth == other.close_depth
     }
@@ -1036,7 +1037,7 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
             pred_depth += pred_token.open_depth;
 
             if !token.is_var {
-                if token != pred_token || input_depth != pred_depth {
+                if token.string != pred_token.string || input_depth != pred_depth {
                     return false;
                 }
             } else {
@@ -1089,7 +1090,7 @@ fn match_variables_with_existing(
             pred_depth += pred_token.open_depth;
 
             if !token.is_var {
-                if token != pred_token || input_depth != pred_depth {
+                if token.string != pred_token.string || input_depth != pred_depth {
                     return None;
                 }
             } else {
