@@ -688,10 +688,10 @@ where
 
     // per input, a list of states that match the input.
     // indexed by input using start index and counts in the following vectors.
-    let mut input_state_matches = Vec::with_capacity(inputs.len() * state.len());
+    let mut input_state_matches = vec![];
 
-    let mut input_state_match_start_indices = Vec::with_capacity(inputs.len());
-    let mut input_state_match_counts = Vec::with_capacity(inputs.len());
+    let mut input_state_match_start_indices = vec![];
+    let mut input_state_match_counts = vec![];
 
     let mut backwards_pred = vec![];
     let mut side_pred = vec![];
