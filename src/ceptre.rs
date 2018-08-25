@@ -4,6 +4,7 @@ use rand::{Rng, SeedableRng};
 use regex::Regex;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::iter;
 use std::vec::Vec;
@@ -217,26 +218,20 @@ pub struct Context {
     rng: SmallRng,
 }
 
-struct PhraseToRuleInput {
-    rule_id: i32,
-    inputs: Vec<bool>,
-}
-
-struct PhraseToRules {
-    active: bool,
-    rule_inputs: Vec<PhraseToRuleInput>,
+#[derive(Hash, Eq, PartialEq)]
+struct RuleInputPhraseMatch {
+    rule_input: Phrase,
+    phrase: Phrase,
 }
 
 pub struct MatchCache {
-    phrase_counts: HashMap<Phrase, i32>,
-    phrase_to_rules: HashMap<Phrase, PhraseToRules>,
+    rule_phrase_matches: HashSet<RuleInputPhraseMatch>,
 }
 
 impl MatchCache {
     fn new(rules: &Vec<Rule>, state: &Vec<Phrase>) -> MatchCache {
         let mut cache = MatchCache {
-            phrase_counts: HashMap::new(),
-            phrase_to_rules: HashMap::new(),
+            rule_phrase_matches: HashSet::new(),
         };
 
         for phrase in state.iter() {
@@ -249,59 +244,25 @@ impl MatchCache {
     fn insert_phrase(&mut self, phrase: &Phrase, rules: &Vec<Rule>) {
         let phrase = remove_numbers_from_phrase(phrase.clone());
 
-        let insert = if let Some(count) = self.phrase_counts.get_mut(&phrase) {
-            *count += 1;
-            false
-        } else {
-            true
-        };
-
-        if insert {
-            self.phrase_counts.insert(phrase.clone(), 1);
-        }
-
-        if !self.phrase_to_rules.contains_key(&phrase) {
-            self.phrase_to_rules.insert(
-                phrase.clone(),
-                PhraseToRules {
-                    active: true,
-                    rule_inputs: rules
-                        .iter()
-                        .map(|r| {
-                            rule_inputs_maybe_matching_phrase(r, &phrase).map(|inputs| {
-                                PhraseToRuleInput {
-                                    rule_id: r.id,
-                                    inputs,
-                                }
-                            })
-                        })
-                        .filter(|result| result.is_some())
-                        .map(|result| result.unwrap())
-                        .collect::<Vec<_>>(),
-                },
-            );
-        } else {
-            self.phrase_to_rules.get_mut(&phrase).expect("tuple").active = true;
+        for r in rules.iter() {
+            for input in r.inputs.iter().filter(|input| is_concrete_pred(input)) {
+                if test_match_without_variables(input, &phrase) {
+                    self.rule_phrase_matches.insert(RuleInputPhraseMatch {
+                        rule_input: input.clone(),
+                        phrase: phrase.clone(),
+                    });
+                }
+            }
         }
     }
 
-    fn remove_phrase(&mut self, phrase: &Phrase) {
-        let phrase = remove_numbers_from_phrase(phrase.clone());
+    fn remove_phrase(&mut self, phrase: &Phrase) {}
 
-        let count = self.phrase_counts.get_mut(&phrase).expect("count");
-
-        *count -= 1;
-        assert!(*count >= 0);
-
-        if *count == 0 {
-            self.phrase_to_rules.get_mut(&phrase).unwrap().active = false;
-        }
-    }
-
-    fn get_rule_inputs_for_phrase(&self, phrase: &Phrase) -> Option<&PhraseToRules> {
-        self.phrase_to_rules
-            .get(phrase)
-            .option_filter(|res| res.active)
+    fn could_rule_input_match_phrase(&self, rule_input: &Phrase, phrase: &Phrase) -> bool {
+        self.rule_phrase_matches.contains(&RuleInputPhraseMatch {
+            rule_input: rule_input.clone(),
+            phrase: remove_numbers_from_phrase(phrase.clone()),
+        })
     }
 }
 
@@ -896,16 +857,6 @@ where
 
     let mut permutation_count = 1;
 
-    let inputs_maybe_matching_by_state = state
-        .iter()
-        .map(|p| {
-            match_cache
-                .get_rule_inputs_for_phrase(&remove_numbers_from_phrase(p.clone()))
-                .and_then(|res| res.rule_inputs.iter().find(|res| res.rule_id == r.id))
-                .map(|res| &res.inputs)
-        })
-        .collect::<Vec<_>>();
-
     // per input, a list of states that match the input.
     // indexed by input using start index and counts in the following vectors.
     let mut input_state_matches = vec![];
@@ -929,12 +880,10 @@ where
         } else {
             assert!(is_concrete_pred(input));
 
-            for (s_i, maybe_matches) in inputs_maybe_matching_by_state.iter().enumerate() {
-                if let Some(maybe_matches) = maybe_matches {
-                    if maybe_matches[i_i] {
-                        input_state_matches.push(s_i);
-                        count += 1;
-                    }
+            for (s_i, p) in state.iter().enumerate() {
+                if match_cache.could_rule_input_match_phrase(input, p) {
+                    input_state_matches.push(s_i);
+                    count += 1;
                 }
             }
 
@@ -1064,33 +1013,6 @@ where
     }
 
     return None;
-}
-
-fn rule_inputs_maybe_matching_phrase(r: &Rule, phrase: &Phrase) -> Option<Vec<bool>> {
-    let mut any_concrete_input = false;
-    let mut any_concrete_matches = false;
-    let mut matches = vec![];
-
-    for (i_i, input) in r.inputs.iter().enumerate() {
-        if is_concrete_pred(input) {
-            any_concrete_input = true;
-
-            let m = test_match_without_variables(input, phrase);
-            if m {
-                any_concrete_matches = true;
-            }
-
-            matches.push(m);
-        } else {
-            matches.push(true);
-        }
-    }
-
-    if any_concrete_input && !any_concrete_matches {
-        None
-    } else {
-        Some(matches)
-    }
 }
 
 fn match_backwards_variables(
