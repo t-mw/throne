@@ -117,8 +117,8 @@ pub type Phrase = Vec<Token>;
 type Match = (Atom, Phrase);
 
 // https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
-pub trait SideInput: Fn(&Phrase) -> Option<Phrase> {}
-impl<F> SideInput for F where F: Fn(&Phrase) -> Option<Phrase> {}
+pub trait SideInput: FnMut(&Phrase) -> Option<Phrase> {}
+impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Phrase> {}
 
 #[derive(Debug, Eq, PartialEq)]
 struct Rule {
@@ -357,7 +357,7 @@ impl Context {
     }
 }
 
-pub fn update<F>(context: &mut Context, side_input: F)
+pub fn update<F>(context: &mut Context, mut side_input: F)
 where
     F: SideInput,
 {
@@ -401,7 +401,7 @@ where
                     &rule,
                     &state,
                     &mut context.rng,
-                    &side_input,
+                    &mut side_input,
                     &mut context.string_cache,
                 ) {
                     matching_rule = Some(rule);
@@ -456,7 +456,7 @@ fn rule_matches_state<R, F>(
     r: &Rule,
     state: &Vec<Phrase>,
     rng: &mut R,
-    side_input: &F,
+    side_input: &mut F,
     string_cache: &mut StringCache,
 ) -> Option<Rule>
 where
@@ -633,7 +633,7 @@ fn match_backwards_variables(
 fn match_side_variables<F>(
     pred: &Phrase,
     existing_matches: &Vec<Match>,
-    side_input: &F,
+    side_input: &mut F,
 ) -> Option<Vec<Match>>
 where
     F: SideInput,
@@ -803,7 +803,7 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
     }
 }
 
-fn evaluate_side_pred<F>(tokens: &Phrase, side_input: &F) -> Option<Phrase>
+fn evaluate_side_pred<F>(tokens: &Phrase, side_input: &mut F) -> Option<Phrase>
 where
     F: SideInput,
 {
@@ -1432,7 +1432,7 @@ mod tests {
                 &rule,
                 &state,
                 &mut rng,
-                &|_: &Phrase| None,
+                &mut |_: &Phrase| None,
                 &mut string_cache,
             );
 
@@ -1534,7 +1534,7 @@ mod tests {
                 &rule,
                 &state,
                 &mut rng,
-                &|_: &Phrase| None,
+                &mut |_: &Phrase| None,
                 &mut string_cache,
             );
 
@@ -1617,7 +1617,7 @@ mod tests {
                 &rule,
                 &state,
                 &mut rng,
-                &|_: &Phrase| None,
+                &mut |_: &Phrase| None,
                 &mut string_cache,
             );
 
