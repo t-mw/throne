@@ -27,6 +27,7 @@ enum BackwardsPred {
     Gt,
     Lte,
     Gte,
+    ModNeg,
 }
 
 #[derive(Clone, Debug)]
@@ -88,6 +89,8 @@ impl Token {
             ">" => Some(BackwardsPred::Gt),
             "<=" => Some(BackwardsPred::Lte),
             ">=" => Some(BackwardsPred::Gte),
+            "%%" => Some(BackwardsPred::ModNeg),
+
             _ => None,
         };
 
@@ -774,6 +777,25 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
 
             return match (n1, n2) {
                 (Ok(v1), Ok(v2)) if v1 >= v2 => Some(tokens.clone()),
+                _ => None,
+            };
+        }
+        Some(BackwardsPred::ModNeg) => {
+            use std::str::FromStr;
+
+            let n1 = f32::from_str(tokens[1].as_str(string_cache));
+            let n2 = f32::from_str(tokens[2].as_str(string_cache));
+            let n3 = f32::from_str(tokens[3].as_str(string_cache));
+
+            let mod_neg = |x: f32, n: f32| x - n * (x / n).floor();
+
+            return match (n1, n2, n3) {
+                (Ok(v1), Ok(v2), Err(_)) => Some(vec![
+                    tokens[0].clone(),
+                    tokens[1].clone(),
+                    tokens[2].clone(),
+                    Token::new(&mod_neg(v1, v2).to_string(), 0, 1, string_cache),
+                ]),
                 _ => None,
             };
         }
