@@ -712,8 +712,6 @@ where
     let inputs = &r.inputs;
     let outputs = &r.outputs;
 
-    let mut permutation_count = 1;
-
     // per input, a list of states that match the input.
     // indexed by input using start index and counts in the following vectors.
     let mut input_state_matches = vec![];
@@ -776,8 +774,6 @@ where
             if count == 0 {
                 return None;
             }
-
-            permutation_count *= count;
         }
 
         input_state_match_start_indices.push(input_state_matches.len() - count);
@@ -786,14 +782,14 @@ where
 
     // precompute values required for deriving branch indices.
     let mut input_rev_permutation_counts = vec![1; inputs.len()];
-    let mut acc = 1;
+    let mut permutation_count = 1;
     for (i, count) in input_state_match_counts.iter().enumerate().rev() {
         if *count > 0 {
-            acc = acc * count;
+            permutation_count = permutation_count * count;
         }
 
         if i > 0 {
-            input_rev_permutation_counts[i - 1] = acc;
+            input_rev_permutation_counts[i - 1] = permutation_count;
         }
     }
 
