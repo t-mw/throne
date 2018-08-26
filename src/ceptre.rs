@@ -785,7 +785,6 @@ where
     let mut variables_matched = vec![];
 
     let mut states_matched_bool = vec![false; state.len()];
-    let mut states_matched = vec![];
 
     let mut did_classify = false;
     let mut backwards_pred = vec![];
@@ -795,11 +794,9 @@ where
     'outer: for p_i in 0..permutation_count {
         variables_matched.clear();
 
-        for s_i in states_matched.drain(..) {
-            states_matched_bool[s_i] = false;
+        for v in states_matched_bool.iter_mut() {
+            *v = false;
         }
-
-        assert!(states_matched_bool.iter().all(|b| !b));
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
@@ -819,7 +816,6 @@ where
             if states_matched_bool[s_i] {
                 continue 'outer;
             } else {
-                states_matched.push(s_i);
                 states_matched_bool[s_i] = true;
             }
 
