@@ -360,8 +360,6 @@ impl Context {
             first_atoms_state: vec![],
         };
 
-        context.on_state_change();
-
         context
     }
 
@@ -381,11 +379,6 @@ impl Context {
 
     pub fn append_state(&mut self, text: &str) {
         self.state.push(tokenize(text, &mut self.string_cache));
-        self.on_state_change();
-    }
-
-    fn on_state_change(&mut self) {
-        self.first_atoms_state = extract_first_atoms_state(&self.state);
     }
 
     pub fn print(&self) {
@@ -635,8 +628,7 @@ where
             context.state.push(qui.clone());
         }
 
-        // state changed with shuffle + qui
-        context.on_state_change();
+        context.first_atoms_state = extract_first_atoms_state(&context.state);
 
         {
             let rules = &context.rules;
@@ -696,8 +688,6 @@ where
                     state.push(output.clone());
                 }
             }
-
-            context.on_state_change();
         } else {
             context.quiescence = true;
         }
