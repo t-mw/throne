@@ -783,13 +783,7 @@ where
     }
 
     let mut variables_matched = vec![];
-
     let mut states_matched_bool = vec![false; state.len()];
-
-    let mut did_classify = false;
-    let mut backwards_pred = vec![];
-    let mut side_pred = vec![];
-    let mut negated_pred = vec![];
 
     'outer: for p_i in 0..permutation_count {
         variables_matched.clear();
@@ -828,24 +822,7 @@ where
             }
         }
 
-        if !did_classify {
-            did_classify = true;
-
-            for (i_i, input) in inputs.iter().enumerate() {
-                if is_backwards_pred(input) {
-                    backwards_pred.push(i_i);
-                } else if is_side_pred(input) {
-                    // TODO: exit early if we already know that side predicate won't match
-                    side_pred.push(i_i);
-                } else if is_negated_pred(input) {
-                    negated_pred.push(i_i);
-                } else {
-                    assert!(is_concrete_pred(input));
-                }
-            }
-        }
-
-        for input in backwards_pred.iter().map(|&i| &inputs[i]) {
+        for input in inputs.iter().filter(|input| is_backwards_pred(input)) {
             let mut extra_matches =
                 match_backwards_variables(input, &variables_matched, string_cache);
 
@@ -856,7 +833,7 @@ where
             }
         }
 
-        for input in side_pred.iter().map(|&i| &inputs[i]) {
+        for input in inputs.iter().filter(|input| is_side_pred(input)) {
             let mut extra_matches = match_side_variables(input, &variables_matched, side_input);
 
             if let Some(ref mut extra_matches) = extra_matches {
@@ -866,7 +843,7 @@ where
             }
         }
 
-        for input in negated_pred.iter().map(|&i| &inputs[i]) {
+        for input in inputs.iter().filter(|input| is_negated_pred(input)) {
             // check negated predicates last, so that we know about all variables
             // from the backwards and side predicates
             if state
