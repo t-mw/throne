@@ -72,8 +72,8 @@ pub struct Token {
     pub string: Atom,
     is_negated: bool,
     flag: TokenFlag,
-    open_depth: i32,
-    close_depth: i32,
+    open_depth: u8,
+    close_depth: u8,
 }
 
 impl PartialEq for Token {
@@ -88,12 +88,7 @@ impl PartialEq for Token {
 impl Eq for Token {}
 
 impl Token {
-    fn new(
-        string: &str,
-        open_depth: i32,
-        close_depth: i32,
-        string_cache: &mut StringCache,
-    ) -> Token {
+    fn new(string: &str, open_depth: u8, close_depth: u8, string_cache: &mut StringCache) -> Token {
         let mut string = string;
 
         let mut is_negated = false;
