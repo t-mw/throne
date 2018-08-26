@@ -30,13 +30,13 @@ fn main() {
     file.read_to_string(&mut contents).expect("read_to_string");
     let mut context = ceptre::Context::from_text(&contents);
 
-    let kd = context.to_atom("^kd");
-    let ku = context.to_atom("^ku");
-    let kp = context.to_atom("^kp");
-    let left = context.to_atom("left");
-    let right = context.to_atom("right");
-    let up = context.to_atom("up");
-    let down = context.to_atom("down");
+    let kd = context.str_to_atom("^kd");
+    let ku = context.str_to_atom("^ku");
+    let kp = context.str_to_atom("^kp");
+    let left = context.str_to_atom("left");
+    let right = context.str_to_atom("right");
+    let up = context.str_to_atom("up");
+    let down = context.str_to_atom("down");
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         context.append_state("#tick");
@@ -84,16 +84,16 @@ fn main() {
 
         let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 
-        let is_valid_pos = |x, y| x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT;
+        let is_valid_pos = |x, y| x < WIDTH && y < HEIGHT;
 
-        for p in context.state.iter() {
+        for p in &context.state {
             use std::str::FromStr;
 
             match (
-                p.get(0).map(|t| context.string_cache.from_atom(t.string)),
-                p.get(1).map(|t| context.string_cache.from_atom(t.string)),
-                p.get(2).map(|t| context.string_cache.from_atom(t.string)),
-                p.get(3).map(|t| context.string_cache.from_atom(t.string)),
+                p.get(0).map(|t| context.string_cache.atom_to_str(t.string)),
+                p.get(1).map(|t| context.string_cache.atom_to_str(t.string)),
+                p.get(2).map(|t| context.string_cache.atom_to_str(t.string)),
+                p.get(3).map(|t| context.string_cache.atom_to_str(t.string)),
             ) {
                 (Some("block-falling"), Some(_id), Some(x), Some(y))
                 | (Some("block-set"), Some(_id), Some(x), Some(y)) => {
