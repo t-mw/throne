@@ -1129,7 +1129,7 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
         input_depth -= token.close_depth;
     }
 
-    if let Some(_) = pred_token_iter.next() {
+    if pred_token_iter.next().is_some() {
         return false;
     }
 
@@ -1215,7 +1215,7 @@ fn match_variables_with_existing(
         input_depth -= token.close_depth;
     }
 
-    if let Some(_) = pred_token_iter.next() {
+    if pred_token_iter.next().is_some() {
         return None;
     }
 
