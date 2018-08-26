@@ -782,8 +782,9 @@ where
         // level of the tree is an input, and each branch is a match against a state.
         for (i_i, input) in inputs.iter().enumerate() {
             let match_count = input_state_match_counts[i_i];
+            let is_concrete_input = match_count > 0;
 
-            if match_count == 0 {
+            if !is_concrete_input {
                 continue;
             }
 
