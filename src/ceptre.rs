@@ -719,22 +719,11 @@ where
     let mut input_state_match_start_indices = vec![];
     let mut input_state_match_counts = vec![];
 
-    let mut backwards_pred = vec![];
-    let mut side_pred = vec![];
-    let mut negated_pred = vec![];
-
     for (i_i, input) in inputs.iter().enumerate() {
         let mut count = 0;
-        if is_backwards_pred(input) {
-            backwards_pred.push(i_i);
-        } else if is_side_pred(input) {
-            // TODO: exit early if we already know that side predicate won't match
-            side_pred.push(i_i);
-        } else if is_negated_pred(input) {
-            negated_pred.push(i_i);
-        } else {
-            assert!(is_concrete_pred(input));
 
+        // TODO: exit early if we already know that side predicate won't match
+        if is_concrete_pred(input) {
             let rule_first_atoms = extract_first_atoms_rule_input(input);
 
             let start_idx = if let Some(first) = rule_first_atoms {
@@ -798,6 +787,11 @@ where
     let mut states_matched_bool = vec![false; state.len()];
     let mut states_matched = vec![];
 
+    let mut did_classify = false;
+    let mut backwards_pred = vec![];
+    let mut side_pred = vec![];
+    let mut negated_pred = vec![];
+
     'outer: for p_i in 0..permutation_count {
         variables_matched.clear();
 
@@ -835,6 +829,23 @@ where
                 variables_matched.append(result);
             } else {
                 continue 'outer;
+            }
+        }
+
+        if !did_classify {
+            did_classify = true;
+
+            for (i_i, input) in inputs.iter().enumerate() {
+                if is_backwards_pred(input) {
+                    backwards_pred.push(i_i);
+                } else if is_side_pred(input) {
+                    // TODO: exit early if we already know that side predicate won't match
+                    side_pred.push(i_i);
+                } else if is_negated_pred(input) {
+                    negated_pred.push(i_i);
+                } else {
+                    assert!(is_concrete_pred(input));
+                }
             }
         }
 
