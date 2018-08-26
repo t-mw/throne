@@ -1164,34 +1164,36 @@ fn match_variables_with_existing(
                     return None;
                 }
             } else {
-                let mut matches = vec![pred_token.clone()];
+                // colect tokens to assign to the input variable
+                let mut matching_phrase = vec![pred_token.clone()];
 
                 while input_depth < pred_depth {
                     if let Some(pred_token) = pred_token_iter.next() {
                         pred_depth += pred_token.open_depth;
                         pred_depth -= pred_token.close_depth;
 
-                        matches.push(pred_token.clone());
+                        matching_phrase.push(pred_token.clone());
                     } else {
                         return None;
                     }
                 }
 
-                let len = matches.len();
+                let len = matching_phrase.len();
                 if len == 1 {
-                    matches[0].open_depth = 0;
-                    matches[0].close_depth = 0;
+                    matching_phrase[0].open_depth = 0;
+                    matching_phrase[0].close_depth = 0;
                 } else {
-                    matches[0].open_depth -= token.open_depth;
-                    matches[len - 1].close_depth -= token.close_depth;
+                    matching_phrase[0].open_depth -= token.open_depth;
+                    matching_phrase[len - 1].close_depth -= token.close_depth;
                 }
 
-                let has_existing_matches = if let Some(&(_, ref existing_matches)) = result
+                let variable_already_matched = if let Some(&(_, ref existing_matches)) = result
                     .iter()
                     .chain(existing_matches.iter())
                     .find(|&&(ref t, _)| *t == token.string)
                 {
-                    if *existing_matches != matches {
+                    if *existing_matches != matching_phrase {
+                        // this match of the variable conflicted with an existing match
                         return None;
                     }
 
@@ -1200,8 +1202,8 @@ fn match_variables_with_existing(
                     false
                 };
 
-                if !has_existing_matches {
-                    result.push((token.string.clone(), matches));
+                if !variable_already_matched {
+                    result.push((token.string.clone(), matching_phrase));
                 }
             }
 
