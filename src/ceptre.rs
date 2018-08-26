@@ -66,7 +66,6 @@ pub struct Token {
     is_var: bool,
     is_negated: bool,
     is_side: bool,
-    is_stage: bool,
     open_depth: i32,
     close_depth: i32,
 }
@@ -93,7 +92,6 @@ impl Token {
 
         let mut is_negated = false;
         let mut is_side = false;
-        let mut is_stage = false;
         match string.chars().next().expect("first_char") {
             '!' => {
                 is_negated = true;
@@ -101,9 +99,6 @@ impl Token {
             }
             '^' => {
                 is_side = true;
-            }
-            '#' => {
-                is_stage = true;
             }
             _ => {}
         }
@@ -132,7 +127,6 @@ impl Token {
             is_var,
             is_negated,
             is_side,
-            is_stage,
             open_depth,
             close_depth,
         }
