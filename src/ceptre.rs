@@ -59,13 +59,19 @@ enum BackwardsPred {
     ModNeg,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum TokenFlag {
+    None,
+    Variable,
+    Side,
+    BackwardsPred(BackwardsPred),
+}
+
 #[derive(Clone, Debug)]
 pub struct Token {
     pub string: Atom,
-    backwards_pred: Option<BackwardsPred>,
-    is_var: bool,
     is_negated: bool,
-    is_side: bool,
+    flag: TokenFlag,
     open_depth: i32,
     close_depth: i32,
 }
@@ -121,12 +127,18 @@ impl Token {
 
         let atom = string_cache.str_to_atom(string);
 
+        let flag = match (is_var, is_side, backwards_pred) {
+            (false, false, None) => TokenFlag::None,
+            (true, false, None) => TokenFlag::Variable,
+            (false, true, None) => TokenFlag::Side,
+            (false, false, Some(v)) => TokenFlag::BackwardsPred(v),
+            _ => unreachable!(),
+        };
+
         Token {
             string: atom,
-            backwards_pred,
-            is_var,
+            flag,
             is_negated,
-            is_side,
             open_depth,
             close_depth,
         }
@@ -891,7 +903,7 @@ fn assign_vars(tokens: &Phrase, matches: &[Match]) -> Phrase {
     let mut result: Phrase = vec![];
 
     for token in tokens {
-        if token.is_var {
+        if is_var_token(token) {
             if let Some(&(_, ref tokens)) = matches.iter().find(|&&(ref s, _)| *s == token.string) {
                 let mut tokens = tokens.to_owned();
                 let len = tokens.len();
@@ -922,12 +934,20 @@ fn assign_vars(tokens: &Phrase, matches: &[Match]) -> Phrase {
     result
 }
 
+fn is_var_token(token: &Token) -> bool {
+    token.flag == TokenFlag::Variable
+}
+
 fn is_backwards_pred(tokens: &Phrase) -> bool {
-    tokens[0].backwards_pred.is_some()
+    if let TokenFlag::BackwardsPred(_) = tokens[0].flag {
+        true
+    } else {
+        false
+    }
 }
 
 fn is_side_pred(tokens: &Phrase) -> bool {
-    tokens[0].is_side
+    tokens[0].flag == TokenFlag::Side
 }
 
 fn is_negated_pred(tokens: &Phrase) -> bool {
@@ -935,12 +955,12 @@ fn is_negated_pred(tokens: &Phrase) -> bool {
 }
 
 fn is_concrete_pred(tokens: &Phrase) -> bool {
-    !is_backwards_pred(tokens) && !is_side_pred(tokens) && !is_negated_pred(tokens)
+    !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::None
 }
 
 fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> Option<Phrase> {
-    match tokens[0].backwards_pred {
-        Some(BackwardsPred::Plus) => {
+    match tokens[0].flag {
+        TokenFlag::BackwardsPred(BackwardsPred::Plus) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(tokens[1].as_str(string_cache));
@@ -972,7 +992,7 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
                 _ => None,
             }
         }
-        Some(BackwardsPred::Lt) => {
+        TokenFlag::BackwardsPred(BackwardsPred::Lt) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(tokens[1].as_str(string_cache));
@@ -983,7 +1003,7 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
                 _ => None,
             }
         }
-        Some(BackwardsPred::Gt) => {
+        TokenFlag::BackwardsPred(BackwardsPred::Gt) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(tokens[1].as_str(string_cache));
@@ -994,7 +1014,7 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
                 _ => None,
             }
         }
-        Some(BackwardsPred::Lte) => {
+        TokenFlag::BackwardsPred(BackwardsPred::Lte) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(tokens[1].as_str(string_cache));
@@ -1005,7 +1025,7 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
                 _ => None,
             }
         }
-        Some(BackwardsPred::Gte) => {
+        TokenFlag::BackwardsPred(BackwardsPred::Gte) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(tokens[1].as_str(string_cache));
@@ -1016,7 +1036,7 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
                 _ => None,
             }
         }
-        Some(BackwardsPred::ModNeg) => {
+        TokenFlag::BackwardsPred(BackwardsPred::ModNeg) => {
             use std::str::FromStr;
 
             let n1 = f32::from_str(tokens[1].as_str(string_cache));
@@ -1035,7 +1055,7 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
                 _ => None,
             }
         }
-        _ => None,
+        _ => unreachable!(),
     }
 }
 
@@ -1060,7 +1080,7 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
         if let Some(pred_token) = pred_token {
             pred_depth += pred_token.open_depth;
 
-            if !token.is_var {
+            if !is_var_token(token) {
                 if token.string != pred_token.string || input_depth != pred_depth {
                     return false;
                 }
@@ -1109,7 +1129,7 @@ fn match_variables_with_existing(
         if let Some(pred_token) = pred_token {
             pred_depth += pred_token.open_depth;
 
-            if !token.is_var {
+            if !is_var_token(token) {
                 if token.string != pred_token.string || input_depth != pred_depth {
                     return None;
                 }
@@ -1237,7 +1257,10 @@ type FirstAtomsState = (usize, Atom);
 
 fn extract_first_atoms_rule_input(phrase: &Phrase) -> FirstAtoms {
     if is_concrete_pred(phrase) {
-        phrase.get(0).option_filter(|t| !t.is_var).map(|t| t.string)
+        phrase
+            .get(0)
+            .option_filter(|t| !is_var_token(t))
+            .map(|t| t.string)
     } else {
         None
     }
@@ -1421,13 +1444,13 @@ mod tests {
     #[test]
     fn token_test() {
         let mut string_cache = StringCache::new();
-        assert!(!Token::new("tt1", 1, 1, &mut string_cache).is_var);
-        assert!(!Token::new("tT1", 1, 1, &mut string_cache).is_var);
-        assert!(!Token::new("1", 1, 1, &mut string_cache).is_var);
-        assert!(!Token::new("1Tt", 1, 1, &mut string_cache).is_var);
-        assert!(Token::new("T", 1, 1, &mut string_cache).is_var);
-        assert!(Token::new("TT1", 1, 1, &mut string_cache).is_var);
-        assert!(Token::new("TT1'", 1, 1, &mut string_cache).is_var);
+        assert!(!is_var_token(&Token::new("tt1", 1, 1, &mut string_cache)));
+        assert!(!is_var_token(&Token::new("tT1", 1, 1, &mut string_cache)));
+        assert!(!is_var_token(&Token::new("1", 1, 1, &mut string_cache)));
+        assert!(!is_var_token(&Token::new("1Tt", 1, 1, &mut string_cache)));
+        assert!(is_var_token(&Token::new("T", 1, 1, &mut string_cache)));
+        assert!(is_var_token(&Token::new("TT1", 1, 1, &mut string_cache)));
+        assert!(is_var_token(&Token::new("TT1'", 1, 1, &mut string_cache)));
     }
 
     #[test]
