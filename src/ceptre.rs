@@ -1291,7 +1291,7 @@ fn extract_first_atoms_state(state: &Vec<Phrase>) -> Vec<FirstAtomsState> {
         .map(|(s_i, s)| extract_first_atoms_state_phrase(s_i, s))
         .collect();
 
-    atoms.sort_by(|a, b| a.1.cmp(&b.1));
+    atoms.sort_unstable_by(|a, b| a.1.cmp(&b.1));
 
     atoms
 }
