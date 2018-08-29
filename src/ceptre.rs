@@ -145,6 +145,7 @@ impl Token {
 }
 
 pub type Phrase = Vec<Token>;
+type Match = (Atom, Phrase);
 
 // https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
 pub trait SideInput: FnMut(&Phrase) -> Option<Phrase> {}
@@ -739,8 +740,8 @@ where
                 .skip(start_idx)
                 .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
             {
-                if let Some(matches) = extract_matches(input, &state[*s_i], Some(*s_i)) {
-                    input_state_matches.push((s_i, matches));
+                if test_match_without_variables(input, &state[*s_i]) {
+                    input_state_matches.push(*s_i);
                     count += 1;
                 }
             }
@@ -779,7 +780,7 @@ where
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
-        for (i_i, _) in inputs.iter().enumerate() {
+        for (i_i, input) in inputs.iter().enumerate() {
             let match_count = input_state_match_counts[i_i];
             let is_concrete_input = match_count > 0;
 
@@ -790,17 +791,17 @@ where
             let branch_idx = (p_i / input_rev_permutation_counts[i_i]) % match_count;
 
             let input_state_match_idx = input_state_match_start_indices[i_i] + branch_idx;
-            let (s_i, ref matches) = input_state_matches[input_state_match_idx];
+            let s_i = input_state_matches[input_state_match_idx];
 
             // a previous input in this permutation has already matched the state being checked
-            if states_matched_bool[*s_i] {
+            if states_matched_bool[s_i] {
                 continue 'outer;
             } else {
-                states_matched_bool[*s_i] = true;
+                states_matched_bool[s_i] = true;
             }
 
             if let Some(ref mut result) =
-                match_variables_with_existing(&matches, state, &variables_matched)
+                match_variables_with_existing(input, &state[s_i], &variables_matched)
             {
                 variables_matched.append(result);
             } else {
@@ -810,7 +811,7 @@ where
 
         for input in inputs.iter().filter(|input| is_backwards_pred(input)) {
             let mut extra_matches =
-                match_backwards_variables(input, &variables_matched, state, string_cache);
+                match_backwards_variables(input, &variables_matched, string_cache);
 
             if let Some(ref mut extra_matches) = extra_matches {
                 variables_matched.append(extra_matches);
@@ -820,8 +821,7 @@ where
         }
 
         for input in inputs.iter().filter(|input| is_side_pred(input)) {
-            let mut extra_matches =
-                match_side_variables(input, &variables_matched, state, side_input);
+            let mut extra_matches = match_side_variables(input, &variables_matched, side_input);
 
             if let Some(ref mut extra_matches) = extra_matches {
                 variables_matched.append(extra_matches);
@@ -837,13 +837,8 @@ where
                 .iter()
                 .enumerate()
                 .filter(|&(s_i, _)| !states_matched_bool[s_i])
-                .any(|(s_i, s)| {
-                    extract_matches(input, s, Some(s_i))
-                        .and_then(|matches| {
-                            match_variables_with_existing(&matches, state, &variables_matched)
-                        })
-                        .is_some()
-                }) {
+                .any(|(_, s)| match_variables_with_existing(input, s, &variables_matched).is_some())
+            {
                 continue 'outer;
             }
         }
@@ -853,17 +848,17 @@ where
 
         for v in inputs {
             if is_concrete_pred(v) {
-                forward_concrete.push(assign_vars(v, &variables_matched, state));
+                forward_concrete.push(assign_vars(v, &variables_matched));
             }
         }
 
         for v in outputs {
             if is_side_pred(v) {
-                let pred = assign_vars(v, &variables_matched, state);
+                let pred = assign_vars(v, &variables_matched);
 
                 evaluate_side_pred(&pred, side_input);
             } else {
-                outputs_concrete.push(assign_vars(v, &variables_matched, state));
+                outputs_concrete.push(assign_vars(v, &variables_matched));
             }
         }
 
@@ -876,51 +871,51 @@ where
 fn match_backwards_variables(
     pred: &Phrase,
     existing_matches: &[Match],
-    state: &[Phrase],
     string_cache: &mut StringCache,
 ) -> Option<Vec<Match>> {
-    let pred = assign_vars(pred, existing_matches, state);
+    let pred = assign_vars(pred, existing_matches);
 
-    evaluate_backwards_pred(&pred, string_cache)
-        .and_then(|eval_result| extract_matches(&pred, &eval_result, None))
-        .and_then(|matches| match_variables_with_existing(&matches, state, existing_matches))
+    evaluate_backwards_pred(&pred, string_cache).and_then(|eval_result| {
+        match_variables_with_existing(&pred, &eval_result, existing_matches)
+    })
 }
 
 fn match_side_variables<F>(
     pred: &Phrase,
     existing_matches: &[Match],
-    state: &[Phrase],
     side_input: &mut F,
 ) -> Option<Vec<Match>>
 where
     F: SideInput,
 {
-    let pred = assign_vars(pred, existing_matches, state);
+    let pred = assign_vars(pred, existing_matches);
 
-    evaluate_side_pred(&pred, side_input)
-        .and_then(|eval_result| extract_matches(&pred, &eval_result, None))
-        .and_then(|matches| match_variables_with_existing(&matches, state, existing_matches))
+    evaluate_side_pred(&pred, side_input).and_then(|eval_result| {
+        match_variables_with_existing(&pred, &eval_result, existing_matches)
+    })
 }
 
-fn assign_vars(tokens: &Phrase, matches: &[Match], state: &[Phrase]) -> Phrase {
+fn assign_vars(tokens: &Phrase, matches: &[Match]) -> Phrase {
     let mut result: Phrase = vec![];
 
     for token in tokens {
         if is_var_token(token) {
-            if let Some(m) = matches.iter().find(|m| m.atom == token.string) {
-                let mut tokens = m.get_content(state).to_vec();
+            if let Some(&(_, ref tokens)) = matches.iter().find(|&&(ref s, _)| *s == token.string) {
+                let mut tokens = tokens.to_owned();
                 let len = tokens.len();
 
-                tokens[0].is_negated = token.is_negated;
-
                 if len == 1 {
+                    tokens[0].is_negated = token.is_negated;
                     tokens[0].open_depth = token.open_depth;
                     tokens[len - 1].close_depth = token.close_depth;
                 } else {
-                    tokens[0].open_depth += token.open_depth;
-                    tokens[0].open_depth -= m.open_depth;
-                    tokens[len - 1].close_depth += token.close_depth;
-                    tokens[len - 1].close_depth -= m.close_depth;
+                    tokens[0].is_negated = token.is_negated;
+                    if token.open_depth > 0 {
+                        tokens[0].open_depth += token.open_depth
+                    }
+                    if token.close_depth > 0 {
+                        tokens[len - 1].close_depth += token.close_depth
+                    }
                 }
 
                 result.append(&mut tokens);
@@ -1067,86 +1062,63 @@ where
     side_input(tokens)
 }
 
-#[derive(Clone, Debug)]
-enum MatchContent {
-    State { idx: usize, range: (usize, usize) },
-    Phrase { phrase: Phrase },
-}
-
-#[derive(Clone, Debug)]
-struct Match {
-    atom: Atom,
-    content: MatchContent,
-    open_depth: u8,
-    close_depth: u8,
-}
-
-impl Match {
-    fn get_content<'a>(&'a self, state: &'a [Phrase]) -> &'a [Token] {
-        match self.content {
-            MatchContent::State { idx, range } => &state[idx][range.0..range.1],
-            MatchContent::Phrase { ref phrase } => phrase,
-        }
-    }
-
-    fn equals(&self, m2: &Match, state: &[Phrase]) -> bool {
-        let p1 = self.get_content(state);
-        let p2 = m2.get_content(state);
-
-        if p1.len() != p2.len() {
-            return false;
-        }
-
-        let open_depth1 = self.open_depth;
-        let open_depth2 = m2.open_depth;
-
-        let close_depth1 = self.close_depth;
-        let close_depth2 = m2.close_depth;
-
-        for i in 0..p1.len() {
-            let t1 = &p1[i];
-            let t2 = &p2[i];
-
-            if t1.string != t2.string {
-                return false;
-            }
-
-            if p1.len() > 1 {
-                if i == 0 {
-                    if t1.open_depth - open_depth1 != t2.open_depth - open_depth2 {
-                        return false;
-                    }
-                } else if i == p1.len() - 1 {
-                    if t1.close_depth - close_depth1 != t2.close_depth - close_depth2 {
-                        return false;
-                    }
-                } else {
-                    if t1.open_depth != t2.open_depth || t1.close_depth != t2.close_depth {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        true
-    }
-}
-
-fn extract_matches(
-    input_tokens: &Phrase,
-    pred_tokens: &Phrase,
-    state_idx: Option<usize>,
-) -> Option<Vec<Match>> {
-    let mut result = vec![];
-
-    let mut pred_token_iter = 0;
+fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> bool {
+    let mut pred_token_iter = pred_tokens.iter();
 
     let mut input_depth = 0;
     let mut pred_depth = 0;
 
     for token in input_tokens {
-        let pred_token = pred_tokens.get(pred_token_iter);
-        pred_token_iter += 1;
+        let pred_token = pred_token_iter.next();
+
+        input_depth += token.open_depth;
+
+        if let Some(pred_token) = pred_token {
+            pred_depth += pred_token.open_depth;
+
+            if !is_var_token(token) {
+                if token.string != pred_token.string || input_depth != pred_depth {
+                    return false;
+                }
+            } else {
+                while input_depth < pred_depth {
+                    if let Some(pred_token) = pred_token_iter.next() {
+                        pred_depth += pred_token.open_depth;
+                        pred_depth -= pred_token.close_depth;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+
+            pred_depth -= pred_token.close_depth;
+        } else {
+            return false;
+        }
+
+        input_depth -= token.close_depth;
+    }
+
+    if pred_token_iter.next().is_some() {
+        return false;
+    }
+
+    true
+}
+
+fn match_variables_with_existing(
+    input_tokens: &Phrase,
+    pred_tokens: &Phrase,
+    existing_matches: &[Match],
+) -> Option<Vec<Match>> {
+    let mut pred_token_iter = pred_tokens.iter();
+    let mut result = vec![];
+
+    let mut input_depth = 0;
+    let mut pred_depth = 0;
+
+    for token in input_tokens {
+        let pred_token = pred_token_iter.next();
 
         input_depth += token.open_depth;
 
@@ -1158,38 +1130,47 @@ fn extract_matches(
                     return None;
                 }
             } else {
-                let range_start = pred_token_iter - 1;
+                // colect tokens to assign to the input variable
+                let mut matching_phrase = vec![pred_token.clone()];
 
                 while input_depth < pred_depth {
-                    if let Some(pred_token) = pred_tokens.get(pred_token_iter) {
-                        pred_token_iter += 1;
-
+                    if let Some(pred_token) = pred_token_iter.next() {
                         pred_depth += pred_token.open_depth;
                         pred_depth -= pred_token.close_depth;
+
+                        matching_phrase.push(pred_token.clone());
                     } else {
                         return None;
                     }
                 }
 
-                let range_end = pred_token_iter;
-
-                let content = if let Some(idx) = state_idx {
-                    MatchContent::State {
-                        idx,
-                        range: (range_start, range_end),
-                    }
+                let len = matching_phrase.len();
+                if len == 1 {
+                    matching_phrase[0].open_depth = 0;
+                    matching_phrase[0].close_depth = 0;
                 } else {
-                    MatchContent::Phrase {
-                        phrase: pred_tokens[range_start..range_end].to_vec(),
+                    matching_phrase[0].open_depth -= token.open_depth;
+                    matching_phrase[len - 1].close_depth -= token.close_depth;
+                }
+
+                let variable_already_matched = if let Some(&(_, ref existing_matches)) = result
+                    .iter()
+                    .chain(existing_matches.iter())
+                    .find(|&&(ref t, _)| *t == token.string)
+                {
+                    if *existing_matches != matching_phrase {
+                        // this match of the variable conflicted with an existing match
+                        return None;
                     }
+
+                    true
+                } else {
+                    false
                 };
 
-                result.push(Match {
-                    atom: token.string,
-                    content,
-                    open_depth: token.open_depth,
-                    close_depth: token.close_depth,
-                });
+                if !variable_already_matched {
+                    result.push((token.string, matching_phrase));
+                }
             }
 
             pred_depth -= pred_token.close_depth;
@@ -1200,126 +1181,12 @@ fn extract_matches(
         input_depth -= token.close_depth;
     }
 
-    if pred_token_iter != pred_tokens.len() {
+    if pred_token_iter.next().is_some() {
         return None;
     }
 
     Some(result)
 }
-
-fn match_variables_with_existing(
-    matches: &[Match],
-    state: &[Phrase],
-    existing_matches: &[Match],
-) -> Option<Vec<Match>> {
-    let mut result = vec![];
-
-    for m in matches {
-        let variable_already_matched = if let Some(existing_match) = result
-            .iter()
-            .chain(existing_matches.iter())
-            .find(|m2| m.atom == m2.atom)
-        {
-            if !m.equals(existing_match, state) {
-                // this match of the variable conflicted with an existing match
-                return None;
-            }
-
-            true
-        } else {
-            false
-        };
-
-        if !variable_already_matched {
-            result.push(m.clone());
-        }
-    }
-
-    Some(result)
-}
-
-// fn match_variables_with_existing(
-//     input_tokens: &Phrase,
-//     pred_tokens: &Phrase,
-//     existing_matches: &[Match],
-//     state: &[Phrase],
-// ) -> Option<Vec<Match>> {
-//     let mut pred_token_iter = pred_tokens.iter();
-//     let mut result = vec![];
-
-//     let mut input_depth = 0;
-//     let mut pred_depth = 0;
-
-//     for token in input_tokens {
-//         let pred_token = pred_token_iter.next();
-
-//         input_depth += token.open_depth;
-
-//         if let Some(pred_token) = pred_token {
-//             pred_depth += pred_token.open_depth;
-
-//             if !is_var_token(token) {
-//                 if token.string != pred_token.string || input_depth != pred_depth {
-//                     return None;
-//                 }
-//             } else {
-//                 // colect tokens to assign to the input variable
-//                 let mut matching_phrase = vec![pred_token.clone()];
-
-//                 while input_depth < pred_depth {
-//                     if let Some(pred_token) = pred_token_iter.next() {
-//                         pred_depth += pred_token.open_depth;
-//                         pred_depth -= pred_token.close_depth;
-
-//                         matching_phrase.push(pred_token.clone());
-//                     } else {
-//                         return None;
-//                     }
-//                 }
-
-//                 let len = matching_phrase.len();
-//                 if len == 1 {
-//                     matching_phrase[0].open_depth = 0;
-//                     matching_phrase[0].close_depth = 0;
-//                 } else {
-//                     matching_phrase[0].open_depth -= token.open_depth;
-//                     matching_phrase[len - 1].close_depth -= token.close_depth;
-//                 }
-
-//                 let variable_already_matched = if let Some(existing_match) = result
-//                     .iter()
-//                     .chain(existing_matches.iter())
-//                     .find(|m| m.atom == token.string)
-//                 {
-//                     if !are_matches_equal(existing_matches, ) *existing_matches != matching_phrase {
-//                         // this match of the variable conflicted with an existing match
-//                         return None;
-//                     }
-
-//                     true
-//                 } else {
-//                     false
-//                 };
-
-//                 if !variable_already_matched {
-//                     result.push((token.string, matching_phrase));
-//                 }
-//             }
-
-//             pred_depth -= pred_token.close_depth;
-//         } else {
-//             return None;
-//         }
-
-//         input_depth -= token.close_depth;
-//     }
-
-//     if pred_token_iter.next().is_some() {
-//         return None;
-//     }
-
-//     Some(result)
-// }
 
 fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
     let mut string = format!("({})", string);
@@ -1473,9 +1340,9 @@ mod tests {
         Rule::new(0, inputs, outputs)
     }
 
-    // fn match_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<Vec<Match>> {
-    //     match_variables_with_existing(input_tokens, pred_tokens, &vec![])
-    // }
+    fn match_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<Vec<Match>> {
+        match_variables_with_existing(input_tokens, pred_tokens, &vec![])
+    }
 
     #[test]
     fn context_from_text_state_test() {
@@ -1847,8 +1714,6 @@ mod tests {
         ];
 
         for (rule, state, expected) in test_cases.drain(..) {
-            print_state(&state, &string_cache);
-
             let result = rule_matches_state(
                 &rule,
                 &state,
@@ -2011,216 +1876,179 @@ mod tests {
             ),
         ];
 
-        let new_match = |atom, phrase| Match {
-            atom,
-            content: MatchContent::Phrase { phrase },
-            open_depth: 0,
-            close_depth: 0,
-        };
-
-        for (tokens, mut matches, expected) in test_cases.drain(..) {
-            let matches = matches
-                .drain(..)
-                .map(|(atom, phrase)| new_match(atom, phrase))
-                .collect::<Vec<_>>();
-
-            assert_eq!(assign_vars(&tokens, &matches, &vec![]), expected);
+        for (tokens, matches, expected) in test_cases.drain(..) {
+            assert_eq!(assign_vars(&tokens, &matches), expected);
         }
     }
 
-    // #[test]
-    // fn match_variables_test() {
-    //     let mut string_cache = StringCache::new();
+    #[test]
+    fn match_variables_test() {
+        let mut string_cache = StringCache::new();
 
-    //     let mut test_cases = vec![
-    //         (
-    //             tokenize("t1 T2 T3", &mut string_cache),
-    //             tokenize("t1 t2 t3", &mut string_cache),
-    //             Some(vec![
-    //                 (
-    //                     string_cache.str_to_atom("T2"),
-    //                     tokenize("t2", &mut string_cache),
-    //                 ),
-    //                 (
-    //                     string_cache.str_to_atom("T3"),
-    //                     tokenize("t3", &mut string_cache),
-    //                 ),
-    //             ]),
-    //         ),
-    //         (
-    //             tokenize("t1 T2", &mut string_cache),
-    //             tokenize("t1 (t21 t22)", &mut string_cache),
-    //             Some(vec![(
-    //                 string_cache.str_to_atom("T2"),
-    //                 tokenize("t21 t22", &mut string_cache),
-    //             )]),
-    //         ),
-    //         (
-    //             tokenize("t1 (t21 T22 t23) T3", &mut string_cache),
-    //             tokenize("t1 (t21 (t221 t222 t223) t23) t3", &mut string_cache),
-    //             Some(vec![
-    //                 (
-    //                     string_cache.str_to_atom("T22"),
-    //                     tokenize("t221 t222 t223", &mut string_cache),
-    //                 ),
-    //                 (
-    //                     string_cache.str_to_atom("T3"),
-    //                     tokenize("t3", &mut string_cache),
-    //                 ),
-    //             ]),
-    //         ),
-    //         (
-    //             tokenize("t1 T2 T3", &mut string_cache),
-    //             tokenize("t1 t2 (t3 t2)", &mut string_cache),
-    //             Some(vec![
-    //                 (
-    //                     string_cache.str_to_atom("T2"),
-    //                     tokenize("t2", &mut string_cache),
-    //                 ),
-    //                 (
-    //                     string_cache.str_to_atom("T3"),
-    //                     tokenize("t3 t2", &mut string_cache),
-    //                 ),
-    //             ]),
-    //         ),
-    //         (
-    //             tokenize("t1 T2", &mut string_cache),
-    //             tokenize("t1 (t2 t3 (t3 t2))", &mut string_cache),
-    //             Some(vec![(
-    //                 string_cache.str_to_atom("T2"),
-    //                 tokenize("t2 t3 (t3 t2)", &mut string_cache),
-    //             )]),
-    //         ),
-    //         (
-    //             tokenize("t1 T2", &mut string_cache),
-    //             tokenize("t1 ((t2 t3) t3 t2)", &mut string_cache),
-    //             Some(vec![(
-    //                 string_cache.str_to_atom("T2"),
-    //                 tokenize("(t2 t3) t3 t2", &mut string_cache),
-    //             )]),
-    //         ),
-    //         (
-    //             tokenize("t1 (t2 t3 T2)", &mut string_cache),
-    //             tokenize("t1 (t2 t3 (t3 t2))", &mut string_cache),
-    //             Some(vec![(
-    //                 string_cache.str_to_atom("T2"),
-    //                 tokenize("t3 t2", &mut string_cache),
-    //             )]),
-    //         ),
-    //         (
-    //             tokenize("t1 (T2 t3 t2)", &mut string_cache),
-    //             tokenize("t1 ((t2 t3) t3 t2)", &mut string_cache),
-    //             Some(vec![(
-    //                 string_cache.str_to_atom("T2"),
-    //                 tokenize("t2 t3", &mut string_cache),
-    //             )]),
-    //         ),
-    //         (
-    //             tokenize("t1 T2 T3", &mut string_cache),
-    //             tokenize("t1 (t2 t3) (t3 t2)", &mut string_cache),
-    //             Some(vec![
-    //                 (
-    //                     string_cache.str_to_atom("T2"),
-    //                     tokenize("t2 t3", &mut string_cache),
-    //                 ),
-    //                 (
-    //                     string_cache.str_to_atom("T3"),
-    //                     tokenize("t3 t2", &mut string_cache),
-    //                 ),
-    //             ]),
-    //         ),
-    //         (
-    //             tokenize("t1 t3", &mut string_cache),
-    //             tokenize("t1 t3", &mut string_cache),
-    //             Some(vec![]),
-    //         ),
-    //         (
-    //             tokenize("t1 t3", &mut string_cache),
-    //             tokenize("t1 (t21 t23)", &mut string_cache),
-    //             None,
-    //         ),
-    //         (
-    //             tokenize("t1 T3", &mut string_cache),
-    //             tokenize("t1 t2 t3", &mut string_cache),
-    //             None,
-    //         ),
-    //         (
-    //             tokenize("t1 T3 t3", &mut string_cache),
-    //             tokenize("t1 t2", &mut string_cache),
-    //             None,
-    //         ),
-    //         (
-    //             tokenize("t1 T3 T3", &mut string_cache),
-    //             tokenize("t1 t2 t3", &mut string_cache),
-    //             None,
-    //         ),
-    //         (
-    //             tokenize("t1 T3 T3", &mut string_cache),
-    //             tokenize("t1 t3 t3", &mut string_cache),
-    //             Some(vec![(
-    //                 string_cache.str_to_atom("T3"),
-    //                 tokenize("t3", &mut string_cache),
-    //             )]),
-    //         ),
-    //     ];
+        let mut test_cases = vec![
+            (
+                tokenize("t1 T2 T3", &mut string_cache),
+                tokenize("t1 t2 t3", &mut string_cache),
+                Some(vec![
+                    (
+                        string_cache.str_to_atom("T2"),
+                        tokenize("t2", &mut string_cache),
+                    ),
+                    (
+                        string_cache.str_to_atom("T3"),
+                        tokenize("t3", &mut string_cache),
+                    ),
+                ]),
+            ),
+            (
+                tokenize("t1 T2", &mut string_cache),
+                tokenize("t1 (t21 t22)", &mut string_cache),
+                Some(vec![(
+                    string_cache.str_to_atom("T2"),
+                    tokenize("t21 t22", &mut string_cache),
+                )]),
+            ),
+            (
+                tokenize("t1 (t21 T22 t23) T3", &mut string_cache),
+                tokenize("t1 (t21 (t221 t222 t223) t23) t3", &mut string_cache),
+                Some(vec![
+                    (
+                        string_cache.str_to_atom("T22"),
+                        tokenize("t221 t222 t223", &mut string_cache),
+                    ),
+                    (
+                        string_cache.str_to_atom("T3"),
+                        tokenize("t3", &mut string_cache),
+                    ),
+                ]),
+            ),
+            (
+                tokenize("t1 T2 T3", &mut string_cache),
+                tokenize("t1 t2 (t3 t2)", &mut string_cache),
+                Some(vec![
+                    (
+                        string_cache.str_to_atom("T2"),
+                        tokenize("t2", &mut string_cache),
+                    ),
+                    (
+                        string_cache.str_to_atom("T3"),
+                        tokenize("t3 t2", &mut string_cache),
+                    ),
+                ]),
+            ),
+            (
+                tokenize("t1 T2", &mut string_cache),
+                tokenize("t1 (t2 t3 (t3 t2))", &mut string_cache),
+                Some(vec![(
+                    string_cache.str_to_atom("T2"),
+                    tokenize("t2 t3 (t3 t2)", &mut string_cache),
+                )]),
+            ),
+            (
+                tokenize("t1 T2", &mut string_cache),
+                tokenize("t1 ((t2 t3) t3 t2)", &mut string_cache),
+                Some(vec![(
+                    string_cache.str_to_atom("T2"),
+                    tokenize("(t2 t3) t3 t2", &mut string_cache),
+                )]),
+            ),
+            (
+                tokenize("t1 (t2 t3 T2)", &mut string_cache),
+                tokenize("t1 (t2 t3 (t3 t2))", &mut string_cache),
+                Some(vec![(
+                    string_cache.str_to_atom("T2"),
+                    tokenize("t3 t2", &mut string_cache),
+                )]),
+            ),
+            (
+                tokenize("t1 (T2 t3 t2)", &mut string_cache),
+                tokenize("t1 ((t2 t3) t3 t2)", &mut string_cache),
+                Some(vec![(
+                    string_cache.str_to_atom("T2"),
+                    tokenize("t2 t3", &mut string_cache),
+                )]),
+            ),
+            (
+                tokenize("t1 T2 T3", &mut string_cache),
+                tokenize("t1 (t2 t3) (t3 t2)", &mut string_cache),
+                Some(vec![
+                    (
+                        string_cache.str_to_atom("T2"),
+                        tokenize("t2 t3", &mut string_cache),
+                    ),
+                    (
+                        string_cache.str_to_atom("T3"),
+                        tokenize("t3 t2", &mut string_cache),
+                    ),
+                ]),
+            ),
+            (
+                tokenize("t1 t3", &mut string_cache),
+                tokenize("t1 t3", &mut string_cache),
+                Some(vec![]),
+            ),
+            (
+                tokenize("t1 t3", &mut string_cache),
+                tokenize("t1 (t21 t23)", &mut string_cache),
+                None,
+            ),
+            (
+                tokenize("t1 T3", &mut string_cache),
+                tokenize("t1 t2 t3", &mut string_cache),
+                None,
+            ),
+            (
+                tokenize("t1 T3 t3", &mut string_cache),
+                tokenize("t1 t2", &mut string_cache),
+                None,
+            ),
+            (
+                tokenize("t1 T3 T3", &mut string_cache),
+                tokenize("t1 t2 t3", &mut string_cache),
+                None,
+            ),
+            (
+                tokenize("t1 T3 T3", &mut string_cache),
+                tokenize("t1 t3 t3", &mut string_cache),
+                Some(vec![(
+                    string_cache.str_to_atom("T3"),
+                    tokenize("t3", &mut string_cache),
+                )]),
+            ),
+        ];
 
-    //     for (input_tokens, pred_tokens, expected) in test_cases.drain(..) {
-    //         assert_eq!(match_variables(&input_tokens, &pred_tokens), expected);
-    //     }
-    // }
+        for (input_tokens, pred_tokens, expected) in test_cases.drain(..) {
+            assert_eq!(match_variables(&input_tokens, &pred_tokens), expected);
+        }
+    }
 
-    // #[test]
-    // fn match_variables_with_existing_test() {
-    //     let mut string_cache = StringCache::new();
+    #[test]
+    fn match_variables_with_existing_test() {
+        let mut string_cache = StringCache::new();
 
-    //     let input_tokens = tokenize("T1 T2 T3", &mut string_cache);
-    //     let pred_tokens = tokenize("t1 t2 t3", &mut string_cache);
-    //     let existing_matches = vec![(
-    //         string_cache.str_to_atom("T2"),
-    //         tokenize("t2", &mut string_cache),
-    //     )];
+        let input_tokens = tokenize("T1 T2 T3", &mut string_cache);
+        let pred_tokens = tokenize("t1 t2 t3", &mut string_cache);
+        let existing_matches = vec![(
+            string_cache.str_to_atom("T2"),
+            tokenize("t2", &mut string_cache),
+        )];
 
-    //     let result = match_variables_with_existing(&input_tokens, &pred_tokens, &existing_matches);
+        let result = match_variables_with_existing(&input_tokens, &pred_tokens, &existing_matches);
 
-    //     assert_eq!(
-    //         result,
-    //         Some(vec![
-    //             (
-    //                 string_cache.str_to_atom("T1"),
-    //                 tokenize("t1", &mut string_cache),
-    //             ),
-    //             (
-    //                 string_cache.str_to_atom("T3"),
-    //                 tokenize("t3", &mut string_cache),
-    //             ),
-    //         ])
-    //     )
-    // }
-
-    // #[test]
-    // fn match_variable_ranges_test() {
-    //     let mut string_cache = StringCache::new();
-
-    //     let mut test_cases = vec![
-    //         (
-    //             tokenize("t1 T2 T3", &mut string_cache),
-    //             tokenize("t1 t2 t3", &mut string_cache),
-    //             Some(vec![
-    //                 (string_cache.str_to_atom("T2"), 0, 0, (1, 2)),
-    //                 (string_cache.str_to_atom("T3"), 0, 1, (2, 3)),
-    //             ]),
-    //         ),
-    //         (
-    //             tokenize("t1 T2", &mut string_cache),
-    //             tokenize("t1 (t21 t22)", &mut string_cache),
-    //             Some(vec![(string_cache.str_to_atom("T2"), 0, 1, (1, 3))]),
-    //         ),
-    //     ];
-
-    //     for (input_tokens, pred_tokens, expected) in test_cases.drain(..) {
-    //         assert_eq!(extract_matches(&input_tokens, &pred_tokens), expected);
-    //     }
-    // }
+        assert_eq!(
+            result,
+            Some(vec![
+                (
+                    string_cache.str_to_atom("T1"),
+                    tokenize("t1", &mut string_cache),
+                ),
+                (
+                    string_cache.str_to_atom("T3"),
+                    tokenize("t3", &mut string_cache),
+                ),
+            ])
+        )
+    }
 
     #[test]
     fn tokenize_test() {
