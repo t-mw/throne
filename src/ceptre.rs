@@ -730,19 +730,14 @@ where
             };
 
             let mut matches = vec![];
-            let mut input_has_variables = false;
 
             for (s_i, _) in state_first_atoms
                 .iter()
                 .skip(start_idx)
                 .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
             {
-                if let Some(has_variables) = test_match_without_variables(input, &state[*s_i]) {
+                if test_match_without_variables(input, &state[*s_i]) {
                     matches.push(*s_i);
-
-                    if has_variables {
-                        input_has_variables = true;
-                    }
                 }
             }
 
@@ -750,14 +745,14 @@ where
                 return None;
             }
 
-            input_state_matches.push((i_i, input_has_variables, matches));
+            input_state_matches.push((i_i, matches));
         }
     }
 
     // precompute values required for deriving branch indices.
     let mut input_rev_permutation_counts = vec![1; input_state_matches.len()];
     let mut permutation_count = 1;
-    for (i, (_, _, matches)) in input_state_matches.iter().enumerate().rev() {
+    for (i, (_, matches)) in input_state_matches.iter().enumerate().rev() {
         permutation_count *= matches.len();
 
         if i > 0 {
@@ -771,7 +766,7 @@ where
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
-        for (c_i, (i_i, has_variables, matches)) in input_state_matches.iter().enumerate() {
+        for (c_i, (i_i, matches)) in input_state_matches.iter().enumerate() {
             let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % matches.len();
             let s_i = matches[branch_idx];
 
@@ -780,10 +775,6 @@ where
                 continue 'outer;
             } else {
                 states_matched_bool[s_i] = true;
-            }
-
-            if !has_variables {
-                continue;
             }
 
             if let Some(ref mut result) =
@@ -1048,13 +1039,11 @@ where
     side_input(tokens)
 }
 
-fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<bool> {
+fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> bool {
     let mut pred_token_iter = pred_tokens.iter();
 
     let mut input_depth = 0;
     let mut pred_depth = 0;
-
-    let mut has_variables = false;
 
     for token in input_tokens {
         let pred_token = pred_token_iter.next();
@@ -1066,7 +1055,7 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
 
             if !is_var_token(token) {
                 if token.string != pred_token.string || input_depth != pred_depth {
-                    return None;
+                    return false;
                 }
             } else {
                 while input_depth < pred_depth {
@@ -1074,26 +1063,24 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
                         pred_depth += pred_token.open_depth;
                         pred_depth -= pred_token.close_depth;
                     } else {
-                        return None;
+                        return false;
                     }
                 }
-
-                has_variables = true;
             }
 
             pred_depth -= pred_token.close_depth;
         } else {
-            return None;
+            return false;
         }
 
         input_depth -= token.close_depth;
     }
 
     if pred_token_iter.next().is_some() {
-        return None;
+        return false;
     }
 
-    Some(has_variables)
+    true
 }
 
 fn match_variables_with_existing(
