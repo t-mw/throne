@@ -773,12 +773,6 @@ where
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
         for (c_i, (i_i, match_count)) in input_state_match_counts.iter().enumerate() {
-            let is_concrete_input = *match_count > 0;
-
-            if !is_concrete_input {
-                continue;
-            }
-
             let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % match_count;
 
             let input_state_match_idx = input_state_match_start_indices[c_i] + branch_idx;
