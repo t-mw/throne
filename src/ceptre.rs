@@ -756,13 +756,14 @@ where
     }
 
     // precompute values required for deriving branch indices.
-    let mut input_rev_permutation_counts = vec![];
+    let mut input_rev_permutation_counts = vec![1; input_state_match_counts.len()];
     let mut permutation_count = 1;
-
-    input_rev_permutation_counts.push(1);
     for (i, (_, count)) in input_state_match_counts.iter().enumerate().rev() {
         permutation_count *= count;
-        input_rev_permutation_counts.push(permutation_count);
+
+        if i > 0 {
+            input_rev_permutation_counts[i - 1] = permutation_count;
+        }
     }
 
     let mut variables_matched = vec![];
@@ -784,9 +785,7 @@ where
                 continue;
             }
 
-            let branch_idx = (p_i
-                / input_rev_permutation_counts[input_state_match_counts.len() - c_i - 1])
-                % match_count;
+            let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % match_count;
 
             let input_state_match_idx = input_state_match_start_indices[c_i] + branch_idx;
             let s_i = input_state_matches[input_state_match_idx];
