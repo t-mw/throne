@@ -702,15 +702,9 @@ where
     let outputs = &r.outputs;
 
     // per input, a list of states that match the input.
-    // indexed by input using start index and counts in the following vectors.
     let mut input_state_matches = vec![];
 
-    let mut input_state_match_start_indices = vec![];
-    let mut input_state_match_counts = vec![];
-
     for (i_i, input) in inputs.iter().enumerate() {
-        let mut count = 0;
-
         // TODO: exit early if we already know that side predicate won't match
         if is_concrete_pred(input) {
             let rule_first_atoms = extract_first_atoms_rule_input(input);
@@ -735,31 +729,31 @@ where
                 0
             };
 
+            let mut matches = vec![];
+
             for (s_i, _) in state_first_atoms
                 .iter()
                 .skip(start_idx)
                 .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
             {
                 if test_match_without_variables(input, &state[*s_i]) {
-                    input_state_matches.push(*s_i);
-                    count += 1;
+                    matches.push(*s_i);
                 }
             }
 
-            if count == 0 {
+            if matches.len() == 0 {
                 return None;
             }
 
-            input_state_match_start_indices.push(input_state_matches.len() - count);
-            input_state_match_counts.push((i_i, count));
+            input_state_matches.push((i_i, matches));
         }
     }
 
     // precompute values required for deriving branch indices.
-    let mut input_rev_permutation_counts = vec![1; input_state_match_counts.len()];
+    let mut input_rev_permutation_counts = vec![1; input_state_matches.len()];
     let mut permutation_count = 1;
-    for (i, (_, count)) in input_state_match_counts.iter().enumerate().rev() {
-        permutation_count *= count;
+    for (i, (_, matches)) in input_state_matches.iter().enumerate().rev() {
+        permutation_count *= matches.len();
 
         if i > 0 {
             input_rev_permutation_counts[i - 1] = permutation_count;
@@ -772,11 +766,9 @@ where
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
-        for (c_i, (i_i, match_count)) in input_state_match_counts.iter().enumerate() {
-            let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % match_count;
-
-            let input_state_match_idx = input_state_match_start_indices[c_i] + branch_idx;
-            let s_i = input_state_matches[input_state_match_idx];
+        for (c_i, (i_i, matches)) in input_state_matches.iter().enumerate() {
+            let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % matches.len();
+            let s_i = matches[branch_idx];
 
             // a previous input in this permutation has already matched the state being checked
             if states_matched_bool[s_i] {
