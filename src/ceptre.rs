@@ -766,15 +766,9 @@ where
         }
     }
 
-    let mut variables_matched = vec![];
-    let mut states_matched_bool = vec![false; state.len()];
-
     'outer: for p_i in 0..permutation_count {
-        variables_matched.clear();
-
-        for v in &mut states_matched_bool {
-            *v = false;
-        }
+        let mut variables_matched = vec![];
+        let mut states_matched_bool = vec![false; state.len()];
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
