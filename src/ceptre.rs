@@ -708,7 +708,7 @@ where
     let mut input_state_match_start_indices = vec![];
     let mut input_state_match_counts = vec![];
 
-    for input in inputs {
+    for (i_i, input) in inputs.iter().enumerate() {
         let mut count = 0;
 
         // TODO: exit early if we already know that side predicate won't match
@@ -749,19 +749,17 @@ where
             if count == 0 {
                 return None;
             }
-        }
 
-        input_state_match_start_indices.push(input_state_matches.len() - count);
-        input_state_match_counts.push(count);
+            input_state_match_start_indices.push(input_state_matches.len() - count);
+            input_state_match_counts.push((i_i, count));
+        }
     }
 
     // precompute values required for deriving branch indices.
-    let mut input_rev_permutation_counts = vec![1; inputs.len()];
+    let mut input_rev_permutation_counts = vec![1; input_state_match_counts.len()];
     let mut permutation_count = 1;
-    for (i, count) in input_state_match_counts.iter().enumerate().rev() {
-        if *count > 0 {
-            permutation_count *= count;
-        }
+    for (i, (_, count)) in input_state_match_counts.iter().enumerate().rev() {
+        permutation_count *= count;
 
         if i > 0 {
             input_rev_permutation_counts[i - 1] = permutation_count;
@@ -780,17 +778,16 @@ where
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
-        for (i_i, input) in inputs.iter().enumerate() {
-            let match_count = input_state_match_counts[i_i];
-            let is_concrete_input = match_count > 0;
+        for (c_i, (i_i, match_count)) in input_state_match_counts.iter().enumerate() {
+            let is_concrete_input = *match_count > 0;
 
             if !is_concrete_input {
                 continue;
             }
 
-            let branch_idx = (p_i / input_rev_permutation_counts[i_i]) % match_count;
+            let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % match_count;
 
-            let input_state_match_idx = input_state_match_start_indices[i_i] + branch_idx;
+            let input_state_match_idx = input_state_match_start_indices[c_i] + branch_idx;
             let s_i = input_state_matches[input_state_match_idx];
 
             // a previous input in this permutation has already matched the state being checked
@@ -801,7 +798,7 @@ where
             }
 
             if let Some(ref mut result) =
-                match_variables_with_existing(input, &state[s_i], &variables_matched)
+                match_variables_with_existing(&inputs[*i_i], &state[s_i], &variables_matched)
             {
                 variables_matched.append(result);
             } else {
