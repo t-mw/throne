@@ -606,15 +606,18 @@ where
 {
     let qui: Phrase = vec![Token::new("qui", 0, 0, &mut context.string_cache)];
 
+    // shuffle state so that a given rule with multiple potential
+    // matches does not always match the same permutation of state.
+    context.rng.shuffle(&mut context.state);
+
+    // shuffle rules so that each has an equal chance of selection.
+    context.rng.shuffle(&mut context.rules);
+
+    // change starting rule on each iteration to introduce randomness.
+    let mut start_rule_idx = 0;
+
     loop {
         let mut matching_rule = None;
-
-        // shuffle rules so that each has an equal chance of selection.
-        context.rng.shuffle(&mut context.rules);
-
-        // shuffle state so that a given rule with multiple potential
-        // matches does not always match the same permutation of state.
-        context.rng.shuffle(&mut context.state);
 
         if context.quiescence {
             context.state.push(qui.clone());
@@ -626,7 +629,9 @@ where
             let rules = &context.rules;
             let state = &context.state;
 
-            for rule in rules {
+            for i in 0..rules.len() {
+                let rule = &rules[(start_rule_idx + i) % rules.len()];
+
                 if let Some(rule) = rule_matches_state(
                     &rule,
                     &state,
@@ -638,6 +643,8 @@ where
                     break;
                 }
             }
+
+            start_rule_idx += 1;
         }
 
         if context.quiescence {
@@ -1405,11 +1412,11 @@ mod tests {
         assert_eq!(
             context.state,
             [
+                tokenize("at 1 1 wood", &mut context.string_cache),
+                tokenize("at 0 0 wood", &mut context.string_cache),
+                tokenize("at 1 1 fire", &mut context.string_cache),
                 tokenize("at 0 0 fire", &mut context.string_cache),
                 tokenize("at 0 1 fire", &mut context.string_cache),
-                tokenize("at 1 1 fire", &mut context.string_cache),
-                tokenize("at 0 0 wood", &mut context.string_cache),
-                tokenize("at 1 1 wood", &mut context.string_cache),
             ]
         );
     }
