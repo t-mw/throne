@@ -25,10 +25,7 @@ fn main() {
         panic!("{}", e);
     });
 
-    let mut file = fs::File::open("blocks.ceptre").expect("file");
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).expect("read_to_string");
-    let mut context = ceptre::Context::from_text(&contents);
+    let mut context = ceptre::Context::from_text(include_str!("../blocks.ceptre"));
 
     let kd = context.str_to_atom("^kd");
     let ku = context.str_to_atom("^ku");
