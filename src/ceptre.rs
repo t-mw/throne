@@ -152,7 +152,7 @@ pub trait SideInput: FnMut(&Phrase) -> Option<Phrase> {}
 impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Phrase> {}
 
 #[derive(Debug, Eq, PartialEq)]
-struct Rule {
+pub struct Rule {
     id: i32,
     inputs: Vec<Phrase>,
     outputs: Vec<Phrase>,
@@ -346,13 +346,15 @@ impl Context {
 
         let rng = SmallRng::from_seed(seed);
 
+        let first_atoms_state = extract_first_atoms_state(&state);
+
         Context {
             state,
             rules,
             string_cache,
             quiescence: false,
             rng,
-            first_atoms_state: vec![],
+            first_atoms_state,
         }
     }
 
@@ -372,6 +374,38 @@ impl Context {
 
     pub fn append_state(&mut self, text: &str) {
         self.state.push(tokenize(text, &mut self.string_cache));
+    }
+
+    pub fn find_matching_rules(&mut self) -> Vec<Rule> {
+        let state = &self.state;
+        let string_cache = &mut self.string_cache;
+        let first_atoms_state = &self.first_atoms_state;
+
+        self.rules
+            .iter()
+            .filter_map(|rule| {
+                rule_matches_state(
+                    &rule,
+                    state,
+                    &mut |_: &Phrase| None,
+                    string_cache,
+                    first_atoms_state,
+                )
+            }).collect()
+    }
+
+    pub fn execute_rule(&mut self, rule: &Rule) {
+        let inputs = &rule.inputs;
+        let outputs = &rule.outputs;
+
+        inputs.iter().for_each(|input| {
+            let remove_idx = self.state.iter().position(|v| v == input);
+            self.state.swap_remove(remove_idx.expect("remove_idx"));
+        });
+
+        outputs.iter().for_each(|output| {
+            self.state.push(output.clone());
+        });
     }
 
     pub fn print(&self) {
@@ -671,21 +705,7 @@ where
         }
 
         if let Some(ref matching_rule) = matching_rule {
-            let inputs = &matching_rule.inputs;
-            let outputs = &matching_rule.outputs;
-
-            {
-                let state = &mut context.state;
-
-                for input in inputs {
-                    let remove_idx = state.iter().position(|v| v == input);
-                    state.swap_remove(remove_idx.expect("remove_idx"));
-                }
-
-                for output in outputs {
-                    state.push(output.clone());
-                }
-            }
+            context.execute_rule(matching_rule);
         } else {
             context.quiescence = true;
         }
@@ -1392,6 +1412,39 @@ mod tests {
             vec![
                 tokenize("test 1 2", &mut context.string_cache),
                 tokenize("test 3 4", &mut context.string_cache),
+            ]
+        );
+    }
+
+    #[test]
+    fn context_find_matching_rules_test() {
+        let mut context = Context::from_text(
+            "test 1 2 . test 3 4 . test 5 6\n\
+             \n\
+             test 1 2 . test 5 6 = match\n\
+             test 1 2 . nomatch = nomatch\n\
+             test 3 4 . test 5 6 = match",
+        );
+
+        assert_eq!(
+            context.find_matching_rules(),
+            [
+                Rule::new(
+                    1,
+                    vec![
+                        tokenize("test 1 2", &mut context.string_cache),
+                        tokenize("test 5 6", &mut context.string_cache),
+                    ],
+                    vec![tokenize("match", &mut context.string_cache)]
+                ),
+                Rule::new(
+                    3,
+                    vec![
+                        tokenize("test 3 4", &mut context.string_cache),
+                        tokenize("test 5 6", &mut context.string_cache),
+                    ],
+                    vec![tokenize("match", &mut context.string_cache)],
+                ),
             ]
         );
     }
