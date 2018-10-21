@@ -1196,7 +1196,7 @@ fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
     let mut string = format!("({})", string);
 
     lazy_static! {
-        static ref RE1: Regex = Regex::new(r"\(\s*(\S+)\s*\)").unwrap();
+        static ref RE1: Regex = Regex::new(r"\(\s*(\S+|`[^`]+`)\s*\)").unwrap();
     }
 
     loop {
@@ -1212,10 +1212,21 @@ fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
     }
 
     lazy_static! {
-        static ref RE2: Regex = Regex::new(r"\(|\)|\s+|[^\(\)\s]+").unwrap();
+        static ref RE2: Regex = Regex::new(r"`(.*?)`").unwrap();
     }
 
-    let tokens = RE2
+    let string1 = string.clone();
+    let mut strings = RE2
+        .captures_iter(&string1)
+        .map(|c| c.get(1).expect("string_capture").as_str());
+
+    string = RE2.replace_all(&string, "`").to_string();
+
+    lazy_static! {
+        static ref RE3: Regex = Regex::new(r"\(|\)|\s+|[^\(\)\s]+").unwrap();
+    }
+
+    let tokens = RE3
         .find_iter(&string)
         .map(|m| m.as_str())
         .filter(|s| !s.trim().is_empty())
@@ -1244,7 +1255,16 @@ fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
             continue;
         }
 
-        result.push(Token::new(token, open_depth, close_depth, string_cache));
+        if *token == "`" {
+            result.push(Token::new(
+                strings.next().expect("string"),
+                open_depth,
+                close_depth,
+                string_cache,
+            ));
+        } else {
+            result.push(Token::new(token, open_depth, close_depth, string_cache));
+        }
         open_depth = 0;
         close_depth = 0;
     }
@@ -2136,6 +2156,37 @@ mod tests {
                 Token::new("t2", 0, 0, &mut string_cache),
                 Token::new("t3''", 1, 0, &mut string_cache),
                 Token::new("t4'", 0, 2, &mut string_cache),
+            ]
+        );
+    }
+
+    #[test]
+    fn tokenize_string_test() {
+        let mut string_cache = StringCache::new();
+
+        assert_eq!(
+            tokenize("`string here`", &mut string_cache),
+            [Token::new("string here", 0, 0, &mut string_cache),]
+        );
+
+        assert_eq!(
+            tokenize("`one string` `two strings`", &mut string_cache),
+            [
+                Token::new("one string", 1, 0, &mut string_cache),
+                Token::new("two strings", 0, 1, &mut string_cache),
+            ]
+        );
+
+        assert_eq!(
+            tokenize(
+                "t1 t2 (((`string here` )) `final string`)",
+                &mut string_cache
+            ),
+            [
+                Token::new("t1", 1, 0, &mut string_cache),
+                Token::new("t2", 0, 0, &mut string_cache),
+                Token::new("string here", 1, 0, &mut string_cache),
+                Token::new("final string", 0, 2, &mut string_cache),
             ]
         );
     }
