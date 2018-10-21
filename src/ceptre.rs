@@ -284,7 +284,7 @@ impl Context {
 
         let mut attach = None;
 
-        for line in lines {
+        lines.for_each(|line| {
             let line = line.trim();
 
             if line.is_empty() {
@@ -308,7 +308,7 @@ impl Context {
                     out_lines.push(String::from(line));
                 }
             }
-        }
+        });
 
         let state = out_lines
             .iter()
@@ -420,9 +420,9 @@ impl Context {
             .collect::<Vec<_>>();
         rules.sort();
 
-        for r in rules {
+        rules.iter().for_each(|r| {
             println!("{}", r);
-        }
+        });
     }
 
     pub fn find_phrase<'a>(&'a self, s1: Option<&str>) -> Option<&'a Phrase> {
@@ -629,8 +629,7 @@ impl Context {
                             && (atom5.is_none() || s5 == atom5.as_ref())
                     }
                 }
-            })
-            .collect()
+            }).collect()
     }
 }
 
@@ -758,15 +757,15 @@ where
 
             let mut matches = vec![];
 
-            for (s_i, _) in state_first_atoms
+            state_first_atoms
                 .iter()
                 .skip(start_idx)
                 .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
-            {
-                if test_match_without_variables(input, &state[*s_i]) {
-                    matches.push(*s_i);
-                }
-            }
+                .for_each(|(s_i, _)| {
+                    if test_match_without_variables(input, &state[*s_i]) {
+                        matches.push(*s_i);
+                    }
+                });
 
             if matches.len() == 0 {
                 return None;
@@ -779,13 +778,17 @@ where
     // precompute values required for deriving branch indices.
     let mut input_rev_permutation_counts = vec![1; input_state_matches.len()];
     let mut permutation_count = 1;
-    for (i, (_, matches)) in input_state_matches.iter().enumerate().rev() {
-        permutation_count *= matches.len();
+    input_state_matches
+        .iter()
+        .enumerate()
+        .rev()
+        .for_each(|(i, (_, matches))| {
+            permutation_count *= matches.len();
 
-        if i > 0 {
-            input_rev_permutation_counts[i - 1] = permutation_count;
-        }
-    }
+            if i > 0 {
+                input_rev_permutation_counts[i - 1] = permutation_count;
+            }
+        });
 
     'outer: for p_i in 0..permutation_count {
         let mut variables_matched = vec![];
@@ -850,13 +853,14 @@ where
         let mut forward_concrete = vec![];
         let mut outputs_concrete = vec![];
 
-        for v in inputs {
-            if is_concrete_pred(v) {
+        inputs
+            .iter()
+            .filter(|pred| is_concrete_pred(pred))
+            .for_each(|v| {
                 forward_concrete.push(assign_vars(v, &variables_matched));
-            }
-        }
+            });
 
-        for v in outputs {
+        outputs.iter().for_each(|v| {
             if is_side_pred(v) {
                 let pred = assign_vars(v, &variables_matched);
 
@@ -864,7 +868,7 @@ where
             } else {
                 outputs_concrete.push(assign_vars(v, &variables_matched));
             }
-        }
+        });
 
         return Some(Rule::new(r.id, forward_concrete, outputs_concrete));
     }
@@ -1321,13 +1325,12 @@ fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
 }
 
 fn print_state(state: &[Phrase], string_cache: &StringCache) {
-    for s in state
+    state
         .iter()
         .map(|p| build_phrase(p, string_cache))
-        .collect::<Vec<_>>()
-    {
-        println!("{}", s);
-    }
+        .for_each(|s| {
+            println!("{}", s);
+        });
 }
 
 fn rule_to_string(rule: &Rule, string_cache: &StringCache) -> String {
