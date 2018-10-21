@@ -2,25 +2,46 @@ extern crate ceptre;
 
 #[macro_use]
 extern crate criterion;
+#[macro_use]
+extern crate lazy_static;
 
 use criterion::Criterion;
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("update/context1", |b| {
-        let mut context1 = ceptre::Context::from_text(include_str!("wood.ceptre"));
+        b.iter_with_setup(
+            || {
+                // only parse once, otherwise benchmark is affected
+                lazy_static! {
+                    static ref CONTEXT: ceptre::Context =
+                        ceptre::Context::from_text(include_str!("wood.ceptre")).with_test_rng();
+                }
 
-        b.iter(|| {
-            context1.append_state("#update");
-            ceptre::update(&mut context1, |_: &ceptre::Phrase| None);
-        })
+                CONTEXT.clone()
+            },
+            |mut context| {
+                context.append_state("#update");
+                ceptre::update(&mut context, |_: &ceptre::Phrase| None);
+            },
+        )
     });
 
     c.bench_function("update/context2", |b| {
-        let mut context2 = ceptre::Context::from_text(include_str!("spaceopera.ceptre"));
+        b.iter_with_setup(
+            || {
+                // only parse once, otherwise benchmark is affected
+                lazy_static! {
+                    static ref CONTEXT: ceptre::Context =
+                        ceptre::Context::from_text(include_str!("spaceopera.ceptre"))
+                            .with_test_rng();
+                }
 
-        b.iter(|| {
-            ceptre::update(&mut context2, |_: &ceptre::Phrase| None);
-        })
+                CONTEXT.clone()
+            },
+            |mut context| {
+                ceptre::update(&mut context, |_: &ceptre::Phrase| None);
+            },
+        )
     });
 }
 

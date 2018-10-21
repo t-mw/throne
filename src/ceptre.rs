@@ -138,7 +138,7 @@ type Match = (Atom, Phrase);
 pub trait SideInput: FnMut(&Phrase) -> Option<Phrase> {}
 impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Phrase> {}
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Rule {
     id: i32,
     inputs: Vec<Phrase>,
@@ -155,6 +155,7 @@ impl Rule {
     }
 }
 
+#[derive(Clone)]
 pub struct Context {
     rules: Vec<Rule>,
     pub state: Vec<Phrase>,
@@ -164,7 +165,7 @@ pub struct Context {
     first_atoms_state: Vec<FirstAtomsState>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct StringCache {
     atom_to_str: Vec<String>,
     str_to_atom: HashMap<String, Atom>,
