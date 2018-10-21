@@ -3,7 +3,6 @@ use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use regex::Regex;
 
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::f32;
 use std::vec::Vec;
@@ -32,21 +31,9 @@ impl<T> OptionFilter<T> for Option<T> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Atom {
     idx: usize,
-}
-
-impl PartialOrd for Atom {
-    fn partial_cmp(&self, other: &Atom) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Atom {
-    fn cmp(&self, other: &Atom) -> Ordering {
-        self.idx.cmp(&other.idx)
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
