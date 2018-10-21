@@ -1,3 +1,5 @@
+// blocks
+
 fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 20
 
 #tick . !shape X Y BLOCKS = #new-shape
@@ -8,7 +10,7 @@ fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 2
 #new-shape . $max-height H = new-shape 4 H ((block 0 -1) ((block 0 0) ((block 0 1) ((block 1 1) (cons))))) . #shape-to-blocks (#input-lr)
 
 #shape-to-blocks RETURN:
-  block-falling ID X Y =
+  block-falling ID X Y = ()
   $new-shape X Y BLOCKS . !BLOCKS = BLOCKS
   () = #shape-to-blocks-create RETURN
 
@@ -22,11 +24,11 @@ fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 2
 #shape-to-blocks-check RETURN . () = #shape-to-blocks-ok RETURN
 
 #shape-to-blocks-ok RETURN:
-  shape X Y BLOCKS =
+  shape X Y BLOCKS = ()
   new-shape X Y BLOCKS . () = shape X Y BLOCKS . RETURN
 
 #shape-to-blocks-fail RETURN:
-  new-shape X Y BLOCKS =
+  new-shape X Y BLOCKS = ()
   $shape X Y BLOCKS . () = new-shape X Y BLOCKS . #shape-to-blocks RETURN
 
 #input-u . ^kp up = #rotate-shape
@@ -50,7 +52,7 @@ fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 2
   block-falling ID X Y . + Y1 1 Y . $block-set ID2 X Y1 = block-setting ID X Y
   block-falling ID X Y . + Y1 1 Y . < Y1 0 = block-setting ID X Y
   $block-setting ID X Y . block-falling ID2 X1 Y1 = block-setting ID2 X1 Y1
-  $block-setting ID X Y . shape X1 Y1 BLOCKS =
+  $block-setting ID X Y . shape X1 Y1 BLOCKS = ()
   () = #set
 
 #set:
@@ -65,8 +67,8 @@ fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 2
 #score-y . score-counter X Y . () = #fall-tick
 
 #clear:
-  $clear-y Y . block-set ID X Y =
-  block-clear-move ID =
+  $clear-y Y . block-set ID X Y = ()
+  block-clear-move ID = ()
   () = #clear-move
 
 #clear-move:
@@ -80,6 +82,6 @@ fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 2
 #fall . () = #clean
 
 #clean:
-  dt DT =
-  cons =
-  () =
+  dt DT = ()
+  cons = ()
+  () = ()

@@ -15,6 +15,12 @@ macro_rules! dump {
     })
 }
 
+mod parser {
+    #[derive(Parser)]
+    #[grammar = "ceptre.pest"]
+    pub struct Parser;
+}
+
 pub trait OptionFilter<T> {
     fn option_filter<P: FnOnce(&T) -> bool>(self, predicate: P) -> Self;
 }
@@ -236,117 +242,96 @@ impl StringCache {
 
 impl Context {
     pub fn from_text(text: &str) -> Context {
+        use pest::iterators::Pair;
+        use pest::Parser;
+
         let text = text.replace("()", "qui");
-        let lines = text.split('\n');
+
+        let file = parser::Parser::parse(parser::Rule::file, &text)
+            .unwrap_or_else(|e| panic!("{}", e))
+            .next()
+            .unwrap();
+
+        let mut state: Vec<Phrase> = vec![];
+        let mut rules: Vec<Rule> = vec![];
 
         let mut string_cache = StringCache::new();
 
-        let parse_rule = |id: i32, string: &str, string_cache: &mut StringCache| {
-            let mut r = string.split(" =");
+        let mut idx = -1;
 
-            let (dollars, inputs): (Vec<_>, Vec<_>) = r
-                .next()
-                .expect("r[0]")
-                .split(" . ")
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .partition(|s| s.chars().next().expect("char") == '$');
+        let mut pair_to_ceptre_rule = |pair: Pair<parser::Rule>, string_cache: &mut StringCache| {
+            let mut pairs = pair.into_inner();
+            let inputs_pair = pairs.next().unwrap();
+            let outputs_pair = pairs.next().unwrap();
 
-            let outputs = if let Some(r1) = r.next() { r1 } else { "" }
-                .split(" . ")
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty());
+            idx += 1;
 
-            let dollars: Vec<_> = dollars.iter().map(|s| s.split_at(1).1).collect();
+            let mut inputs = vec![];
+            let mut outputs = vec![];
+            let mut has_input_qui = false;
 
-            let inputs: Vec<_> = inputs
-                .iter()
-                .chain(dollars.iter())
-                .cloned()
-                .map(|s| tokenize(s, string_cache))
-                .collect();
+            for p in inputs_pair.into_inner() {
+                let input_phrase = p.into_inner().next().unwrap();
 
-            let outputs = outputs
-                .chain(dollars)
-                .map(|s| tokenize(s, string_cache))
-                .collect();
+                match input_phrase.as_rule() {
+                    parser::Rule::copy_phrase => {
+                        let copy_phrase = tokenize(
+                            input_phrase.into_inner().next().unwrap().as_str(),
+                            string_cache,
+                        );
 
-            Rule::new(id, inputs, outputs)
-        };
-
-        let get_label = |line| {
-            lazy_static! {
-                static ref RE: Regex = Regex::new(r"^(#[^:]*):\s*$").unwrap();
-            }
-
-            RE.captures(line)
-                .map(|caps| caps.get(1).unwrap().as_str().trim())
-        };
-
-        let get_init = |line: &String, string_cache: &mut StringCache| {
-            if !line.contains(" =") && !line.is_empty() {
-                Some(
-                    line.split(" . ")
-                        .map(|s| tokenize(s, string_cache))
-                        .collect::<Vec<_>>(),
-                )
-            } else {
-                None
-            }
-        };
-
-        let get_rule = |(i, line): (usize, &String), string_cache: &mut StringCache| {
-            if line.contains(" =") && !line.is_empty() {
-                Some(parse_rule(i as i32, line, string_cache))
-            } else {
-                None
-            }
-        };
-
-        let mut out_lines = vec![];
-
-        let mut attach = None;
-
-        lines.for_each(|line| {
-            let line = line.trim();
-
-            if line.is_empty() {
-                attach = None;
-            } else {
-                let label = get_label(line);
-
-                if label.is_some() {
-                    attach = label;
-                } else if let Some(attach) = attach {
-                    // discard the current label on quiescence
-                    if line
-                        .split(|c| c == '.' || c == '=')
-                        .any(|s| s.trim() == "qui")
-                    {
-                        out_lines.push(format!("{} . {}", attach, line));
-                    } else {
-                        out_lines.push(format!("{} . {} . {}", attach, line, attach));
+                        inputs.push(copy_phrase.clone());
+                        outputs.push(copy_phrase);
                     }
-                } else {
-                    out_lines.push(String::from(line));
+                    rule_type => {
+                        has_input_qui = has_input_qui || rule_type == parser::Rule::qui;
+                        inputs.push(tokenize(input_phrase.as_str(), string_cache));
+                    }
                 }
             }
-        });
 
-        let state = out_lines
-            .iter()
-            .map(|l| get_init(l, &mut string_cache))
-            .filter(|v| v.is_some())
-            .flat_map(|v| v.expect("v"))
-            .collect::<Vec<_>>();
+            for p in outputs_pair.into_inner() {
+                let output_phrase = p.into_inner().next().unwrap();
 
-        let rules = out_lines
-            .iter()
-            .enumerate()
-            .map(|l| get_rule(l, &mut string_cache))
-            .filter(|v| v.is_some())
-            .map(|v| v.expect("v"))
-            .collect::<Vec<_>>();
+                match output_phrase.as_rule() {
+                    parser::Rule::qui => (),
+                    _ => outputs.push(tokenize(output_phrase.as_str(), string_cache)),
+                }
+            }
+
+            (Rule::new(idx, inputs, outputs), has_input_qui)
+        };
+
+        for line in file.into_inner() {
+            match line.as_rule() {
+                parser::Rule::stage => {
+                    let mut stage = line.into_inner();
+                    let phrase_pair = stage.next().unwrap();
+                    let stage_phrase = tokenize(phrase_pair.as_str(), &mut string_cache);
+
+                    for pair in stage {
+                        let (mut r, has_input_qui) = pair_to_ceptre_rule(pair, &mut string_cache);
+
+                        // insert at beginning, so that 'first atoms' optimization is effective
+                        r.inputs.insert(0, stage_phrase.clone());
+
+                        if !has_input_qui {
+                            r.outputs.push(stage_phrase.clone());
+                        }
+
+                        rules.push(r);
+                    }
+                }
+                parser::Rule::rule => {
+                    rules.push(pair_to_ceptre_rule(line, &mut string_cache).0);
+                }
+                parser::Rule::state => for phrase in line.into_inner() {
+                    state.push(tokenize(phrase.as_str(), &mut string_cache));
+                },
+                parser::Rule::EOI => (),
+                _ => unreachable!("{}", line),
+            }
+        }
 
         let seed = [
             rand::random::<u8>(),
@@ -368,7 +353,6 @@ impl Context {
         ];
 
         let rng = SmallRng::from_seed(seed);
-
         let first_atoms_state = extract_first_atoms_state(&state);
 
         Context {
@@ -680,7 +664,6 @@ where
         }
 
         context.first_atoms_state = extract_first_atoms_state(&context.state);
-
         {
             let rules = &context.rules;
             let state = &context.state;
@@ -1440,6 +1423,73 @@ mod tests {
     }
 
     #[test]
+    fn context_from_text_copy_test() {
+        let mut context = Context::from_text("at 0 0 wood . $at 1 2 wood = at 1 0 wood");
+
+        assert_eq!(
+            context.rules,
+            [Rule::new(
+                0,
+                vec![
+                    tokenize("at 0 0 wood", &mut context.string_cache),
+                    tokenize("at 1 2 wood", &mut context.string_cache),
+                ],
+                vec![
+                    tokenize("at 1 2 wood", &mut context.string_cache),
+                    tokenize("at 1 0 wood", &mut context.string_cache)
+                ]
+            ),]
+        );
+    }
+
+    #[test]
+    fn context_from_text_rules_newline_test() {
+        let mut context = Context::from_text(
+            "broken line 1 =\n\
+             broken line 2 .\n\
+             broken line 3 \n\
+             . broken line 4\n\
+             text\n\
+             = `broken\ntext`",
+        );
+
+        assert_eq!(
+            context.rules,
+            [
+                Rule::new(
+                    0,
+                    vec![tokenize("broken line 1", &mut context.string_cache)],
+                    vec![
+                        tokenize("broken line 2", &mut context.string_cache),
+                        tokenize("broken line 3", &mut context.string_cache),
+                        tokenize("broken line 4", &mut context.string_cache),
+                    ],
+                ),
+                Rule::new(
+                    1,
+                    vec![tokenize("text", &mut context.string_cache)],
+                    vec![tokenize("`broken\ntext`", &mut context.string_cache)],
+                )
+            ]
+        );
+    }
+
+    #[test]
+    fn context_from_text_comment_test() {
+        let mut context = Context::from_text(
+            "// comment 1\n\
+             state 1\n\
+             /* comment\n\
+             2 */",
+        );
+
+        assert_eq!(
+            context.state,
+            [tokenize("state 1", &mut context.string_cache),]
+        );
+    }
+
+    #[test]
     fn context_append_state_test() {
         let mut context = Context::from_text("test 1 2");
 
@@ -1468,7 +1518,7 @@ mod tests {
             context.find_matching_rules(),
             [
                 Rule::new(
-                    1,
+                    0,
                     vec![
                         tokenize("test 1 2", &mut context.string_cache),
                         tokenize("test 5 6", &mut context.string_cache),
@@ -1476,7 +1526,7 @@ mod tests {
                     vec![tokenize("match", &mut context.string_cache)]
                 ),
                 Rule::new(
-                    3,
+                    2,
                     vec![
                         tokenize("test 3 4", &mut context.string_cache),
                         tokenize("test 5 6", &mut context.string_cache),
@@ -1505,9 +1555,9 @@ mod tests {
             [
                 tokenize("at 1 1 wood", &mut context.string_cache),
                 tokenize("at 0 0 wood", &mut context.string_cache),
+                tokenize("at 0 1 fire", &mut context.string_cache),
                 tokenize("at 1 1 fire", &mut context.string_cache),
                 tokenize("at 0 0 fire", &mut context.string_cache),
-                tokenize("at 0 1 fire", &mut context.string_cache),
             ]
         );
     }

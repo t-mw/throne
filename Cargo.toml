@@ -6,6 +6,8 @@ authors = ["Tobias Mansfield-Williams <contact@tmwhere.com>"]
 [dependencies]
 lazy_static = "1.0.0"
 minifb = "0.10.4"
+pest = "2.0"
+pest_derive = "2.0"
 rand = "0.5"
 regex = "1.0.3"
 

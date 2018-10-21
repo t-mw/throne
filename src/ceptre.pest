@@ -1,0 +1,33 @@
+WHITESPACE = _{ " " }
+COMMENT = _{ ("//" ~ (!NEWLINE ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
+atom = @{ (ASCII_ALPHANUMERIC)+ ~ "'"* }
+string = { "`" ~ (!"`" ~ ANY)* ~ "`" }
+qui = { "qui" }
+
+// list <= and >= first, to give precendence over < and >
+prefix = { !(string | atom) ~ ("+" | "-" | "%%" | "<=" | ">=" | "<" | ">" | "#") }
+
+phrase_compound = { prefix? ~ ((string | atom)+ | "(" ~ phrase_compound+ ~ ")") }
+phrase = { phrase_compound+ }
+
+stage_phrase = { "#" ~ phrase }
+copy_phrase = { "$" ~ phrase }
+side_phrase = { "^" ~ phrase }
+negate_phrase = { "!" ~ phrase }
+
+state_phrase = { stage_phrase | phrase }
+state = { state_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ state_phrase)* }
+
+input_phrase = { qui | stage_phrase | copy_phrase | side_phrase | negate_phrase | phrase }
+inputs = { input_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ input_phrase)* }
+output_phrase = { qui | stage_phrase | side_phrase | phrase }
+outputs = { output_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ output_phrase)* }
+rule = { inputs ~ NEWLINE? ~ "=" ~ NEWLINE? ~ outputs }
+
+stage = { (stage_phrase ~ ":") ~ NEWLINE ~ rule ~ (NEWLINE ~ rule)* ~ NEWLINE? }
+
+file = {
+  SOI ~
+  (NEWLINE* ~ (stage | rule | state))* ~
+  NEWLINE* ~ EOI
+}
