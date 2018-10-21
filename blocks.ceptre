@@ -1,4 +1,4 @@
-fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-height 20
+fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 20
 
 #tick . !shape X Y BLOCKS = #new-shape
 #tick . $shape X Y BLOCKS = #input-u
@@ -42,8 +42,8 @@ fall-timer 0.25 . default-fall-timer 0.25 . block-id 0 . max-width 10 . max-heig
 #input-lr . () = #input-d
 
 #input-d:
-  ^kd down . default-fall-timer 0.25 . fall-timer TIMER = default-fall-timer 0.05 . fall-timer 0
-  ^ku down . default-fall-timer 0.05 . fall-timer TIMER = default-fall-timer 0.25 . fall-timer 0
+  ^kd down . default-fall-timer 25 . fall-timer TIMER = default-fall-timer 5 . fall-timer 0
+  ^ku down . default-fall-timer 5 . fall-timer TIMER = default-fall-timer 25 . fall-timer 0
   () = #collision
 
 #collision:

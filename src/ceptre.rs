@@ -4,7 +4,7 @@ use rand::{Rng, SeedableRng};
 use regex::Regex;
 
 use std::collections::HashMap;
-use std::f32;
+use std::usize;
 use std::vec::Vec;
 
 macro_rules! dump {
@@ -30,6 +30,9 @@ impl<T> OptionFilter<T> for Option<T> {
         None
     }
 }
+
+const MAX_NUMBER: i32 = 99999;
+const MAX_STRING_IDX: usize = usize::MAX - MAX_NUMBER as usize * 2 - 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Atom {
@@ -126,8 +129,12 @@ impl Token {
         }
     }
 
-    pub fn as_str<'a>(&self, string_cache: &'a StringCache) -> &'a str {
+    pub fn as_str<'a>(&self, string_cache: &'a StringCache) -> Option<&'a str> {
         string_cache.atom_to_str(self.string)
+    }
+
+    pub fn as_number(&self) -> Option<i32> {
+        StringCache::atom_to_number(self.string)
     }
 }
 
@@ -177,11 +184,27 @@ impl StringCache {
     }
 
     pub fn str_to_atom(&mut self, text: &str) -> Atom {
+        use std::str::FromStr;
+
+        if let Some(n) = i32::from_str(text).ok() {
+            if n.abs() > MAX_NUMBER {
+                panic!("{} is large than the maximum of {}", n.abs(), MAX_NUMBER);
+            }
+
+            return Atom {
+                idx: (n + MAX_NUMBER + 1) as usize + MAX_STRING_IDX,
+            };
+        }
+
         if let Some(atom) = self.str_to_existing_atom(text) {
             return atom;
         }
 
         let idx = self.atom_to_str.len();
+        if idx > MAX_STRING_IDX {
+            panic!("String cache full");
+        }
+
         let atom = Atom { idx };
 
         self.atom_to_str.push(text.to_string());
@@ -194,8 +217,20 @@ impl StringCache {
         self.str_to_atom.get(text).cloned()
     }
 
-    pub fn atom_to_str(&self, atom: Atom) -> &str {
-        &self.atom_to_str[atom.idx]
+    fn atom_to_str(&self, atom: Atom) -> Option<&str> {
+        if atom.idx <= MAX_STRING_IDX {
+            Some(&self.atom_to_str[atom.idx])
+        } else {
+            None
+        }
+    }
+
+    fn atom_to_number(atom: Atom) -> Option<i32> {
+        if atom.idx <= MAX_STRING_IDX {
+            None
+        } else {
+            Some((atom.idx - MAX_STRING_IDX) as i32 - MAX_NUMBER - 1)
+        }
     }
 }
 
@@ -953,92 +988,78 @@ fn is_concrete_pred(tokens: &Phrase) -> bool {
 fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> Option<Phrase> {
     match tokens[0].flag {
         TokenFlag::BackwardsPred(BackwardsPred::Plus) => {
-            use std::str::FromStr;
-
-            let n1 = f32::from_str(tokens[1].as_str(string_cache));
-            let n2 = f32::from_str(tokens[2].as_str(string_cache));
-            let n3 = f32::from_str(tokens[3].as_str(string_cache));
+            let n1 = tokens[1].as_number();
+            let n2 = tokens[2].as_number();
+            let n3 = tokens[3].as_number();
 
             match (n1, n2, n3) {
-                (Ok(v1), Ok(v2), Err(_)) => Some(vec![
+                (Some(v1), Some(v2), None) => Some(vec![
                     tokens[0].clone(),
                     tokens[1].clone(),
                     tokens[2].clone(),
                     Token::new(&(v1 + v2).to_string(), 0, 1, string_cache),
                 ]),
-                (Ok(v1), Err(_), Ok(v3)) => Some(vec![
+                (Some(v1), None, Some(v3)) => Some(vec![
                     tokens[0].clone(),
                     tokens[1].clone(),
                     Token::new(&(v3 - v1).to_string(), 0, 0, string_cache),
                     tokens[3].clone(),
                 ]),
-                (Err(_), Ok(v2), Ok(v3)) => Some(vec![
+                (None, Some(v2), Some(v3)) => Some(vec![
                     tokens[0].clone(),
                     Token::new(&(v3 - v2).to_string(), 0, 0, string_cache),
                     tokens[2].clone(),
                     tokens[3].clone(),
                 ]),
-                (Ok(v1), Ok(v2), Ok(v3)) if (v1 + v2 - v3).abs() < f32::EPSILON => {
-                    Some(tokens.to_owned())
-                }
+                (Some(v1), Some(v2), Some(v3)) if v1 + v2 == v3 => Some(tokens.to_owned()),
                 _ => None,
             }
         }
         TokenFlag::BackwardsPred(BackwardsPred::Lt) => {
-            use std::str::FromStr;
-
-            let n1 = f32::from_str(tokens[1].as_str(string_cache));
-            let n2 = f32::from_str(tokens[2].as_str(string_cache));
+            let n1 = tokens[1].as_number();
+            let n2 = tokens[2].as_number();
 
             match (n1, n2) {
-                (Ok(v1), Ok(v2)) if v1 < v2 => Some(tokens.to_owned()),
+                (Some(v1), Some(v2)) if v1 < v2 => Some(tokens.to_owned()),
                 _ => None,
             }
         }
         TokenFlag::BackwardsPred(BackwardsPred::Gt) => {
-            use std::str::FromStr;
-
-            let n1 = f32::from_str(tokens[1].as_str(string_cache));
-            let n2 = f32::from_str(tokens[2].as_str(string_cache));
+            let n1 = tokens[1].as_number();
+            let n2 = tokens[2].as_number();
 
             match (n1, n2) {
-                (Ok(v1), Ok(v2)) if v1 > v2 => Some(tokens.to_owned()),
+                (Some(v1), Some(v2)) if v1 > v2 => Some(tokens.to_owned()),
                 _ => None,
             }
         }
         TokenFlag::BackwardsPred(BackwardsPred::Lte) => {
-            use std::str::FromStr;
-
-            let n1 = f32::from_str(tokens[1].as_str(string_cache));
-            let n2 = f32::from_str(tokens[2].as_str(string_cache));
+            let n1 = tokens[1].as_number();
+            let n2 = tokens[2].as_number();
 
             match (n1, n2) {
-                (Ok(v1), Ok(v2)) if v1 <= v2 => Some(tokens.to_owned()),
+                (Some(v1), Some(v2)) if v1 <= v2 => Some(tokens.to_owned()),
                 _ => None,
             }
         }
         TokenFlag::BackwardsPred(BackwardsPred::Gte) => {
-            use std::str::FromStr;
-
-            let n1 = f32::from_str(tokens[1].as_str(string_cache));
-            let n2 = f32::from_str(tokens[2].as_str(string_cache));
+            let n1 = tokens[1].as_number();
+            let n2 = tokens[2].as_number();
 
             match (n1, n2) {
-                (Ok(v1), Ok(v2)) if v1 >= v2 => Some(tokens.to_owned()),
+                (Some(v1), Some(v2)) if v1 >= v2 => Some(tokens.to_owned()),
                 _ => None,
             }
         }
         TokenFlag::BackwardsPred(BackwardsPred::ModNeg) => {
-            use std::str::FromStr;
+            let n1 = tokens[1].as_number();
+            let n2 = tokens[2].as_number();
+            let n3 = tokens[3].as_number();
 
-            let n1 = f32::from_str(tokens[1].as_str(string_cache));
-            let n2 = f32::from_str(tokens[2].as_str(string_cache));
-            let n3 = f32::from_str(tokens[3].as_str(string_cache));
-
-            let mod_neg = |x: f32, n: f32| x - n * (x / n).floor();
+            let mod_neg = |x: i32, n: i32| x - n * (x / n);
 
             match (n1, n2, n3) {
-                (Ok(v1), Ok(v2), Err(_)) => Some(vec![
+                (Some(v1), Some(v2), None) => Some(vec![
                     tokens[0].clone(),
                     tokens[1].clone(),
                     tokens[2].clone(),
@@ -1298,7 +1319,13 @@ fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
     let mut tokens = vec![];
 
     for t in phrase {
-        let string = t.as_str(string_cache);
+        let mut string = String::new();
+
+        if let Some(s) = t.as_str(string_cache) {
+            string += s;
+        } else {
+            string += &t.as_number().expect("number").to_string();
+        }
 
         tokens.push(format!(
             "{}{}{}{}",

@@ -12,14 +12,14 @@ mod ceptre;
 use std::io::Read;
 use std::{fs, thread, time};
 
-const WIDTH: usize = 100;
-const HEIGHT: usize = 200;
+const WIDTH: i32 = 100;
+const HEIGHT: i32 = 200;
 
 fn main() {
     let mut window = Window::new(
         "Test - ESC to exit",
-        WIDTH,
-        HEIGHT,
+        WIDTH as usize,
+        HEIGHT as usize,
         WindowOptions::default(),
     ).unwrap_or_else(|e| {
         panic!("{}", e);
@@ -37,7 +37,7 @@ fn main() {
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         context.append_state("#tick");
-        context.append_state("dt 0.03");
+        context.append_state("dt 3");
         context.print();
 
         let string_to_key = |s: &ceptre::Atom| match s {
@@ -79,44 +79,33 @@ fn main() {
             }
         });
 
-        let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
+        let mut buffer: Vec<u32> = vec![0; (WIDTH * HEIGHT) as usize];
 
         let is_valid_pos = |x, y| x < WIDTH && y < HEIGHT;
 
         for p in &context.state {
-            use std::str::FromStr;
-
             match (
-                p.get(0).map(|t| context.string_cache.atom_to_str(t.string)),
-                p.get(1).map(|t| context.string_cache.atom_to_str(t.string)),
-                p.get(2).map(|t| context.string_cache.atom_to_str(t.string)),
-                p.get(3).map(|t| context.string_cache.atom_to_str(t.string)),
+                p.get(0).and_then(|t| t.as_str(&context.string_cache)),
+                p.get(2).and_then(|t| t.as_number()),
+                p.get(3).and_then(|t| t.as_number()),
             ) {
-                (Some("block-falling"), Some(_id), Some(x), Some(y))
-                | (Some("block-set"), Some(_id), Some(x), Some(y)) => {
-                    let x = usize::from_str(x);
-                    let y = usize::from_str(y);
-
+                (Some("block-falling"), Some(x), Some(y))
+                | (Some("block-set"), Some(x), Some(y)) => {
                     let color = 0x00b27474;
 
-                    match (x, y) {
-                        (Ok(x), Ok(y)) => {
-                            let x0 = x * 10;
-                            let x1 = x0 + 10;
+                    let x0 = x * 10;
+                    let x1 = x0 + 10;
 
-                            let y0 = y * 10;
-                            let y1 = y0 + 10;
+                    let y0 = y * 10;
+                    let y1 = y0 + 10;
 
-                            for y in y0..y1 {
-                                for x in x0..x1 {
-                                    if is_valid_pos(x, y) {
-                                        let idx = x + WIDTH * (HEIGHT - 1 - y);
-                                        buffer[idx] = color;
-                                    }
-                                }
+                    for y in y0..y1 {
+                        for x in x0..x1 {
+                            if is_valid_pos(x, y) {
+                                let idx = x + WIDTH * (HEIGHT - 1 - y);
+                                buffer[idx as usize] = color;
                             }
                         }
-                        _ => (),
                     }
                 }
                 _ => (),
