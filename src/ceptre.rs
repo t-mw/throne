@@ -1133,13 +1133,14 @@ fn match_variables_assuming_compatible_structure(
 ) -> bool {
     assert!(test_match_without_variables(input_tokens, pred_tokens).is_some());
 
-    let mut pred_token_iter = pred_tokens.iter();
+    let mut pred_token_i = 0;
 
     let mut input_depth = 0;
     let mut pred_depth = 0;
 
     for token in input_tokens {
-        let pred_token = pred_token_iter.next().expect("pred_token");
+        let pred_token = &pred_tokens[pred_token_i];
+        pred_token_i += 1;
 
         input_depth += token.open_depth;
         pred_depth += pred_token.open_depth;
@@ -1148,15 +1149,17 @@ fn match_variables_assuming_compatible_structure(
 
         if is_var {
             // colect tokens to assign to the input variable
-            let mut matching_phrase = vec![pred_token];
+            let start_i = pred_token_i - 1;
 
             while input_depth < pred_depth {
-                let pred_token = pred_token_iter.next().expect("pred_token");
+                let pred_token = &pred_tokens[pred_token_i];
+                pred_token_i += 1;
+
                 pred_depth += pred_token.open_depth;
                 pred_depth -= pred_token.close_depth;
-
-                matching_phrase.push(pred_token);
             }
+
+            let end_i = pred_token_i;
 
             let variable_already_matched = if let Some(&(_, ref existing_matches)) =
                 existing_matches_and_result
@@ -1165,7 +1168,7 @@ fn match_variables_assuming_compatible_structure(
             {
                 if !phrase_equal(
                     &existing_matches,
-                    matching_phrase.as_slice(),
+                    &pred_tokens[start_i..end_i],
                     token.open_depth,
                 ) {
                     // this match of the variable conflicted with an existing match
@@ -1178,12 +1181,10 @@ fn match_variables_assuming_compatible_structure(
             };
 
             if !variable_already_matched {
-                let mut matching_phrase = matching_phrase
-                    .iter()
-                    .map(|t| (*t).clone())
-                    .collect::<Vec<_>>();
+                let mut matching_phrase = pred_tokens[start_i..end_i].to_vec();
 
                 let len = matching_phrase.len();
+
                 if len == 1 {
                     matching_phrase[0].open_depth = 0;
                     matching_phrase[0].close_depth = 0;
@@ -1204,22 +1205,22 @@ fn match_variables_assuming_compatible_structure(
 }
 
 #[inline]
-fn phrase_equal(a: &Phrase, b: &[&Token], b_start_depth: u8) -> bool {
+fn phrase_equal(a: &Phrase, b: &[Token], b_start_depth: u8) -> bool {
     if a.len() != b.len() {
         return false;
     }
 
     if b.len() == 1 {
-        token_equal(&a[0], b[0], true, None)
+        token_equal(&a[0], &b[0], true, None)
     } else {
         let len = b.len();
 
-        token_equal(&a[0], b[0], false, Some(b_start_depth))
+        token_equal(&a[0], &b[0], false, Some(b_start_depth))
             && a.iter()
                 .skip(1)
                 .take(len - 2)
-                .eq(b.iter().cloned().skip(1).take(len - 2))
-            && token_equal(&a[len - 1], b[len - 1], false, Some(b_start_depth))
+                .eq(b.iter().skip(1).take(len - 2))
+            && token_equal(&a[len - 1], &b[len - 1], false, Some(b_start_depth))
     }
 }
 
