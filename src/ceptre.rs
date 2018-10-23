@@ -764,8 +764,8 @@ where
                 .skip(start_idx)
                 .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
                 .for_each(|(s_i, _)| {
-                    if test_match_without_variables(input, &state[*s_i]) {
-                        matches.push(*s_i);
+                    if let Some(has_var) = test_match_without_variables(input, &state[*s_i]) {
+                        matches.push((*s_i, has_var));
                     }
                 });
 
@@ -800,7 +800,7 @@ where
         // level of the tree is an input, and each branch is a match against a state.
         for (c_i, (i_i, matches)) in input_state_matches.iter().enumerate() {
             let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % matches.len();
-            let s_i = matches[branch_idx];
+            let (s_i, has_var) = matches[branch_idx];
 
             // a previous input in this permutation has already matched the state being checked
             if states_matched_bool[s_i] {
@@ -809,12 +809,17 @@ where
                 states_matched_bool[s_i] = true;
             }
 
-            if let Some(ref mut result) =
-                match_variables_with_existing(&inputs[*i_i], &state[s_i], &variables_matched)
-            {
-                variables_matched.append(result);
-            } else {
-                continue 'outer;
+            if has_var {
+                // we know the structures are compatible from the earlier matching check
+                if let Some(ref mut result) = match_variables_assuming_compatible_structure(
+                    &inputs[*i_i],
+                    &state[s_i],
+                    &variables_matched,
+                ) {
+                    variables_matched.append(result);
+                } else {
+                    continue 'outer;
+                }
             }
         }
 
@@ -1058,11 +1063,13 @@ where
     side_input(tokens)
 }
 
-fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> bool {
+fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<bool> {
     let mut pred_token_iter = pred_tokens.iter();
 
     let mut input_depth = 0;
     let mut pred_depth = 0;
+
+    let mut has_var = false;
 
     for token in input_tokens {
         let pred_token = pred_token_iter.next();
@@ -1072,109 +1079,22 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
         if let Some(pred_token) = pred_token {
             pred_depth += pred_token.open_depth;
 
-            if !is_var_token(token) {
-                if token.string != pred_token.string || input_depth != pred_depth {
-                    return false;
-                }
-            } else {
-                while input_depth < pred_depth {
-                    if let Some(pred_token) = pred_token_iter.next() {
-                        pred_depth += pred_token.open_depth;
-                        pred_depth -= pred_token.close_depth;
-                    } else {
-                        return false;
-                    }
-                }
-            }
+            let is_var = is_var_token(token);
 
-            pred_depth -= pred_token.close_depth;
-        } else {
-            return false;
-        }
-
-        input_depth -= token.close_depth;
-    }
-
-    if pred_token_iter.next().is_some() {
-        return false;
-    }
-
-    true
-}
-
-fn match_variables_with_existing(
-    input_tokens: &Phrase,
-    pred_tokens: &Phrase,
-    existing_matches: &[Match],
-) -> Option<Vec<Match>> {
-    let mut pred_token_iter = pred_tokens.iter();
-    let mut result = vec![];
-
-    let mut input_depth = 0;
-    let mut pred_depth = 0;
-
-    for token in input_tokens {
-        let pred_token = pred_token_iter.next();
-
-        input_depth += token.open_depth;
-
-        if let Some(pred_token) = pred_token {
-            pred_depth += pred_token.open_depth;
-
-            if !is_var_token(token) {
+            if !is_var {
                 if token.string != pred_token.string || input_depth != pred_depth {
                     return None;
                 }
             } else {
-                // colect tokens to assign to the input variable
-                let mut matching_phrase = vec![pred_token];
+                has_var = true;
 
                 while input_depth < pred_depth {
                     if let Some(pred_token) = pred_token_iter.next() {
                         pred_depth += pred_token.open_depth;
                         pred_depth -= pred_token.close_depth;
-
-                        matching_phrase.push(pred_token);
                     } else {
                         return None;
                     }
-                }
-
-                let variable_already_matched = if let Some(&(_, ref existing_matches)) = result
-                    .iter()
-                    .chain(existing_matches.iter())
-                    .find(|&&(ref t, _)| *t == token.string)
-                {
-                    if !phrase_equal(
-                        &existing_matches,
-                        matching_phrase.as_slice(),
-                        token.open_depth,
-                    ) {
-                        // this match of the variable conflicted with an existing match
-                        return None;
-                    }
-
-                    true
-                } else {
-                    false
-                };
-
-                if !variable_already_matched {
-                    let mut matching_phrase = matching_phrase
-                        .iter()
-                        .map(|t| (*t).clone())
-                        .collect::<Vec<_>>();
-
-                    let len = matching_phrase.len();
-                    if len == 1 {
-                        matching_phrase[0].open_depth = 0;
-                        matching_phrase[0].close_depth = 0;
-                    } else {
-                        matching_phrase[0].open_depth -= token.open_depth;
-                        matching_phrase[len - 1].close_depth -= token.close_depth;
-                    }
-
-                    result.push((token.string, matching_phrase));
                 }
             }
 
@@ -1188,6 +1108,104 @@ fn match_variables_with_existing(
 
     if pred_token_iter.next().is_some() {
         return None;
+    }
+
+    Some(has_var)
+}
+
+fn match_variables_with_existing(
+    input_tokens: &Phrase,
+    pred_tokens: &Phrase,
+    existing_matches: &[Match],
+) -> Option<Vec<Match>> {
+    if let Some(has_var) = test_match_without_variables(input_tokens, pred_tokens) {
+        if has_var {
+            match_variables_assuming_compatible_structure(
+                input_tokens,
+                pred_tokens,
+                existing_matches,
+            )
+        } else {
+            Some(vec![])
+        }
+    } else {
+        None
+    }
+}
+
+fn match_variables_assuming_compatible_structure(
+    input_tokens: &Phrase,
+    pred_tokens: &Phrase,
+    existing_matches: &[Match],
+) -> Option<Vec<Match>> {
+    assert!(test_match_without_variables(input_tokens, pred_tokens).is_some());
+
+    let mut result = vec![];
+    let mut pred_token_iter = pred_tokens.iter();
+
+    let mut input_depth = 0;
+    let mut pred_depth = 0;
+
+    for token in input_tokens {
+        let pred_token = pred_token_iter.next().expect("pred_token");
+
+        input_depth += token.open_depth;
+        pred_depth += pred_token.open_depth;
+
+        let is_var = is_var_token(token);
+
+        if is_var {
+            // colect tokens to assign to the input variable
+            let mut matching_phrase = vec![pred_token];
+
+            while input_depth < pred_depth {
+                let pred_token = pred_token_iter.next().expect("pred_token");
+                pred_depth += pred_token.open_depth;
+                pred_depth -= pred_token.close_depth;
+
+                matching_phrase.push(pred_token);
+            }
+
+            let variable_already_matched = if let Some(&(_, ref existing_matches)) = result
+                .iter()
+                .chain(existing_matches.iter())
+                .find(|&&(ref t, _)| *t == token.string)
+            {
+                if !phrase_equal(
+                    &existing_matches,
+                    matching_phrase.as_slice(),
+                    token.open_depth,
+                ) {
+                    // this match of the variable conflicted with an existing match
+                    return None;
+                }
+
+                true
+            } else {
+                false
+            };
+
+            if !variable_already_matched {
+                let mut matching_phrase = matching_phrase
+                    .iter()
+                    .map(|t| (*t).clone())
+                    .collect::<Vec<_>>();
+
+                let len = matching_phrase.len();
+                if len == 1 {
+                    matching_phrase[0].open_depth = 0;
+                    matching_phrase[0].close_depth = 0;
+                } else {
+                    matching_phrase[0].open_depth -= token.open_depth;
+                    matching_phrase[len - 1].close_depth -= token.close_depth;
+                }
+
+                result.push((token.string, matching_phrase));
+            }
+        }
+
+        pred_depth -= pred_token.close_depth;
+        input_depth -= token.close_depth;
     }
 
     Some(result)
