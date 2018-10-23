@@ -815,35 +815,24 @@ where
 
             if has_var {
                 // we know the structures are compatible from the earlier matching check
-                if let Some(ref mut result) = match_variables_assuming_compatible_structure(
+                if !match_variables_assuming_compatible_structure(
                     &inputs[*i_i],
                     &state[s_i],
-                    &variables_matched,
+                    &mut variables_matched,
                 ) {
-                    variables_matched.append(result);
-                } else {
                     continue 'outer;
                 }
             }
         }
 
         for input in inputs.iter().filter(|input| is_backwards_pred(input)) {
-            let mut extra_matches =
-                match_backwards_variables(input, &variables_matched, string_cache);
-
-            if let Some(ref mut extra_matches) = extra_matches {
-                variables_matched.append(extra_matches);
-            } else {
+            if !match_backwards_variables(input, &mut variables_matched, string_cache) {
                 continue 'outer;
             }
         }
 
         for input in inputs.iter().filter(|input| is_side_pred(input)) {
-            let mut extra_matches = match_side_variables(input, &variables_matched, side_input);
-
-            if let Some(ref mut extra_matches) = extra_matches {
-                variables_matched.append(extra_matches);
-            } else {
+            if !match_side_variables(input, &mut variables_matched, side_input) {
                 continue 'outer;
             }
         }
@@ -855,7 +844,7 @@ where
                 .iter()
                 .enumerate()
                 .filter(|&(s_i, _)| !states_matched_bool[s_i])
-                .any(|(_, s)| match_variables_with_existing(input, s, &variables_matched).is_some())
+                .any(|(_, s)| match_variables_with_existing(input, s, &mut variables_matched))
             {
                 continue 'outer;
             }
@@ -889,29 +878,33 @@ where
 
 fn match_backwards_variables(
     pred: &Phrase,
-    existing_matches: &[Match],
+    existing_matches_and_result: &mut Vec<Match>,
     string_cache: &mut StringCache,
-) -> Option<Vec<Match>> {
-    let pred = assign_vars(pred, existing_matches);
+) -> bool {
+    let pred = assign_vars(pred, existing_matches_and_result);
 
-    evaluate_backwards_pred(&pred, string_cache).and_then(|eval_result| {
-        match_variables_with_existing(&pred, &eval_result, existing_matches)
-    })
+    if let Some(eval_result) = evaluate_backwards_pred(&pred, string_cache) {
+        match_variables_with_existing(&pred, &eval_result, existing_matches_and_result)
+    } else {
+        false
+    }
 }
 
 fn match_side_variables<F>(
     pred: &Phrase,
-    existing_matches: &[Match],
+    existing_matches_and_result: &mut Vec<Match>,
     side_input: &mut F,
-) -> Option<Vec<Match>>
+) -> bool
 where
     F: SideInput,
 {
-    let pred = assign_vars(pred, existing_matches);
+    let pred = assign_vars(pred, existing_matches_and_result);
 
-    evaluate_side_pred(&pred, side_input).and_then(|eval_result| {
-        match_variables_with_existing(&pred, &eval_result, existing_matches)
-    })
+    if let Some(eval_result) = evaluate_side_pred(&pred, side_input) {
+        match_variables_with_existing(&pred, &eval_result, existing_matches_and_result)
+    } else {
+        false
+    }
 }
 
 fn assign_vars(tokens: &Phrase, matches: &[Match]) -> Phrase {
@@ -1120,31 +1113,30 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
 fn match_variables_with_existing(
     input_tokens: &Phrase,
     pred_tokens: &Phrase,
-    existing_matches: &[Match],
-) -> Option<Vec<Match>> {
+    existing_matches_and_result: &mut Vec<Match>,
+) -> bool {
     if let Some(has_var) = test_match_without_variables(input_tokens, pred_tokens) {
         if has_var {
             match_variables_assuming_compatible_structure(
                 input_tokens,
                 pred_tokens,
-                existing_matches,
+                existing_matches_and_result,
             )
         } else {
-            Some(vec![])
+            true
         }
     } else {
-        None
+        false
     }
 }
 
 fn match_variables_assuming_compatible_structure(
     input_tokens: &Phrase,
     pred_tokens: &Phrase,
-    existing_matches: &[Match],
-) -> Option<Vec<Match>> {
+    existing_matches_and_result: &mut Vec<Match>,
+) -> bool {
     assert!(test_match_without_variables(input_tokens, pred_tokens).is_some());
 
-    let mut result = vec![];
     let mut pred_token_iter = pred_tokens.iter();
 
     let mut input_depth = 0;
@@ -1179,14 +1171,14 @@ fn match_variables_assuming_compatible_structure(
                 matching_phrase[len - 1].close_depth -= token.close_depth;
             }
 
-            let variable_already_matched = if let Some(&(_, ref existing_matches)) = result
-                .iter()
-                .chain(existing_matches.iter())
-                .find(|&&(ref t, _)| *t == token.string)
+            let variable_already_matched = if let Some(&(_, ref existing_matches)) =
+                existing_matches_and_result
+                    .iter()
+                    .find(|&&(ref t, _)| *t == token.string)
             {
                 if *existing_matches != matching_phrase {
                     // this match of the variable conflicted with an existing match
-                    return None;
+                    return false;
                 }
 
                 true
@@ -1195,7 +1187,7 @@ fn match_variables_assuming_compatible_structure(
             };
 
             if !variable_already_matched {
-                result.push((token.string, matching_phrase));
+                existing_matches_and_result.push((token.string, matching_phrase));
             }
         }
 
@@ -1203,7 +1195,7 @@ fn match_variables_assuming_compatible_structure(
         input_depth -= token.close_depth;
     }
 
-    Some(result)
+    true
 }
 
 fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
@@ -1384,7 +1376,13 @@ mod tests {
     }
 
     fn match_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<Vec<Match>> {
-        match_variables_with_existing(input_tokens, pred_tokens, &vec![])
+        let mut result = vec![];
+
+        if match_variables_with_existing(input_tokens, pred_tokens, &mut result) {
+            Some(result)
+        } else {
+            None
+        }
     }
 
     #[test]
@@ -2171,16 +2169,23 @@ mod tests {
 
         let input_tokens = tokenize("T1 T2 T3", &mut string_cache);
         let pred_tokens = tokenize("t1 t2 t3", &mut string_cache);
-        let existing_matches = vec![(
+
+        let mut matches = vec![(
             string_cache.str_to_atom("T2"),
             tokenize("t2", &mut string_cache),
         )];
 
-        let result = match_variables_with_existing(&input_tokens, &pred_tokens, &existing_matches);
+        let result = match_variables_with_existing(&input_tokens, &pred_tokens, &mut matches);
+
+        assert!(result);
 
         assert_eq!(
-            result,
-            Some(vec![
+            matches,
+            [
+                (
+                    string_cache.str_to_atom("T2"),
+                    tokenize("t2", &mut string_cache),
+                ),
                 (
                     string_cache.str_to_atom("T1"),
                     tokenize("t1", &mut string_cache),
@@ -2189,7 +2194,7 @@ mod tests {
                     string_cache.str_to_atom("T3"),
                     tokenize("t3", &mut string_cache),
                 ),
-            ])
+            ]
         )
     }
 
