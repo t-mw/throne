@@ -74,11 +74,7 @@ pub struct Token {
 
 impl PartialEq for Token {
     fn eq(&self, other: &Token) -> bool {
-        // properties not included here can be derived from string
-        self.string == other.string
-            && self.is_negated == other.is_negated
-            && self.open_depth == other.open_depth
-            && self.close_depth == other.close_depth
+        token_equal(self, other, false, None)
     }
 }
 impl Eq for Token {}
@@ -1152,23 +1148,14 @@ fn match_variables_assuming_compatible_structure(
 
         if is_var {
             // colect tokens to assign to the input variable
-            let mut matching_phrase = vec![pred_token.clone()];
+            let mut matching_phrase = vec![pred_token];
 
             while input_depth < pred_depth {
                 let pred_token = pred_token_iter.next().expect("pred_token");
                 pred_depth += pred_token.open_depth;
                 pred_depth -= pred_token.close_depth;
 
-                matching_phrase.push(pred_token.clone());
-            }
-
-            let len = matching_phrase.len();
-            if len == 1 {
-                matching_phrase[0].open_depth = 0;
-                matching_phrase[0].close_depth = 0;
-            } else {
-                matching_phrase[0].open_depth -= token.open_depth;
-                matching_phrase[len - 1].close_depth -= token.close_depth;
+                matching_phrase.push(pred_token);
             }
 
             let variable_already_matched = if let Some(&(_, ref existing_matches)) =
@@ -1176,7 +1163,11 @@ fn match_variables_assuming_compatible_structure(
                     .iter()
                     .find(|&&(ref t, _)| *t == token.string)
             {
-                if *existing_matches != matching_phrase {
+                if !phrase_equal(
+                    &existing_matches,
+                    matching_phrase.as_slice(),
+                    token.open_depth,
+                ) {
                     // this match of the variable conflicted with an existing match
                     return false;
                 }
@@ -1187,6 +1178,20 @@ fn match_variables_assuming_compatible_structure(
             };
 
             if !variable_already_matched {
+                let mut matching_phrase = matching_phrase
+                    .iter()
+                    .map(|t| (*t).clone())
+                    .collect::<Vec<_>>();
+
+                let len = matching_phrase.len();
+                if len == 1 {
+                    matching_phrase[0].open_depth = 0;
+                    matching_phrase[0].close_depth = 0;
+                } else {
+                    matching_phrase[0].open_depth -= token.open_depth;
+                    matching_phrase[len - 1].close_depth -= token.close_depth;
+                }
+
                 existing_matches_and_result.push((token.string, matching_phrase));
             }
         }
@@ -1196,6 +1201,36 @@ fn match_variables_assuming_compatible_structure(
     }
 
     true
+}
+
+#[inline]
+fn phrase_equal(a: &Phrase, b: &[&Token], b_start_depth: u8) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+
+    if b.len() == 1 {
+        token_equal(&a[0], b[0], true, None)
+    } else {
+        let len = b.len();
+
+        token_equal(&a[0], b[0], false, Some(b_start_depth))
+            && a.iter()
+                .skip(1)
+                .take(len - 2)
+                .eq(b.iter().cloned().skip(1).take(len - 2))
+            && token_equal(&a[len - 1], b[len - 1], false, Some(b_start_depth))
+    }
+}
+
+#[inline]
+fn token_equal(a: &Token, b: &Token, ignore_depth: bool, b_depth_diff: Option<u8>) -> bool {
+    // properties not included here can be derived from string
+    a.string == b.string
+        && a.is_negated == b.is_negated
+        && (ignore_depth
+            || (a.open_depth == b.open_depth - b_depth_diff.unwrap_or(0)
+                && a.close_depth == b.close_depth - b_depth_diff.unwrap_or(0)))
 }
 
 fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
