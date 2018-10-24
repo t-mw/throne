@@ -74,7 +74,7 @@ pub struct Token {
 
 impl PartialEq for Token {
     fn eq(&self, other: &Token) -> bool {
-        token_equal(self, other, false, None)
+        token_equal(self, other, false, None, None)
     }
 }
 impl Eq for Token {}
@@ -394,13 +394,20 @@ impl Context {
     }
 
     pub fn find_matching_rules(&mut self) -> Vec<Rule> {
-        let state = &self.state;
+        let state = &mut self.state;
+        let string_cache = &self.string_cache;
         let first_atoms_state = &self.first_atoms_state;
 
         self.rules
             .iter()
             .filter_map(|rule| {
-                rule_matches_state(&rule, state, &mut |_: &Phrase| None, first_atoms_state)
+                rule_matches_state(
+                    &rule,
+                    state,
+                    &mut |_: &Phrase| None,
+                    string_cache,
+                    first_atoms_state,
+                )
             }).collect()
     }
 
@@ -669,14 +676,18 @@ where
         context.first_atoms_state = extract_first_atoms_state(&context.state);
         {
             let rules = &context.rules;
-            let state = &context.state;
+            let state = &mut context.state;
 
             for i in 0..rules.len() {
                 let rule = &rules[(start_rule_idx + i) % rules.len()];
 
-                if let Some(rule) =
-                    rule_matches_state(&rule, &state, &mut side_input, &context.first_atoms_state)
-                {
+                if let Some(rule) = rule_matches_state(
+                    &rule,
+                    state,
+                    &mut side_input,
+                    &context.string_cache,
+                    &context.first_atoms_state,
+                ) {
                     matching_rule = Some(rule);
                     break;
                 }
@@ -721,8 +732,9 @@ where
 // predicates removed.
 fn rule_matches_state<F>(
     r: &Rule,
-    state: &[Phrase],
+    state: &mut Vec<Phrase>,
     side_input: &mut F,
+    string_cache: &StringCache,
     state_first_atoms: &[FirstAtomsState],
 ) -> Option<Rule>
 where
@@ -794,9 +806,14 @@ where
             }
         });
 
+    // store original length, since we'll use state as a scratchpad for other token allocations
+    let len = state.len();
+
     'outer: for p_i in 0..permutation_count {
-        let mut variables_matched = vec![];
-        let mut states_matched_bool = vec![false; state.len()];
+        state.drain(len..);
+
+        let mut states_matched_bool = vec![false; len];
+        let mut variables_matched: Vec<MatchLite> = vec![];
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
@@ -815,7 +832,8 @@ where
                 // we know the structures are compatible from the earlier matching check
                 if !match_variables_assuming_compatible_structure(
                     &inputs[*i_i],
-                    &state[s_i],
+                    state,
+                    s_i,
                     &mut variables_matched,
                 ) {
                     continue 'outer;
@@ -824,13 +842,13 @@ where
         }
 
         for input in inputs.iter().filter(|input| is_backwards_pred(input)) {
-            if !match_backwards_variables(input, &mut variables_matched) {
+            if !match_backwards_variables(input, state, &mut variables_matched) {
                 continue 'outer;
             }
         }
 
         for input in inputs.iter().filter(|input| is_side_pred(input)) {
-            if !match_side_variables(input, &mut variables_matched, side_input) {
+            if !match_side_variables(input, state, &mut variables_matched, side_input) {
                 continue 'outer;
             }
         }
@@ -841,9 +859,10 @@ where
             if state
                 .iter()
                 .enumerate()
-                .filter(|&(s_i, _)| !states_matched_bool[s_i])
-                .any(|(_, s)| match_variables_with_existing(input, s, &mut variables_matched))
-            {
+                .filter(|&(s_i, _)| s_i < len && !states_matched_bool[s_i])
+                .any(|(s_i, _)| {
+                    match_variables_with_existing(input, state, s_i, &mut variables_matched)
+                }) {
                 continue 'outer;
             }
         }
@@ -855,30 +874,41 @@ where
             .iter()
             .filter(|pred| is_concrete_pred(pred))
             .for_each(|v| {
-                forward_concrete.push(assign_vars(v, &variables_matched));
+                forward_concrete.push(assign_vars(v, state, &variables_matched));
             });
 
         outputs.iter().for_each(|v| {
             if is_side_pred(v) {
-                let pred = assign_vars(v, &variables_matched);
+                let pred = assign_vars(v, state, &variables_matched);
 
                 evaluate_side_pred(&pred, side_input);
             } else {
-                outputs_concrete.push(assign_vars(v, &variables_matched));
+                outputs_concrete.push(assign_vars(v, state, &variables_matched));
             }
         });
+
+        state.drain(len..);
 
         return Some(Rule::new(r.id, forward_concrete, outputs_concrete));
     }
 
+    state.drain(len..);
+
     None
 }
 
-fn match_backwards_variables(pred: &Phrase, existing_matches_and_result: &mut Vec<Match>) -> bool {
-    let pred = assign_vars(pred, existing_matches_and_result);
+fn match_backwards_variables(
+    pred: &Phrase,
+    state: &mut Vec<Phrase>,
+    existing_matches_and_result: &mut Vec<MatchLite>,
+) -> bool {
+    let pred = assign_vars(pred, state.as_slice(), existing_matches_and_result);
 
     if let Some(eval_result) = evaluate_backwards_pred(&pred) {
-        match_variables_with_existing(&pred, &eval_result, existing_matches_and_result)
+        let s_i = state.len();
+        state.push(eval_result);
+
+        match_variables_with_existing(&pred, state.as_slice(), s_i, existing_matches_and_result)
     } else {
         false
     }
@@ -886,28 +916,32 @@ fn match_backwards_variables(pred: &Phrase, existing_matches_and_result: &mut Ve
 
 fn match_side_variables<F>(
     pred: &Phrase,
-    existing_matches_and_result: &mut Vec<Match>,
+    state: &mut Vec<Phrase>,
+    existing_matches_and_result: &mut Vec<MatchLite>,
     side_input: &mut F,
 ) -> bool
 where
     F: SideInput,
 {
-    let pred = assign_vars(pred, existing_matches_and_result);
+    let pred = assign_vars(pred, state.as_slice(), existing_matches_and_result);
 
     if let Some(eval_result) = evaluate_side_pred(&pred, side_input) {
-        match_variables_with_existing(&pred, &eval_result, existing_matches_and_result)
+        let s_i = state.len();
+        state.push(eval_result);
+
+        match_variables_with_existing(&pred, state.as_slice(), s_i, existing_matches_and_result)
     } else {
         false
     }
 }
 
-fn assign_vars(tokens: &Phrase, matches: &[Match]) -> Phrase {
+fn assign_vars(tokens: &Phrase, state: &[Phrase], matches: &[MatchLite]) -> Phrase {
     let mut result: Phrase = vec![];
 
     for token in tokens {
         if is_var_token(token) {
-            if let Some(&(_, ref tokens)) = matches.iter().find(|&&(ref s, _)| *s == token.string) {
-                let mut tokens = tokens.to_owned();
+            if let Some(m) = matches.iter().find(|m| m.atom == token.string) {
+                let mut tokens = m.to_phrase(state);
                 let len = tokens.len();
 
                 if len == 1 {
@@ -1106,14 +1140,16 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
 
 fn match_variables_with_existing(
     input_tokens: &Phrase,
-    pred_tokens: &Phrase,
-    existing_matches_and_result: &mut Vec<Match>,
+    state: &[Phrase],
+    s_i: usize,
+    existing_matches_and_result: &mut Vec<MatchLite>,
 ) -> bool {
-    if let Some(has_var) = test_match_without_variables(input_tokens, pred_tokens) {
+    if let Some(has_var) = test_match_without_variables(input_tokens, &state[s_i]) {
         if has_var {
             match_variables_assuming_compatible_structure(
                 input_tokens,
-                pred_tokens,
+                state,
+                s_i,
                 existing_matches_and_result,
             )
         } else {
@@ -1124,11 +1160,44 @@ fn match_variables_with_existing(
     }
 }
 
+#[derive(Eq, PartialEq, Debug)]
+struct MatchLite {
+    atom: Atom,
+    state_i: usize,
+    depths: (u8, u8),
+    range: (usize, usize),
+}
+
+impl MatchLite {
+    fn as_slice<'a>(&self, state: &'a [Phrase]) -> &'a [Token] {
+        &state[self.state_i][self.range.0..self.range.1]
+    }
+
+    fn to_phrase(&self, state: &[Phrase]) -> Phrase {
+        let mut phrase = self.as_slice(state).to_vec();
+
+        let len = phrase.len();
+
+        if len == 1 {
+            phrase[0].open_depth = 0;
+            phrase[0].close_depth = 0;
+        } else {
+            phrase[0].open_depth -= self.depths.0;
+            phrase[len - 1].close_depth -= self.depths.1;
+        }
+
+        phrase
+    }
+}
+
 fn match_variables_assuming_compatible_structure(
     input_tokens: &Phrase,
-    pred_tokens: &Phrase,
-    existing_matches_and_result: &mut Vec<Match>,
+    state: &[Phrase],
+    state_i: usize,
+    existing_matches_and_result: &mut Vec<MatchLite>,
 ) -> bool {
+    let pred_tokens = &state[state_i];
+
     assert!(test_match_without_variables(input_tokens, pred_tokens).is_some());
 
     let mut pred_token_i = 0;
@@ -1159,15 +1228,16 @@ fn match_variables_assuming_compatible_structure(
 
             let end_i = pred_token_i;
 
-            let variable_already_matched = if let Some(&(_, ref existing_matches)) =
+            let variable_already_matched = if let Some(ref existing_match) =
                 existing_matches_and_result
                     .iter()
-                    .find(|&&(ref t, _)| *t == token.string)
+                    .find(|m| m.atom == token.string)
             {
                 if !phrase_equal(
-                    &existing_matches,
+                    &existing_match.as_slice(state),
                     &pred_tokens[start_i..end_i],
-                    token.open_depth,
+                    existing_match.depths,
+                    (token.open_depth, token.close_depth),
                 ) {
                     // this match of the variable conflicted with an existing match
                     return false;
@@ -1179,19 +1249,14 @@ fn match_variables_assuming_compatible_structure(
             };
 
             if !variable_already_matched {
-                let mut matching_phrase = pred_tokens[start_i..end_i].to_vec();
+                let m = MatchLite {
+                    atom: token.string,
+                    state_i,
+                    depths: (token.open_depth, token.close_depth),
+                    range: (start_i, end_i),
+                };
 
-                let len = matching_phrase.len();
-
-                if len == 1 {
-                    matching_phrase[0].open_depth = 0;
-                    matching_phrase[0].close_depth = 0;
-                } else {
-                    matching_phrase[0].open_depth -= token.open_depth;
-                    matching_phrase[len - 1].close_depth -= token.close_depth;
-                }
-
-                existing_matches_and_result.push((token.string, matching_phrase));
+                existing_matches_and_result.push(m);
             }
         }
 
@@ -1203,33 +1268,55 @@ fn match_variables_assuming_compatible_structure(
 }
 
 #[inline]
-fn phrase_equal(a: &Phrase, b: &[Token], b_start_depth: u8) -> bool {
+fn phrase_equal(a: &[Token], b: &[Token], a_depths: (u8, u8), b_depths: (u8, u8)) -> bool {
     if a.len() != b.len() {
         return false;
     }
 
-    if b.len() == 1 {
-        token_equal(&a[0], &b[0], true, None)
-    } else {
-        let len = b.len();
+    let len = b.len();
 
-        token_equal(&a[0], &b[0], false, Some(b_start_depth))
-            && a.iter()
-                .skip(1)
-                .take(len - 2)
-                .eq(b.iter().skip(1).take(len - 2))
-            && token_equal(&a[len - 1], &b[len - 1], false, Some(b_start_depth))
+    if len == 1 {
+        token_equal(&a[0], &b[0], true, None, None)
+    } else {
+        token_equal(
+            &a[0],
+            &b[0],
+            false,
+            Some((a_depths.0, 0)),
+            Some((b_depths.0, 0)),
+        ) && a
+            .iter()
+            .skip(1)
+            .take(len - 2)
+            .eq(b.iter().skip(1).take(len - 2))
+            && token_equal(
+                &a[len - 1],
+                &b[len - 1],
+                false,
+                Some((0, a_depths.1)),
+                Some((0, b_depths.1)),
+            )
     }
 }
 
 #[inline]
-fn token_equal(a: &Token, b: &Token, ignore_depth: bool, b_depth_diff: Option<u8>) -> bool {
-    // properties not included here can be derived from string
+fn token_equal(
+    a: &Token,
+    b: &Token,
+    ignore_depth: bool,
+    a_depth_diffs: Option<(u8, u8)>,
+    b_depth_diffs: Option<(u8, u8)>,
+) -> bool {
+    let a_depth_diffs = a_depth_diffs.unwrap_or((0, 0));
+    let b_depth_diffs = b_depth_diffs.unwrap_or((0, 0));
+
     a.string == b.string
         && a.is_negated == b.is_negated
         && (ignore_depth
-            || (a.open_depth == b.open_depth - b_depth_diff.unwrap_or(0)
-                && a.close_depth == b.close_depth - b_depth_diff.unwrap_or(0)))
+            || (a.open_depth as i32 - a_depth_diffs.0 as i32
+                == b.open_depth as i32 - b_depth_diffs.0 as i32
+                && a.close_depth as i32 - a_depth_diffs.1 as i32
+                    == b.close_depth as i32 - b_depth_diffs.1 as i32))
 }
 
 fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
@@ -1342,7 +1429,7 @@ fn extract_first_atoms_state_phrase(s_i: usize, phrase: &Phrase) -> FirstAtomsSt
     (s_i, phrase[0].string)
 }
 
-fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
+fn build_phrase(phrase: &[Token], string_cache: &StringCache) -> String {
     let mut tokens = vec![];
 
     for t in phrase {
@@ -1409,11 +1496,18 @@ mod tests {
         Rule::new(0, inputs, outputs)
     }
 
-    fn match_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<Vec<Match>> {
+    fn match_variables(input_tokens: &Phrase, pred_tokens: Phrase) -> Option<Vec<Match>> {
         let mut result = vec![];
 
-        if match_variables_with_existing(input_tokens, pred_tokens, &mut result) {
-            Some(result)
+        let state = &[pred_tokens];
+
+        if match_variables_with_existing(input_tokens, state, 0, &mut result) {
+            Some(
+                result
+                    .iter()
+                    .map(|m| (m.atom, m.to_phrase(state)))
+                    .collect::<Vec<_>>(),
+            )
         } else {
             None
         }
@@ -1788,12 +1882,15 @@ mod tests {
             ),
         ];
 
-        for (rule, state, expected) in test_cases.drain(..) {
+        for (rule, mut state, expected) in test_cases.drain(..) {
+            let first_atoms = extract_first_atoms_state(&state);
+
             let result = rule_matches_state(
                 &rule,
-                &state,
+                &mut state,
                 &mut |_: &Phrase| None,
-                &extract_first_atoms_state(&state),
+                &string_cache,
+                &first_atoms,
             );
 
             if expected {
@@ -1887,12 +1984,15 @@ mod tests {
             ),
         ];
 
-        for (rule, state, expected) in test_cases.drain(..) {
+        for (rule, mut state, expected) in test_cases.drain(..) {
+            let first_atoms = extract_first_atoms_state(&state);
+
             let result = rule_matches_state(
                 &rule,
-                &state,
+                &mut state,
                 &mut |_: &Phrase| None,
-                &extract_first_atoms_state(&state),
+                &string_cache,
+                &first_atoms,
             );
 
             if expected {
@@ -1967,12 +2067,15 @@ mod tests {
             ),
         ];
 
-        for (rule, state, expected) in test_cases.drain(..) {
+        for (rule, mut state, expected) in test_cases.drain(..) {
+            let first_atoms = extract_first_atoms_state(&state);
+
             let result = rule_matches_state(
                 &rule,
-                &state,
+                &mut state,
                 &mut |_: &Phrase| None,
-                &extract_first_atoms_state(&state),
+                &string_cache,
+                &first_atoms,
             );
 
             assert!(result.is_some());
@@ -2012,44 +2115,60 @@ mod tests {
         let mut test_cases = vec![
             (
                 tokenize("+ T1 T2 T3", &mut string_cache),
+                vec![tokenize("1 2 3", &mut string_cache)],
                 vec![
-                    (
-                        string_cache.str_to_atom("T1"),
-                        tokenize("1", &mut string_cache),
-                    ),
-                    (
-                        string_cache.str_to_atom("T2"),
-                        tokenize("2", &mut string_cache),
-                    ),
+                    MatchLite {
+                        atom: string_cache.str_to_atom("T1"),
+                        state_i: 0,
+                        depths: (0, 0),
+                        range: (0, 1),
+                    },
+                    MatchLite {
+                        atom: string_cache.str_to_atom("T2"),
+                        state_i: 0,
+                        depths: (0, 0),
+                        range: (1, 2),
+                    },
                 ],
                 tokenize("+ 1 2 T3", &mut string_cache),
             ),
             (
                 tokenize("T1 (T2 T3)", &mut string_cache),
                 vec![
-                    (
-                        string_cache.str_to_atom("T1"),
-                        tokenize("t11 t12", &mut string_cache),
-                    ),
-                    (
-                        string_cache.str_to_atom("T3"),
-                        tokenize("t31 (t32 t33)", &mut string_cache),
-                    ),
+                    tokenize("t11 t12", &mut string_cache),
+                    tokenize("t31 (t32 t33)", &mut string_cache),
+                ],
+                vec![
+                    MatchLite {
+                        atom: string_cache.str_to_atom("T1"),
+                        state_i: 0,
+                        depths: (0, 0),
+                        range: (0, 2),
+                    },
+                    MatchLite {
+                        atom: string_cache.str_to_atom("T3"),
+                        state_i: 1,
+                        depths: (0, 0),
+                        range: (0, 3),
+                    },
                 ],
                 tokenize("(t11 t12) (T2 (t31 (t32 t33)))", &mut string_cache),
             ),
             (
                 tokenize("T1 !T2", &mut string_cache),
-                vec![(
-                    string_cache.str_to_atom("T2"),
-                    tokenize("t11 t12", &mut string_cache),
-                )],
+                vec![tokenize("t11 t12", &mut string_cache)],
+                vec![MatchLite {
+                    atom: string_cache.str_to_atom("T2"),
+                    state_i: 0,
+                    depths: (0, 0),
+                    range: (0, 2),
+                }],
                 tokenize("T1 (!t11 t12)", &mut string_cache),
             ),
         ];
 
-        for (tokens, matches, expected) in test_cases.drain(..) {
-            assert_eq!(assign_vars(&tokens, &matches), expected);
+        for (tokens, state, matches, expected) in test_cases.drain(..) {
+            assert_eq!(assign_vars(&tokens, &state.as_slice(), &matches), expected);
         }
     }
 
@@ -2190,7 +2309,7 @@ mod tests {
         ];
 
         for (input_tokens, pred_tokens, expected) in test_cases.drain(..) {
-            assert_eq!(match_variables(&input_tokens, &pred_tokens), expected);
+            assert_eq!(match_variables(&input_tokens, pred_tokens), expected);
         }
     }
 
@@ -2199,32 +2318,40 @@ mod tests {
         let mut string_cache = StringCache::new();
 
         let input_tokens = tokenize("T1 T2 T3", &mut string_cache);
-        let pred_tokens = tokenize("t1 t2 t3", &mut string_cache);
+        let state = [tokenize("t1 t2 t3", &mut string_cache)];
 
-        let mut matches = vec![(
-            string_cache.str_to_atom("T2"),
-            tokenize("t2", &mut string_cache),
-        )];
+        let mut matches = vec![MatchLite {
+            atom: string_cache.str_to_atom("T2"),
+            state_i: 0,
+            depths: (0, 0),
+            range: (1, 2),
+        }];
 
-        let result = match_variables_with_existing(&input_tokens, &pred_tokens, &mut matches);
+        let result = match_variables_with_existing(&input_tokens, &state, 0, &mut matches);
 
         assert!(result);
 
         assert_eq!(
             matches,
             [
-                (
-                    string_cache.str_to_atom("T2"),
-                    tokenize("t2", &mut string_cache),
-                ),
-                (
-                    string_cache.str_to_atom("T1"),
-                    tokenize("t1", &mut string_cache),
-                ),
-                (
-                    string_cache.str_to_atom("T3"),
-                    tokenize("t3", &mut string_cache),
-                ),
+                MatchLite {
+                    atom: string_cache.str_to_atom("T2"),
+                    state_i: 0,
+                    depths: (0, 0),
+                    range: (1, 2),
+                },
+                MatchLite {
+                    atom: string_cache.str_to_atom("T1"),
+                    state_i: 0,
+                    depths: (1, 0),
+                    range: (0, 1),
+                },
+                MatchLite {
+                    atom: string_cache.str_to_atom("T3"),
+                    state_i: 0,
+                    depths: (0, 1),
+                    range: (2, 3),
+                },
             ]
         )
     }
