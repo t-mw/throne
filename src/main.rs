@@ -12,8 +12,7 @@ use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
 mod ceptre;
 
-use std::io::Read;
-use std::{fs, thread, time};
+use std::{thread, time};
 
 const WIDTH: i32 = 100;
 const HEIGHT: i32 = 200;

@@ -151,7 +151,6 @@ impl Token {
 }
 
 pub type Phrase = Vec<Token>;
-type Match = (Atom, Phrase);
 
 // https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
 pub trait SideInput: FnMut(&Phrase) -> Option<Phrase> {}
@@ -395,19 +394,12 @@ impl Context {
 
     pub fn find_matching_rules(&mut self) -> Vec<Rule> {
         let state = &mut self.state;
-        let string_cache = &self.string_cache;
         let first_atoms_state = &self.first_atoms_state;
 
         self.rules
             .iter()
             .filter_map(|rule| {
-                rule_matches_state(
-                    &rule,
-                    state,
-                    &mut |_: &Phrase| None,
-                    string_cache,
-                    first_atoms_state,
-                )
+                rule_matches_state(&rule, state, &mut |_: &Phrase| None, first_atoms_state)
             }).collect()
     }
 
@@ -681,13 +673,9 @@ where
             for i in 0..rules.len() {
                 let rule = &rules[(start_rule_idx + i) % rules.len()];
 
-                if let Some(rule) = rule_matches_state(
-                    &rule,
-                    state,
-                    &mut side_input,
-                    &context.string_cache,
-                    &context.first_atoms_state,
-                ) {
+                if let Some(rule) =
+                    rule_matches_state(&rule, state, &mut side_input, &context.first_atoms_state)
+                {
                     matching_rule = Some(rule);
                     break;
                 }
@@ -734,7 +722,6 @@ fn rule_matches_state<F>(
     r: &Rule,
     state: &mut Vec<Phrase>,
     side_input: &mut F,
-    string_cache: &StringCache,
     state_first_atoms: &[FirstAtomsState],
 ) -> Option<Rule>
 where
@@ -1496,7 +1483,7 @@ mod tests {
         Rule::new(0, inputs, outputs)
     }
 
-    fn match_variables(input_tokens: &Phrase, pred_tokens: Phrase) -> Option<Vec<Match>> {
+    fn match_variables(input_tokens: &Phrase, pred_tokens: Phrase) -> Option<Vec<(Atom, Phrase)>> {
         let mut result = vec![];
 
         let state = &[pred_tokens];
@@ -1885,13 +1872,8 @@ mod tests {
         for (rule, mut state, expected) in test_cases.drain(..) {
             let first_atoms = extract_first_atoms_state(&state);
 
-            let result = rule_matches_state(
-                &rule,
-                &mut state,
-                &mut |_: &Phrase| None,
-                &string_cache,
-                &first_atoms,
-            );
+            let result =
+                rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None, &first_atoms);
 
             if expected {
                 assert!(result.is_some());
@@ -1987,13 +1969,8 @@ mod tests {
         for (rule, mut state, expected) in test_cases.drain(..) {
             let first_atoms = extract_first_atoms_state(&state);
 
-            let result = rule_matches_state(
-                &rule,
-                &mut state,
-                &mut |_: &Phrase| None,
-                &string_cache,
-                &first_atoms,
-            );
+            let result =
+                rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None, &first_atoms);
 
             if expected {
                 assert!(result.is_some());
@@ -2070,13 +2047,8 @@ mod tests {
         for (rule, mut state, expected) in test_cases.drain(..) {
             let first_atoms = extract_first_atoms_state(&state);
 
-            let result = rule_matches_state(
-                &rule,
-                &mut state,
-                &mut |_: &Phrase| None,
-                &string_cache,
-                &first_atoms,
-            );
+            let result =
+                rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None, &first_atoms);
 
             assert!(result.is_some());
             assert_eq!(result.unwrap(), expected);
