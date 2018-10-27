@@ -796,11 +796,13 @@ where
     // store original length, since we'll use state as a scratchpad for other token allocations
     let len = state.len();
 
+    let mut variables_matched: Vec<MatchLite> = vec![];
+
     'outer: for p_i in 0..permutation_count {
         state.drain(len..);
+        variables_matched.clear();
 
         let mut states_matched_bool = vec![false; len];
-        let mut variables_matched: Vec<MatchLite> = vec![];
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
