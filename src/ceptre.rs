@@ -131,6 +131,16 @@ impl Token {
         }
     }
 
+    fn new_number(n: i32, open_depth: u8, close_depth: u8) -> Token {
+        Token {
+            string: StringCache::number_to_atom(n),
+            flag: TokenFlag::None,
+            is_negated: false,
+            open_depth,
+            close_depth,
+        }
+    }
+
     pub fn as_str<'a>(&self, string_cache: &'a StringCache) -> Option<&'a str> {
         string_cache.atom_to_str(self.string)
     }
@@ -189,13 +199,7 @@ impl StringCache {
         use std::str::FromStr;
 
         if let Some(n) = i32::from_str(text).ok() {
-            if n.abs() > MAX_NUMBER {
-                panic!("{} is large than the maximum of {}", n.abs(), MAX_NUMBER);
-            }
-
-            return Atom {
-                idx: (n + MAX_NUMBER + 1) as usize + MAX_STRING_IDX,
-            };
+            return StringCache::number_to_atom(n);
         }
 
         if let Some(atom) = self.str_to_existing_atom(text) {
@@ -217,6 +221,16 @@ impl StringCache {
 
     pub fn str_to_existing_atom(&self, text: &str) -> Option<Atom> {
         self.str_to_atom.get(text).cloned()
+    }
+
+    fn number_to_atom(n: i32) -> Atom {
+        if n.abs() > MAX_NUMBER {
+            panic!("{} is large than the maximum of {}", n.abs(), MAX_NUMBER);
+        }
+
+        return Atom {
+            idx: (n + MAX_NUMBER + 1) as usize + MAX_STRING_IDX,
+        };
     }
 
     fn atom_to_str(&self, atom: Atom) -> Option<&str> {
@@ -381,19 +395,12 @@ impl Context {
 
     pub fn find_matching_rules(&mut self) -> Vec<Rule> {
         let state = &self.state;
-        let string_cache = &mut self.string_cache;
         let first_atoms_state = &self.first_atoms_state;
 
         self.rules
             .iter()
             .filter_map(|rule| {
-                rule_matches_state(
-                    &rule,
-                    state,
-                    &mut |_: &Phrase| None,
-                    string_cache,
-                    first_atoms_state,
-                )
+                rule_matches_state(&rule, state, &mut |_: &Phrase| None, first_atoms_state)
             }).collect()
     }
 
@@ -667,13 +674,9 @@ where
             for i in 0..rules.len() {
                 let rule = &rules[(start_rule_idx + i) % rules.len()];
 
-                if let Some(rule) = rule_matches_state(
-                    &rule,
-                    &state,
-                    &mut side_input,
-                    &mut context.string_cache,
-                    &context.first_atoms_state,
-                ) {
+                if let Some(rule) =
+                    rule_matches_state(&rule, &state, &mut side_input, &context.first_atoms_state)
+                {
                     matching_rule = Some(rule);
                     break;
                 }
@@ -720,7 +723,6 @@ fn rule_matches_state<F>(
     r: &Rule,
     state: &[Phrase],
     side_input: &mut F,
-    string_cache: &mut StringCache,
     state_first_atoms: &[FirstAtomsState],
 ) -> Option<Rule>
 where
@@ -822,7 +824,7 @@ where
         }
 
         for input in inputs.iter().filter(|input| is_backwards_pred(input)) {
-            if !match_backwards_variables(input, &mut variables_matched, string_cache) {
+            if !match_backwards_variables(input, &mut variables_matched) {
                 continue 'outer;
             }
         }
@@ -872,14 +874,10 @@ where
     None
 }
 
-fn match_backwards_variables(
-    pred: &Phrase,
-    existing_matches_and_result: &mut Vec<Match>,
-    string_cache: &mut StringCache,
-) -> bool {
+fn match_backwards_variables(pred: &Phrase, existing_matches_and_result: &mut Vec<Match>) -> bool {
     let pred = assign_vars(pred, existing_matches_and_result);
 
-    if let Some(eval_result) = evaluate_backwards_pred(&pred, string_cache) {
+    if let Some(eval_result) = evaluate_backwards_pred(&pred) {
         match_variables_with_existing(&pred, &eval_result, existing_matches_and_result)
     } else {
         false
@@ -962,7 +960,7 @@ fn is_concrete_pred(tokens: &Phrase) -> bool {
     !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::None
 }
 
-fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> Option<Phrase> {
+fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
     match tokens[0].flag {
         TokenFlag::BackwardsPred(BackwardsPred::Plus) => {
             let n1 = tokens[1].as_number();
@@ -974,17 +972,17 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
                     tokens[0].clone(),
                     tokens[1].clone(),
                     tokens[2].clone(),
-                    Token::new(&(v1 + v2).to_string(), 0, 1, string_cache),
+                    Token::new_number(v1 + v2, 0, 1),
                 ]),
                 (Some(v1), None, Some(v3)) => Some(vec![
                     tokens[0].clone(),
                     tokens[1].clone(),
-                    Token::new(&(v3 - v1).to_string(), 0, 0, string_cache),
+                    Token::new_number(v3 - v1, 0, 0),
                     tokens[3].clone(),
                 ]),
                 (None, Some(v2), Some(v3)) => Some(vec![
                     tokens[0].clone(),
-                    Token::new(&(v3 - v2).to_string(), 0, 0, string_cache),
+                    Token::new_number(v3 - v2, 0, 0),
                     tokens[2].clone(),
                     tokens[3].clone(),
                 ]),
@@ -1040,7 +1038,7 @@ fn evaluate_backwards_pred(tokens: &Phrase, string_cache: &mut StringCache) -> O
                     tokens[0].clone(),
                     tokens[1].clone(),
                     tokens[2].clone(),
-                    Token::new(&mod_neg(v1, v2).to_string(), 0, 1, string_cache),
+                    Token::new_number(mod_neg(v1, v2), 0, 1),
                 ]),
                 _ => None,
             }
@@ -1795,7 +1793,6 @@ mod tests {
                 &rule,
                 &state,
                 &mut |_: &Phrase| None,
-                &mut string_cache,
                 &extract_first_atoms_state(&state),
             );
 
@@ -1895,7 +1892,6 @@ mod tests {
                 &rule,
                 &state,
                 &mut |_: &Phrase| None,
-                &mut string_cache,
                 &extract_first_atoms_state(&state),
             );
 
@@ -1976,7 +1972,6 @@ mod tests {
                 &rule,
                 &state,
                 &mut |_: &Phrase| None,
-                &mut string_cache,
                 &extract_first_atoms_state(&state),
             );
 
@@ -2006,7 +2001,7 @@ mod tests {
         ];
 
         for (input, expected) in test_cases.drain(..) {
-            assert_eq!(evaluate_backwards_pred(&input, &mut string_cache), expected);
+            assert_eq!(evaluate_backwards_pred(&input), expected);
         }
     }
 
