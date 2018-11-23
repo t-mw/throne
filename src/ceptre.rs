@@ -4,7 +4,7 @@ use rand::{Rng, SeedableRng};
 use regex::Regex;
 
 use std::collections::HashMap;
-use std::usize;
+use std::i32;
 use std::vec::Vec;
 
 macro_rules! dump {
@@ -37,12 +37,16 @@ impl<T> OptionFilter<T> for Option<T> {
     }
 }
 
-const MAX_NUMBER: i32 = 99999;
-const MAX_STRING_IDX: usize = usize::MAX - MAX_NUMBER as usize * 2 - 1;
+type AtomIdx = i32;
+type RuleId = i32;
 
+const MAX_NUMBER: i32 = 99999;
+const MAX_STRING_IDX: AtomIdx = i32::MAX - MAX_NUMBER * 2 - 1;
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Atom {
-    idx: usize,
+    idx: AtomIdx,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -158,7 +162,7 @@ impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Phrase> {}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Rule {
-    id: i32,
+    pub id: RuleId,
     inputs: Vec<Phrase>,
     outputs: Vec<Phrase>,
 }
@@ -205,7 +209,7 @@ impl StringCache {
             return atom;
         }
 
-        let idx = self.atom_to_str.len();
+        let idx = self.atom_to_str.len() as AtomIdx;
         if idx > MAX_STRING_IDX {
             panic!("String cache full");
         }
@@ -228,13 +232,13 @@ impl StringCache {
         }
 
         return Atom {
-            idx: (n + MAX_NUMBER + 1) as usize + MAX_STRING_IDX,
+            idx: (n + MAX_NUMBER + 1) + MAX_STRING_IDX,
         };
     }
 
     fn atom_to_str(&self, atom: Atom) -> Option<&str> {
         if atom.idx <= MAX_STRING_IDX {
-            Some(&self.atom_to_str[atom.idx])
+            Some(&self.atom_to_str[atom.idx as usize])
         } else {
             None
         }
@@ -244,7 +248,7 @@ impl StringCache {
         if atom.idx <= MAX_STRING_IDX {
             None
         } else {
-            Some((atom.idx - MAX_STRING_IDX) as i32 - MAX_NUMBER - 1)
+            Some((atom.idx - MAX_STRING_IDX) - MAX_NUMBER - 1)
         }
     }
 }
@@ -392,15 +396,17 @@ impl Context {
         self.state.push(tokenize(text, &mut self.string_cache));
     }
 
-    pub fn find_matching_rules(&mut self) -> Vec<Rule> {
+    pub fn find_matching_rules<F>(&mut self, mut side_input: F) -> Vec<Rule>
+    where
+        F: SideInput,
+    {
         let state = &mut self.state;
         let first_atoms_state = &self.first_atoms_state;
 
         self.rules
             .iter()
-            .filter_map(|rule| {
-                rule_matches_state(&rule, state, &mut |_: &Phrase| None, first_atoms_state)
-            }).collect()
+            .filter_map(|rule| rule_matches_state(&rule, state, &mut side_input, first_atoms_state))
+            .collect()
     }
 
     pub fn execute_rule(&mut self, rule: &Rule) {
@@ -434,87 +440,41 @@ impl Context {
         });
     }
 
-    pub fn find_phrase<'a>(&'a self, s1: Option<&str>) -> Option<&'a Phrase> {
-        self.find_phrase2(s1, None)
+    pub fn find_phrase<'a>(&'a self, a1: Option<&Atom>) -> Option<&'a Phrase> {
+        self.find_phrase2(a1, None)
     }
 
-    pub fn find_phrase2<'a>(&'a self, s1: Option<&str>, s2: Option<&str>) -> Option<&'a Phrase> {
-        self.find_phrase3(s1, s2, None)
+    pub fn find_phrase2<'a>(&'a self, a1: Option<&Atom>, a2: Option<&Atom>) -> Option<&'a Phrase> {
+        self.find_phrase3(a1, a2, None)
     }
 
     pub fn find_phrase3<'a>(
         &'a self,
-        s1: Option<&str>,
-        s2: Option<&str>,
-        s3: Option<&str>,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+        a3: Option<&Atom>,
     ) -> Option<&'a Phrase> {
-        self.find_phrase4(s1, s2, s3, None)
+        self.find_phrase4(a1, a2, a3, None)
     }
 
     pub fn find_phrase4<'a>(
         &'a self,
-        s1: Option<&str>,
-        s2: Option<&str>,
-        s3: Option<&str>,
-        s4: Option<&str>,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+        a3: Option<&Atom>,
+        a4: Option<&Atom>,
     ) -> Option<&'a Phrase> {
-        self.find_phrase5(s1, s2, s3, s4, None)
+        self.find_phrase5(a1, a2, a3, a4, None)
     }
 
     pub fn find_phrase5<'a>(
         &'a self,
-        s1: Option<&str>,
-        s2: Option<&str>,
-        s3: Option<&str>,
-        s4: Option<&str>,
-        s5: Option<&str>,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+        a3: Option<&Atom>,
+        a4: Option<&Atom>,
+        a5: Option<&Atom>,
     ) -> Option<&'a Phrase> {
-        let mut atom1 = None;
-        let mut atom2 = None;
-        let mut atom3 = None;
-        let mut atom4 = None;
-        let mut atom5 = None;
-
-        if let Some(s) = s1 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom1 = Some(atom);
-            } else {
-                return None;
-            }
-        };
-
-        if let Some(s) = s2 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom2 = Some(atom);
-            } else {
-                return None;
-            }
-        };
-
-        if let Some(s) = s3 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom3 = Some(atom);
-            } else {
-                return None;
-            }
-        };
-
-        if let Some(s) = s4 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom4 = Some(atom);
-            } else {
-                return None;
-            }
-        };
-
-        if let Some(s) = s5 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom5 = Some(atom);
-            } else {
-                return None;
-            }
-        };
-
         for p in &self.state {
             match (
                 p.get(0).map(|t| &t.string),
@@ -524,11 +484,11 @@ impl Context {
                 p.get(4).map(|t| &t.string),
             ) {
                 (s1, s2, s3, s4, s5)
-                    if (atom1.is_none() || s1 == atom1.as_ref())
-                        && (atom2.is_none() || s2 == atom2.as_ref())
-                        && (atom3.is_none() || s3 == atom3.as_ref())
-                        && (atom4.is_none() || s4 == atom4.as_ref())
-                        && (atom5.is_none() || s5 == atom5.as_ref()) =>
+                    if (a1.is_none() || a1 == s1)
+                        && (a2.is_none() || a2 == s2)
+                        && (a3.is_none() || a3 == s3)
+                        && (a4.is_none() || a4 == s4)
+                        && (a5.is_none() || a5 == s5) =>
                 {
                     return Some(p);
                 }
@@ -539,87 +499,41 @@ impl Context {
         None
     }
 
-    pub fn find_phrases<'a>(&'a self, s1: Option<&str>) -> Vec<&'a Phrase> {
-        self.find_phrases2(s1, None)
+    pub fn find_phrases<'a>(&'a self, a1: Option<&Atom>) -> Vec<&'a Phrase> {
+        self.find_phrases2(a1, None)
     }
 
-    pub fn find_phrases2<'a>(&'a self, s1: Option<&str>, s2: Option<&str>) -> Vec<&'a Phrase> {
-        self.find_phrases3(s1, s2, None)
+    pub fn find_phrases2<'a>(&'a self, a1: Option<&Atom>, a2: Option<&Atom>) -> Vec<&'a Phrase> {
+        self.find_phrases3(a1, a2, None)
     }
 
     pub fn find_phrases3<'a>(
         &'a self,
-        s1: Option<&str>,
-        s2: Option<&str>,
-        s3: Option<&str>,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+        a3: Option<&Atom>,
     ) -> Vec<&'a Phrase> {
-        self.find_phrases4(s1, s2, s3, None)
+        self.find_phrases4(a1, a2, a3, None)
     }
 
     pub fn find_phrases4<'a>(
         &'a self,
-        s1: Option<&str>,
-        s2: Option<&str>,
-        s3: Option<&str>,
-        s4: Option<&str>,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+        a3: Option<&Atom>,
+        a4: Option<&Atom>,
     ) -> Vec<&'a Phrase> {
-        self.find_phrases5(s1, s2, s3, s4, None)
+        self.find_phrases5(a1, a2, a3, a4, None)
     }
 
     pub fn find_phrases5<'a>(
         &'a self,
-        s1: Option<&str>,
-        s2: Option<&str>,
-        s3: Option<&str>,
-        s4: Option<&str>,
-        s5: Option<&str>,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+        a3: Option<&Atom>,
+        a4: Option<&Atom>,
+        a5: Option<&Atom>,
     ) -> Vec<&'a Phrase> {
-        let mut atom1 = None;
-        let mut atom2 = None;
-        let mut atom3 = None;
-        let mut atom4 = None;
-        let mut atom5 = None;
-
-        if let Some(s) = s1 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom1 = Some(atom);
-            } else {
-                return vec![];
-            }
-        };
-
-        if let Some(s) = s2 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom2 = Some(atom);
-            } else {
-                return vec![];
-            }
-        };
-
-        if let Some(s) = s3 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom3 = Some(atom);
-            } else {
-                return vec![];
-            }
-        };
-
-        if let Some(s) = s4 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom4 = Some(atom);
-            } else {
-                return vec![];
-            }
-        };
-
-        if let Some(s) = s5 {
-            if let Some(atom) = self.str_to_existing_atom(s) {
-                atom5 = Some(atom);
-            } else {
-                return vec![];
-            }
-        };
-
         self.state
             .iter()
             .filter(|p| {
@@ -631,11 +545,11 @@ impl Context {
                     p.get(4).map(|t| &t.string),
                 ) {
                     (s1, s2, s3, s4, s5) => {
-                        (atom1.is_none() || s1 == atom1.as_ref())
-                            && (atom2.is_none() || s2 == atom2.as_ref())
-                            && (atom3.is_none() || s3 == atom3.as_ref())
-                            && (atom4.is_none() || s4 == atom4.as_ref())
-                            && (atom5.is_none() || s5 == atom5.as_ref())
+                        (a1.is_none() || a1 == s1)
+                            && (a2.is_none() || a2 == s2)
+                            && (a3.is_none() || a3 == s3)
+                            && (a4.is_none() || a4 == s4)
+                            && (a5.is_none() || a5 == s5)
                     }
                 }
             }).collect()
@@ -1652,7 +1566,7 @@ mod tests {
         );
 
         assert_eq!(
-            context.find_matching_rules(),
+            context.find_matching_rules(&mut |_: &Phrase| None),
             [
                 Rule::new(
                     0,
@@ -2173,7 +2087,7 @@ mod tests {
         let result = rule_matches_state(
             &rule,
             &mut state,
-            &mut |p: &Phrase| Some(tokenize("^test 2", &mut string_cache)),
+            &mut |_: &Phrase| Some(tokenize("^test 2", &mut string_cache)),
             &first_atoms,
         );
 

@@ -3,6 +3,9 @@ name = "ceptre"
 version = "0.1.0"
 authors = ["Tobias Mansfield-Williams <contact@tmwhere.com>"]
 
+[lib]
+crate-type = ["staticlib"]
+
 [dependencies]
 lazy_static = "1.0.0"
 minifb = "0.10.4"
@@ -13,6 +16,9 @@ regex = "1.0.3"
 
 [dev-dependencies]
 criterion = { git = "https://github.com/t-mw/criterion.rs", rev = "bb1de83" }
+
+[profile.release]
+lto = true
 
 [[bench]]
 name = "benchmark"
