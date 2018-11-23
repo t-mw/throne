@@ -915,6 +915,10 @@ where
     let pred = assign_vars(pred, state.as_slice(), existing_matches_and_result);
 
     if let Some(eval_result) = evaluate_side_pred(&pred, side_input) {
+        if eval_result.len() == 0 {
+            return true;
+        }
+
         let s_i = state.len();
         state.push(eval_result);
 
@@ -2055,6 +2059,129 @@ mod tests {
             assert!(result.is_some());
             assert_eq!(result.unwrap(), expected);
         }
+    }
+
+    #[test]
+    fn rule_matches_state_input_side_predicate_none_test() {
+        let mut string_cache = StringCache::new();
+
+        let rule = rule_new(
+            vec![tokenize("^test A", &mut string_cache)],
+            vec![tokenize("A", &mut string_cache)],
+        );
+        let mut state = vec![];
+
+        let first_atoms = extract_first_atoms_state(&state);
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None, &first_atoms);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn rule_matches_state_input_side_predicate_some_fail1_test() {
+        let mut string_cache = StringCache::new();
+
+        let rule = rule_new(
+            vec![tokenize("^test A", &mut string_cache)],
+            vec![tokenize("A", &mut string_cache)],
+        );
+        let mut state = vec![];
+
+        let first_atoms = extract_first_atoms_state(&state);
+        let result = rule_matches_state(
+            &rule,
+            &mut state,
+            &mut |_: &Phrase| Some(tokenize("^nah no", &mut string_cache)),
+            &first_atoms,
+        );
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn rule_matches_state_input_side_predicate_some_fail2_test() {
+        let mut string_cache = StringCache::new();
+
+        let rule = rule_new(
+            vec![
+                tokenize("^test A", &mut string_cache),
+                tokenize("+ 1 1 A", &mut string_cache),
+            ],
+            vec![tokenize("A", &mut string_cache)],
+        );
+        let mut state = vec![];
+
+        let first_atoms = extract_first_atoms_state(&state);
+        let result = rule_matches_state(
+            &rule,
+            &mut state,
+            &mut |_: &Phrase| Some(tokenize("^test 3", &mut string_cache)),
+            &first_atoms,
+        );
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn rule_matches_state_input_side_predicate_some_pass1_test() {
+        let mut string_cache = StringCache::new();
+
+        let rule = rule_new(
+            vec![
+                tokenize("^test A", &mut string_cache),
+                tokenize("+ 2 3 A", &mut string_cache),
+            ],
+            vec![tokenize("A", &mut string_cache)],
+        );
+        let mut state = vec![];
+
+        let first_atoms = extract_first_atoms_state(&state);
+        let result = rule_matches_state(
+            &rule,
+            &mut state,
+            &mut |p: &Phrase| {
+                assert_eq!(
+                    p.get(1).and_then(|t| StringCache::atom_to_number(t.string)),
+                    Some(5)
+                );
+                Some(vec![])
+            },
+            &first_atoms,
+        );
+
+        assert!(result.is_some());
+        assert_eq!(
+            result.unwrap(),
+            rule_new(vec![], vec![tokenize("5", &mut string_cache)])
+        );
+    }
+
+    #[test]
+    fn rule_matches_state_input_side_predicate_some_pass2_test() {
+        let mut string_cache = StringCache::new();
+
+        let rule = rule_new(
+            vec![
+                tokenize("^test A", &mut string_cache),
+                tokenize("+ 1 1 A", &mut string_cache),
+            ],
+            vec![tokenize("A", &mut string_cache)],
+        );
+        let mut state = vec![];
+
+        let first_atoms = extract_first_atoms_state(&state);
+        let result = rule_matches_state(
+            &rule,
+            &mut state,
+            &mut |p: &Phrase| Some(tokenize("^test 2", &mut string_cache)),
+            &first_atoms,
+        );
+
+        assert!(result.is_some());
+        assert_eq!(
+            result.unwrap(),
+            rule_new(vec![], vec![tokenize("2", &mut string_cache)])
+        );
     }
 
     #[test]
