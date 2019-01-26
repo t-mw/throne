@@ -1387,7 +1387,7 @@ fn build_phrase(phrase: &[Token], string_cache: &StringCache) -> String {
     tokens.join(" ")
 }
 
-fn print_state(state: &[Phrase], string_cache: &StringCache) {
+pub fn print_state(state: &[Phrase], string_cache: &StringCache) {
     state
         .iter()
         .map(|p| build_phrase(p, string_cache))
