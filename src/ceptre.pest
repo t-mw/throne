@@ -24,7 +24,7 @@ output_phrase = { qui | stage_phrase | side_phrase | phrase }
 outputs = { output_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ output_phrase)* }
 rule = { inputs ~ NEWLINE? ~ "=" ~ NEWLINE? ~ outputs }
 
-stage = { (stage_phrase ~ ":") ~ NEWLINE ~ rule ~ (NEWLINE ~ rule)* ~ NEWLINE? }
+stage = { (inputs ~ ":") ~ NEWLINE ~ rule ~ (NEWLINE ~ rule)* ~ NEWLINE? }
 
 file = {
   SOI ~

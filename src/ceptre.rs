@@ -319,17 +319,40 @@ impl Context {
             match line.as_rule() {
                 parser::Rule::stage => {
                     let mut stage = line.into_inner();
-                    let phrase_pair = stage.next().unwrap();
-                    let stage_phrase = tokenize(phrase_pair.as_str(), &mut string_cache);
+
+                    let prefix_inputs_pair = stage.next().unwrap();
+                    let input_phrase_strings = prefix_inputs_pair
+                        .into_inner()
+                        .map(|p| p.as_str())
+                        .collect::<Vec<_>>();
 
                     for pair in stage {
                         let (mut r, has_input_qui) = pair_to_ceptre_rule(pair, &mut string_cache);
 
-                        // insert at beginning, so that 'first atoms' optimization is effective
-                        r.inputs.insert(0, stage_phrase.clone());
+                        let input_phrases = input_phrase_strings
+                            .iter()
+                            .map(|p| tokenize(p, &mut string_cache))
+                            .collect::<Vec<_>>();
+                        let stage_phrase_idx = input_phrase_strings
+                            .iter()
+                            .position(|s| s.chars().next() == Some('#'));
 
-                        if !has_input_qui {
-                            r.outputs.push(stage_phrase.clone());
+                        // insert stage at beginning, so that 'first atoms' optimization is effective
+                        for (i, p) in input_phrases.iter().enumerate() {
+                            if stage_phrase_idx == Some(i) {
+                                continue;
+                            }
+
+                            r.inputs.push(p.clone())
+                        }
+
+                        if let Some(i) = stage_phrase_idx {
+                            r.inputs.insert(0, input_phrases[i].clone());
+                        }
+
+                        if !has_input_qui && stage_phrase_idx.is_some() {
+                            r.outputs
+                                .push(input_phrases[stage_phrase_idx.unwrap()].clone());
                         }
 
                         rules.push(r);
@@ -1446,7 +1469,7 @@ mod tests {
     fn context_from_text_rules_test() {
         let mut context = Context::from_text(
             "at 0 0 wood . at 1 2 wood = at 1 0 wood \n\
-             #test: \n\
+             asdf . #test: \n\
              at 3 4 wood = at 5 6 wood . at 7 8 wood",
         );
 
@@ -1466,6 +1489,7 @@ mod tests {
                     vec![
                         tokenize("#test", &mut context.string_cache),
                         tokenize("at 3 4 wood", &mut context.string_cache),
+                        tokenize("asdf", &mut context.string_cache),
                     ],
                     vec![
                         tokenize("at 5 6 wood", &mut context.string_cache),
