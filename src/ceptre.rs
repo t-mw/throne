@@ -338,9 +338,11 @@ impl Context {
                 parser::Rule::rule => {
                     rules.push(pair_to_ceptre_rule(line, &mut string_cache).0);
                 }
-                parser::Rule::state => for phrase in line.into_inner() {
-                    state.push(tokenize(phrase.as_str(), &mut string_cache));
-                },
+                parser::Rule::state => {
+                    for phrase in line.into_inner() {
+                        state.push(tokenize(phrase.as_str(), &mut string_cache));
+                    }
+                }
                 parser::Rule::EOI => (),
                 _ => unreachable!("{}", line),
             }
@@ -552,7 +554,8 @@ impl Context {
                             && (a5.is_none() || a5 == s5)
                     }
                 }
-            }).collect()
+            })
+            .collect()
     }
 }
 
@@ -765,7 +768,8 @@ where
                 .filter(|&(s_i, _)| s_i < len && !states_matched_bool[s_i])
                 .any(|(s_i, _)| {
                     match_variables_with_existing(input, state, s_i, &mut variables_matched)
-                }) {
+                })
+            {
                 continue 'outer;
             }
         }
@@ -1597,7 +1601,8 @@ mod tests {
              () = #spread\n\
              \n\
              #spread . $at X Y fire . + X 1 X' . + Y' 1 Y = at X' Y fire . at X Y' fire",
-        ).with_test_rng();
+        )
+        .with_test_rng();
 
         update(&mut context, |_: &Phrase| None);
 
