@@ -84,7 +84,12 @@ impl PartialEq for Token {
 impl Eq for Token {}
 
 impl Token {
-    fn new(string: &str, open_depth: u8, close_depth: u8, string_cache: &mut StringCache) -> Token {
+    pub fn new(
+        string: &str,
+        open_depth: u8,
+        close_depth: u8,
+        string_cache: &mut StringCache,
+    ) -> Token {
         let mut string = string;
 
         let mut is_negated = false;
@@ -135,7 +140,7 @@ impl Token {
         }
     }
 
-    fn new_number(n: i32, open_depth: u8, close_depth: u8) -> Token {
+    pub fn new_number(n: i32, open_depth: u8, close_depth: u8) -> Token {
         Token {
             string: StringCache::number_to_atom(n),
             flag: TokenFlag::None,
