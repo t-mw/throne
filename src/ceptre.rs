@@ -101,6 +101,7 @@ impl Token {
             }
             '^' => {
                 is_side = true;
+                string = string.get(1..).expect("get");
             }
             _ => {}
         }
