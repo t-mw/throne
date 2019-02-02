@@ -1,0 +1,19 @@
+# Ideas
+- wildcard variable: _
+- support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
+- decide on consistent syntax for arguments e.g. keywords?
+- support defining own backwards predicates
+- comment syntax
+- allow hex colors / named colors to be passed directly to sprite
+- add hex overload to 'color' predicate
+- syntax to check absence of state: ^
+- nested labels
+- arbitrary math expressions e.g. 'expr 2 + A / 3 + 1.5 = B'
+- move drawing outside of rules - just draw with js by iterating over state
+- handle frames by 'injecting' atom i.e. insert '#frame' atom and let rules handle it
+- option to only process a variable once per stage
+- 'derived' state i.e. able to match on Z where Z is equivalent to X + Y, when only X + Y are present
+- performance improvement by sorting states by atom indices + jumping to known ranges during matching or do binary search
+- modulo
+- lispy key properties
+- syntax to match rule only once per update / permanently
