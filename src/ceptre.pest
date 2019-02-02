@@ -1,6 +1,6 @@
 WHITESPACE = _{ " " }
 COMMENT = _{ ("//" ~ (!NEWLINE ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
-atom = @{ (ASCII_ALPHANUMERIC)+ ~ "'"* }
+atom = @{ (ASCII_ALPHANUMERIC | "_")+ ~ "'"* }
 string = { "`" ~ (!"`" ~ ANY)* ~ "`" }
 qui = { "qui" }
 
