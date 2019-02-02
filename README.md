@@ -15,5 +15,6 @@
 - 'derived' state i.e. able to match on Z where Z is equivalent to X + Y, when only X + Y are present
 - performance improvement by sorting states by atom indices + jumping to known ranges during matching or do binary search
 - modulo
-- lispy key properties
+- lispy key properties to enable pattern matching
 - syntax to match rule only once per update / permanently
+- improve performance by, for each phrase in a rule, recording the states that could match the phtase. needs to be re-evaluated each time state is added or removed.
