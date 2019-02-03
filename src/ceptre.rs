@@ -417,6 +417,10 @@ impl Context {
         self.string_cache.str_to_existing_atom(text)
     }
 
+    pub fn atom_to_str(&self, atom: Atom) -> &str {
+        self.string_cache.atom_to_str(atom).unwrap()
+    }
+
     pub fn with_test_rng(mut self) -> Context {
         self.rng = test_rng();
 
