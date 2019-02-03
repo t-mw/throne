@@ -1579,6 +1579,48 @@ mod tests {
     }
 
     #[test]
+    fn context_from_text_comment_state_test() {
+        let mut context = Context::from_text(
+            "#test: {\n\
+             \n\
+             // comment 1\n\
+             in1 = out1\n\
+             \n\
+             // comment 2\n\
+             in2 = out2\n\
+             }",
+        );
+
+        assert_eq!(
+            context.rules,
+            [
+                Rule::new(
+                    0,
+                    vec![
+                        tokenize("#test", &mut context.string_cache),
+                        tokenize("in1", &mut context.string_cache)
+                    ],
+                    vec![
+                        tokenize("out1", &mut context.string_cache),
+                        tokenize("#test", &mut context.string_cache)
+                    ],
+                ),
+                Rule::new(
+                    1,
+                    vec![
+                        tokenize("#test", &mut context.string_cache),
+                        tokenize("in2", &mut context.string_cache)
+                    ],
+                    vec![
+                        tokenize("out2", &mut context.string_cache),
+                        tokenize("#test", &mut context.string_cache)
+                    ],
+                )
+            ]
+        );
+    }
+
+    #[test]
     fn context_append_state_test() {
         let mut context = Context::from_text("test 1 2");
 
