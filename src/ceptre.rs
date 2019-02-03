@@ -725,6 +725,13 @@ where
             }
 
             input_state_matches.push((i_i, matches));
+        } else if input.len() == 1 && is_var_pred(&input) {
+            let matches = state
+                .iter()
+                .enumerate()
+                .map(|(i, _)| (i, true))
+                .collect::<Vec<_>>();
+            input_state_matches.push((i_i, matches))
         }
     }
 
@@ -756,6 +763,7 @@ where
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
+        // TODO: improve performance by checking inputs ordered from least to most matches
         for (c_i, (i_i, matches)) in input_state_matches.iter().enumerate() {
             let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % matches.len();
             let (s_i, has_var) = matches[branch_idx];
@@ -936,6 +944,10 @@ fn is_negated_pred(tokens: &Phrase) -> bool {
 
 fn is_concrete_pred(tokens: &Phrase) -> bool {
     !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::None
+}
+
+fn is_var_pred(tokens: &Phrase) -> bool {
+    !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::Variable
 }
 
 fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Phrase> {
@@ -1865,6 +1877,34 @@ mod tests {
                 vec![
                     tokenize("at 0 0 fire", &mut string_cache),
                     tokenize("at 2 0 fire", &mut string_cache),
+                ],
+                true,
+            ),
+            (
+                rule_new(
+                    vec![
+                        tokenize("has RESULT", &mut string_cache),
+                        tokenize("RESULT", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("has foo", &mut string_cache),
+                    tokenize("bar", &mut string_cache),
+                ],
+                false,
+            ),
+            (
+                rule_new(
+                    vec![
+                        tokenize("has RESULT", &mut string_cache),
+                        tokenize("RESULT", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("has bar", &mut string_cache),
+                    tokenize("bar", &mut string_cache),
                 ],
                 true,
             ),
