@@ -44,7 +44,7 @@ const MAX_NUMBER: i32 = 99999;
 const MAX_STRING_IDX: AtomIdx = i32::MAX - MAX_NUMBER * 2 - 1;
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Atom {
     idx: AtomIdx,
 }
