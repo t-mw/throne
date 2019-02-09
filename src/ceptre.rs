@@ -141,6 +141,16 @@ impl Token {
         }
     }
 
+    pub fn new_atom(atom: Atom, open_depth: u8, close_depth: u8) -> Token {
+        Token {
+            string: atom,
+            flag: TokenFlag::None,
+            is_negated: false,
+            open_depth,
+            close_depth,
+        }
+    }
+
     pub fn new_number(n: i32, open_depth: u8, close_depth: u8) -> Token {
         Token {
             string: StringCache::number_to_atom(n),
