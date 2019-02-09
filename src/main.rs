@@ -23,7 +23,8 @@ fn main() {
         WIDTH as usize,
         HEIGHT as usize,
         WindowOptions::default(),
-    ).unwrap_or_else(|e| {
+    )
+    .unwrap_or_else(|e| {
         panic!("{}", e);
     });
 
@@ -50,7 +51,7 @@ fn main() {
             _ => None,
         };
 
-        ceptre::update(&mut context, |p: &ceptre::Phrase| {
+        context.update(|p: &ceptre::Phrase| {
             if p.len() != 2 {
                 return None;
             }
@@ -85,7 +86,7 @@ fn main() {
 
         let is_valid_pos = |x, y| x < WIDTH && y < HEIGHT;
 
-        for p in &context.state {
+        for p in &context.core.state {
             match (
                 p.get(0).and_then(|t| t.as_str(&context.string_cache)),
                 p.get(2).and_then(|t| t.as_number()),

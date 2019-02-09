@@ -3,7 +3,6 @@ use std::mem::transmute;
 use std::os::raw::{c_char, c_void};
 use std::slice;
 
-use ceptre;
 use ceptre::{Atom, Context, Phrase};
 
 #[repr(C)]
@@ -25,7 +24,7 @@ pub extern "C" fn ceptre_context_destroy(context: *mut Context) {
 #[no_mangle]
 pub extern "C" fn ceptre_update(context: *mut Context) {
     let context = unsafe { &mut *context };
-    ceptre::update(context, |_: &Phrase| None);
+    context.update(|_: &Phrase| None);
 }
 
 #[no_mangle]

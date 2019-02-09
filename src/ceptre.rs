@@ -196,11 +196,16 @@ impl Rule {
 
 #[derive(Clone)]
 pub struct Context {
-    rules: Vec<Rule>,
-    pub state: Vec<Phrase>,
+    pub core: Core,
     pub string_cache: StringCache,
-    quiescence: bool,
+}
+
+#[derive(Clone)]
+pub struct Core {
+    pub state: Vec<Phrase>,
+    rules: Vec<Rule>,
     rng: SmallRng,
+    qui_atom: Atom,
     first_atoms_state: Vec<FirstAtomsState>,
 }
 
@@ -409,14 +414,17 @@ impl Context {
 
         let rng = SmallRng::from_seed(seed);
         let first_atoms_state = extract_first_atoms_state(&state);
+        let qui_atom = string_cache.str_to_atom("qui");
 
         Context {
-            state,
-            rules,
+            core: Core {
+                state,
+                rules,
+                rng,
+                qui_atom,
+                first_atoms_state,
+            },
             string_cache,
-            quiescence: false,
-            rng,
-            first_atoms_state,
         }
     }
 
@@ -433,40 +441,38 @@ impl Context {
     }
 
     pub fn with_test_rng(mut self) -> Context {
-        self.rng = test_rng();
+        self.core.rng = test_rng();
 
         self
     }
 
     pub fn append_state(&mut self, text: &str) {
-        self.state.push(tokenize(text, &mut self.string_cache));
+        self.core.state.push(tokenize(text, &mut self.string_cache));
     }
 
     pub fn find_matching_rules<F>(&mut self, mut side_input: F) -> Vec<Rule>
     where
         F: SideInput,
     {
-        let state = &mut self.state;
-        let first_atoms_state = &self.first_atoms_state;
+        let state = &mut self.core.state;
+        let first_atoms_state = &self.core.first_atoms_state;
 
-        self.rules
+        self.core
+            .rules
             .iter()
             .filter_map(|rule| rule_matches_state(&rule, state, &mut side_input, first_atoms_state))
             .collect()
     }
 
+    pub fn update<F>(&mut self, side_input: F)
+    where
+        F: SideInput,
+    {
+        update(&mut self.core, side_input);
+    }
+
     pub fn execute_rule(&mut self, rule: &Rule) {
-        let inputs = &rule.inputs;
-        let outputs = &rule.outputs;
-
-        inputs.iter().for_each(|input| {
-            let remove_idx = self.state.iter().position(|v| v == input);
-            self.state.swap_remove(remove_idx.expect("remove_idx"));
-        });
-
-        outputs.iter().for_each(|output| {
-            self.state.push(output.clone());
-        });
+        execute_rule(rule, &mut self.core.state);
     }
 
     pub fn print(&self) {
@@ -508,7 +514,7 @@ impl Context {
         a4: Option<&Atom>,
         a5: Option<&Atom>,
     ) -> Option<&'a Phrase> {
-        for p in &self.state {
+        for p in &self.core.state {
             match (
                 p.get(0).map(|t| &t.string),
                 p.get(1).map(|t| &t.string),
@@ -567,7 +573,8 @@ impl Context {
         a4: Option<&Atom>,
         a5: Option<&Atom>,
     ) -> Vec<&'a Phrase> {
-        self.state
+        self.core
+            .state
             .iter()
             .filter(|p| {
                 match (
@@ -592,9 +599,10 @@ impl Context {
 
 impl fmt::Display for Context {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let state = build_state(&self.state, &self.string_cache);
+        let state = build_state(&self.core.state, &self.string_cache);
 
         let mut rules = self
+            .core
             .rules
             .iter()
             .map(|r| rule_to_string(r, &self.string_cache))
@@ -605,54 +613,68 @@ impl fmt::Display for Context {
     }
 }
 
-pub fn update<F>(context: &mut Context, mut side_input: F)
+fn execute_rule(rule: &Rule, state: &mut Vec<Phrase>) {
+    let inputs = &rule.inputs;
+    let outputs = &rule.outputs;
+
+    inputs.iter().for_each(|input| {
+        let remove_idx = state.iter().position(|v| v == input);
+        state.swap_remove(remove_idx.expect("remove_idx"));
+    });
+
+    outputs.iter().for_each(|output| {
+        state.push(output.clone());
+    });
+}
+
+pub fn update<F>(core: &mut Core, mut side_input: F)
 where
     F: SideInput,
 {
-    let qui: Phrase = vec![Token::new("qui", 0, 0, &mut context.string_cache)];
+    let qui: Phrase = vec![Token::new_atom(core.qui_atom, 0, 0)];
+
+    let state = &mut core.state;
+    let rules = &mut core.rules;
+    let rng = &mut core.rng;
 
     // shuffle state so that a given rule with multiple potential
     // matches does not always match the same permutation of state.
-    context.rng.shuffle(&mut context.state);
+    rng.shuffle(state);
 
     // shuffle rules so that each has an equal chance of selection.
-    context.rng.shuffle(&mut context.rules);
+    rng.shuffle(rules);
 
     // change starting rule on each iteration to introduce randomness.
     let mut start_rule_idx = 0;
 
+    let mut quiescence = false;
+
     loop {
         let mut matching_rule = None;
 
-        if context.quiescence {
-            context.state.push(qui.clone());
+        if quiescence {
+            state.push(qui.clone());
         }
 
-        context.first_atoms_state = extract_first_atoms_state(&context.state);
-        {
-            let rules = &context.rules;
-            let state = &mut context.state;
+        core.first_atoms_state = extract_first_atoms_state(state);
 
-            for i in 0..rules.len() {
-                let rule = &rules[(start_rule_idx + i) % rules.len()];
+        for i in 0..rules.len() {
+            let rule = &rules[(start_rule_idx + i) % rules.len()];
 
-                if let Some(rule) =
-                    rule_matches_state(&rule, state, &mut side_input, &context.first_atoms_state)
-                {
-                    matching_rule = Some(rule);
-                    break;
-                }
+            if let Some(rule) =
+                rule_matches_state(&rule, state, &mut side_input, &core.first_atoms_state)
+            {
+                matching_rule = Some(rule);
+                break;
             }
-
-            start_rule_idx += 1;
         }
 
-        if context.quiescence {
-            context.quiescence = false;
+        start_rule_idx += 1;
+
+        if quiescence {
+            quiescence = false;
 
             if matching_rule.is_none() {
-                let state = &mut context.state;
-
                 assert!(
                     state
                         .iter()
@@ -671,9 +693,9 @@ where
         }
 
         if let Some(ref matching_rule) = matching_rule {
-            context.execute_rule(matching_rule);
+            execute_rule(matching_rule, state);
         } else {
-            context.quiescence = true;
+            quiescence = true;
         }
     }
 }
@@ -1398,7 +1420,7 @@ fn extract_first_atoms_state_phrase(s_i: usize, phrase: &Phrase) -> FirstAtomsSt
     (s_i, phrase[0].string)
 }
 
-fn build_phrase(phrase: &[Token], string_cache: &StringCache) -> String {
+pub fn build_phrase(phrase: &[Token], string_cache: &StringCache) -> String {
     let mut tokens = vec![];
 
     for t in phrase {
@@ -1489,7 +1511,7 @@ mod tests {
         );
 
         assert_eq!(
-            context.state,
+            context.core.state,
             [
                 tokenize("at 0 0 wood", &mut context.string_cache),
                 tokenize("at 0 0 wood", &mut context.string_cache),
@@ -1508,7 +1530,7 @@ mod tests {
         );
 
         assert_eq!(
-            context.rules,
+            context.core.rules,
             [
                 Rule::new(
                     0,
@@ -1540,7 +1562,7 @@ mod tests {
         let mut context = Context::from_text("at 0 0 wood . $at 1 2 wood = at 1 0 wood");
 
         assert_eq!(
-            context.rules,
+            context.core.rules,
             [Rule::new(
                 0,
                 vec![
@@ -1567,7 +1589,7 @@ mod tests {
         );
 
         assert_eq!(
-            context.rules,
+            context.core.rules,
             [
                 Rule::new(
                     0,
@@ -1597,7 +1619,7 @@ mod tests {
         );
 
         assert_eq!(
-            context.state,
+            context.core.state,
             [tokenize("state 1", &mut context.string_cache),]
         );
     }
@@ -1616,7 +1638,7 @@ mod tests {
         );
 
         assert_eq!(
-            context.rules,
+            context.core.rules,
             [
                 Rule::new(
                     0,
@@ -1651,7 +1673,7 @@ mod tests {
         context.append_state("test 3 4");
 
         assert_eq!(
-            context.state,
+            context.core.state,
             vec![
                 tokenize("test 1 2", &mut context.string_cache),
                 tokenize("test 3 4", &mut context.string_cache),
@@ -1704,10 +1726,10 @@ mod tests {
         )
         .with_test_rng();
 
-        update(&mut context, |_: &Phrase| None);
+        context.update(|_: &Phrase| None);
 
         assert_eq!(
-            context.state,
+            context.core.state,
             [
                 tokenize("at 1 1 wood", &mut context.string_cache),
                 tokenize("at 0 0 wood", &mut context.string_cache),
