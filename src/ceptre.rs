@@ -4,6 +4,7 @@ use rand::{Rng, SeedableRng};
 use regex::Regex;
 
 use std::collections::HashMap;
+use std::fmt;
 use std::i32;
 use std::vec::Vec;
 
@@ -469,20 +470,7 @@ impl Context {
     }
 
     pub fn print(&self) {
-        println!("state:");
-        print_state(&self.state, &self.string_cache);
-
-        println!("\nrules:");
-        let mut rules = self
-            .rules
-            .iter()
-            .map(|r| rule_to_string(r, &self.string_cache))
-            .collect::<Vec<_>>();
-        rules.sort();
-
-        rules.iter().for_each(|r| {
-            println!("{}", r);
-        });
+        println!("{}", self);
     }
 
     pub fn find_phrase<'a>(&'a self, a1: Option<&Atom>) -> Option<&'a Phrase> {
@@ -599,6 +587,21 @@ impl Context {
                 }
             })
             .collect()
+    }
+}
+
+impl fmt::Display for Context {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let state = build_state(&self.state, &self.string_cache);
+
+        let mut rules = self
+            .rules
+            .iter()
+            .map(|r| rule_to_string(r, &self.string_cache))
+            .collect::<Vec<_>>();
+        rules.sort();
+
+        write!(f, "state:\n{}\nrules:\n{}", state, rules.join("\n"))
     }
 }
 
@@ -1419,13 +1422,12 @@ fn build_phrase(phrase: &[Token], string_cache: &StringCache) -> String {
     tokens.join(" ")
 }
 
-pub fn print_state(state: &[Phrase], string_cache: &StringCache) {
+pub fn build_state(state: &[Phrase], string_cache: &StringCache) -> String {
     state
         .iter()
         .map(|p| build_phrase(p, string_cache))
-        .for_each(|s| {
-            println!("{}", s);
-        });
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn rule_to_string(rule: &Rule, string_cache: &StringCache) -> String {
