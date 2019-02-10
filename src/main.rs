@@ -51,7 +51,7 @@ fn main() {
             _ => None,
         };
 
-        context.update(|p: &[ceptre::Token]| {
+        context.update(|p: &ceptre::Phrase| {
             if p.len() != 2 {
                 return None;
             }

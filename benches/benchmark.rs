@@ -21,7 +21,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             },
             |mut context| {
                 context.append_state("#update");
-                ceptre::update(&mut context.core, |_: &[ceptre::Token]| None);
+                ceptre::update(&mut context.core, |_: &ceptre::Phrase| None);
             },
         )
     });
@@ -39,7 +39,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 CONTEXT.clone()
             },
             |mut context| {
-                ceptre::update(&mut context.core, |_: &[ceptre::Token]| None);
+                ceptre::update(&mut context.core, |_: &ceptre::Phrase| None);
             },
         )
     });

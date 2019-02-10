@@ -171,21 +171,21 @@ impl Token {
     }
 }
 
-type Phrase = Vec<Token>;
+pub type Phrase = [Token];
 
 // https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
-pub trait SideInput: FnMut(&[Token]) -> Option<Phrase> {}
-impl<F> SideInput for F where F: FnMut(&[Token]) -> Option<Phrase> {}
+pub trait SideInput: FnMut(&Phrase) -> Option<Vec<Token>> {}
+impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Rule {
     pub id: RuleId,
-    pub inputs: Vec<Phrase>,
-    pub outputs: Vec<Phrase>,
+    pub inputs: Vec<Vec<Token>>,
+    pub outputs: Vec<Vec<Token>>,
 }
 
 impl Rule {
-    pub fn new(id: i32, inputs: Vec<Phrase>, outputs: Vec<Phrase>) -> Rule {
+    pub fn new(id: i32, inputs: Vec<Vec<Token>>, outputs: Vec<Vec<Token>>) -> Rule {
         Rule {
             id,
             inputs,
@@ -226,7 +226,7 @@ pub struct State {
     scratch_idx: Option<(usize, usize)>,
 }
 
-fn extract_first_atoms_rule_input(phrase: &[Token]) -> Option<Atom> {
+fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
     if is_concrete_pred(phrase) {
         phrase
             .get(0)
@@ -299,7 +299,7 @@ impl State {
         self.first_atoms = extract_first_atoms_state(self);
     }
 
-    fn remove_phrase(&mut self, phrase: &[Token]) {
+    fn remove_phrase(&mut self, phrase: &Phrase) {
         let remove_idx = self
             .phrases
             .iter()
@@ -336,7 +336,7 @@ impl State {
         self.phrases.iter()
     }
 
-    pub fn get(&self, id: PhraseId) -> &[Token] {
+    pub fn get(&self, id: PhraseId) -> &Phrase {
         let (begin, end) = self.phrase_ranges[id.idx];
         &self.tokens[begin..end]
     }
@@ -381,7 +381,7 @@ impl State {
 impl std::ops::Index<usize> for State {
     type Output = [Token];
 
-    fn index(&self, i: usize) -> &[Token] {
+    fn index(&self, i: usize) -> &Phrase {
         let id = self.phrases[i];
         self.get(id)
     }
@@ -1064,7 +1064,7 @@ where
 }
 
 fn match_backwards_variables(
-    pred: &[Token],
+    pred: &Phrase,
     state: &mut State,
     existing_matches_and_result: &mut Vec<MatchLite>,
 ) -> bool {
@@ -1081,7 +1081,7 @@ fn match_backwards_variables(
 }
 
 fn match_side_variables<F>(
-    pred: &[Token],
+    pred: &Phrase,
     state: &mut State,
     existing_matches_and_result: &mut Vec<MatchLite>,
     side_input: &mut F,
@@ -1105,8 +1105,8 @@ where
     }
 }
 
-fn assign_vars(tokens: &[Token], state: &State, matches: &[MatchLite]) -> Phrase {
-    let mut result: Phrase = vec![];
+fn assign_vars(tokens: &Phrase, state: &State, matches: &[MatchLite]) -> Vec<Token> {
+    let mut result: Vec<Token> = vec![];
 
     for token in tokens {
         if is_var_token(token) {
@@ -1144,7 +1144,7 @@ fn is_var_token(token: &Token) -> bool {
     token.flag == TokenFlag::Variable
 }
 
-fn is_backwards_pred(tokens: &[Token]) -> bool {
+fn is_backwards_pred(tokens: &Phrase) -> bool {
     if let TokenFlag::BackwardsPred(_) = tokens[0].flag {
         true
     } else {
@@ -1152,23 +1152,23 @@ fn is_backwards_pred(tokens: &[Token]) -> bool {
     }
 }
 
-fn is_side_pred(tokens: &[Token]) -> bool {
+fn is_side_pred(tokens: &Phrase) -> bool {
     tokens[0].flag == TokenFlag::Side
 }
 
-fn is_negated_pred(tokens: &[Token]) -> bool {
+fn is_negated_pred(tokens: &Phrase) -> bool {
     tokens[0].is_negated
 }
 
-fn is_concrete_pred(tokens: &[Token]) -> bool {
+fn is_concrete_pred(tokens: &Phrase) -> bool {
     !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::None
 }
 
-fn is_var_pred(tokens: &Phrase) -> bool {
+fn is_var_pred(tokens: &Vec<Token>) -> bool {
     !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::Variable
 }
 
-fn evaluate_backwards_pred(tokens: &[Token]) -> Option<Phrase> {
+fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Vec<Token>> {
     match tokens[0].flag {
         TokenFlag::BackwardsPred(BackwardsPred::Plus) => {
             let n1 = tokens[1].as_number();
@@ -1255,14 +1255,14 @@ fn evaluate_backwards_pred(tokens: &[Token]) -> Option<Phrase> {
     }
 }
 
-fn evaluate_side_pred<F>(tokens: &[Token], side_input: &mut F) -> Option<Phrase>
+fn evaluate_side_pred<F>(tokens: &Phrase, side_input: &mut F) -> Option<Vec<Token>>
 where
     F: SideInput,
 {
     side_input(tokens)
 }
 
-fn test_match_without_variables(input_tokens: &[Token], pred_tokens: &[Token]) -> Option<bool> {
+fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<bool> {
     let mut pred_token_iter = pred_tokens.iter();
 
     let mut input_depth = 0;
@@ -1313,7 +1313,7 @@ fn test_match_without_variables(input_tokens: &[Token], pred_tokens: &[Token]) -
 }
 
 fn match_variables_with_existing(
-    input_tokens: &[Token],
+    input_tokens: &Phrase,
     state: &State,
     s_i: usize,
     existing_matches_and_result: &mut Vec<MatchLite>,
@@ -1347,7 +1347,7 @@ impl MatchLite {
         &state[self.state_i][self.range.0..self.range.1]
     }
 
-    fn to_phrase(&self, state: &State) -> Phrase {
+    fn to_phrase(&self, state: &State) -> Vec<Token> {
         let mut phrase = self.as_slice(state).to_vec();
 
         let len = phrase.len();
@@ -1365,7 +1365,7 @@ impl MatchLite {
 }
 
 fn match_variables_assuming_compatible_structure(
-    input_tokens: &[Token],
+    input_tokens: &Phrase,
     state: &State,
     state_i: usize,
     existing_matches_and_result: &mut Vec<MatchLite>,
@@ -1442,7 +1442,7 @@ fn match_variables_assuming_compatible_structure(
 }
 
 #[inline]
-fn phrase_equal(a: &[Token], b: &[Token], a_depths: (u8, u8), b_depths: (u8, u8)) -> bool {
+fn phrase_equal(a: &Phrase, b: &Phrase, a_depths: (u8, u8), b_depths: (u8, u8)) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -1493,7 +1493,7 @@ fn token_equal(
                     == b.close_depth as i32 - b_depth_diffs.1 as i32))
 }
 
-fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
+fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
     let mut string = format!("({})", string);
 
     lazy_static! {
@@ -1573,7 +1573,7 @@ fn tokenize(string: &str, string_cache: &mut StringCache) -> Phrase {
     result
 }
 
-pub fn build_phrase(phrase: &[Token], string_cache: &StringCache) -> String {
+pub fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
     let mut tokens = vec![];
 
     for t in phrase {
@@ -1641,14 +1641,14 @@ fn test_rng() -> SmallRng {
 mod tests {
     use super::*;
 
-    fn rule_new(inputs: Vec<Phrase>, outputs: Vec<Phrase>) -> Rule {
+    fn rule_new(inputs: Vec<Vec<Token>>, outputs: Vec<Vec<Token>>) -> Rule {
         Rule::new(0, inputs, outputs)
     }
 
     fn match_variables(
-        input_tokens: &[Token],
-        pred_tokens: &[Token],
-    ) -> Option<Vec<(Atom, Phrase)>> {
+        input_tokens: &Phrase,
+        pred_tokens: &Phrase,
+    ) -> Option<Vec<(Atom, Vec<Token>)>> {
         let mut result = vec![];
 
         let mut state = State::new();
@@ -1855,7 +1855,7 @@ mod tests {
         );
 
         assert_eq!(
-            context.find_matching_rules(&mut |_: &[Token]| None),
+            context.find_matching_rules(&mut |_: &Phrase| None),
             [
                 Rule::new(
                     0,
@@ -1889,7 +1889,7 @@ mod tests {
         )
         .with_test_rng();
 
-        context.update(|_: &[Token]| None);
+        context.update(|_: &Phrase| None);
 
         assert_eq!(
             context.core.state.get_all(),
@@ -2110,7 +2110,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, &mut |_: &[Token]| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
 
             if expected {
                 assert!(result.is_some());
@@ -2206,7 +2206,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, &mut |_: &[Token]| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
 
             if expected {
                 assert!(result.is_some());
@@ -2283,7 +2283,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, &mut |_: &[Token]| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
 
             assert!(result.is_some());
             assert_eq!(result.unwrap(), expected);
@@ -2300,7 +2300,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, &mut |_: &[Token]| None);
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
 
         assert!(result.is_none());
     }
@@ -2315,7 +2315,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, &mut |_: &[Token]| {
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^nah no", &mut string_cache))
         });
 
@@ -2335,7 +2335,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, &mut |_: &[Token]| {
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^test 3", &mut string_cache))
         });
 
@@ -2355,7 +2355,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, &mut |p: &[Token]| {
+        let result = rule_matches_state(&rule, &mut state, &mut |p: &Phrase| {
             assert_eq!(
                 p.get(1).and_then(|t| StringCache::atom_to_number(t.string)),
                 Some(5)
@@ -2383,7 +2383,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, &mut |_: &[Token]| {
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^test 2", &mut string_cache))
         });
 
