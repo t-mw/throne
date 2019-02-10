@@ -450,11 +450,11 @@ impl Context {
         self.core.state.push(tokenize(text, &mut self.string_cache));
     }
 
-    pub fn find_matching_rules<F>(&mut self, mut side_input: F) -> Vec<Rule>
+    pub fn find_matching_rules<F>(&self, mut side_input: F) -> Vec<Rule>
     where
         F: SideInput,
     {
-        let state = &mut self.core.state;
+        let state = &self.core.state;
         let first_atoms_state = &self.core.first_atoms_state;
 
         self.core
@@ -705,7 +705,7 @@ where
 // predicates removed.
 fn rule_matches_state<F>(
     r: &Rule,
-    state: &mut Vec<Phrase>,
+    state: &[Phrase],
     side_input: &mut F,
     state_first_atoms: &[FirstAtomsState],
 ) -> Option<Rule>
@@ -785,10 +785,11 @@ where
             }
         });
 
-    // store original length, since we'll use state as a scratchpad for other token allocations
-    let len = state.len();
-
     let mut variables_matched: Vec<MatchLite> = vec![];
+
+    // clone state, since we'll use it as a scratchpad for other token allocations
+    let len = state.len();
+    let mut state = state.to_vec();
 
     'outer: for p_i in 0..permutation_count {
         state.drain(len..);
@@ -814,7 +815,7 @@ where
                 // we know the structures are compatible from the earlier matching check
                 if !match_variables_assuming_compatible_structure(
                     &inputs[*i_i],
-                    state,
+                    &state,
                     s_i,
                     &mut variables_matched,
                 ) {
@@ -824,13 +825,13 @@ where
         }
 
         for input in inputs.iter().filter(|input| is_backwards_pred(input)) {
-            if !match_backwards_variables(input, state, &mut variables_matched) {
+            if !match_backwards_variables(input, &mut state, &mut variables_matched) {
                 continue 'outer;
             }
         }
 
         for input in inputs.iter().filter(|input| is_side_pred(input)) {
-            if !match_side_variables(input, state, &mut variables_matched, side_input) {
+            if !match_side_variables(input, &mut state, &mut variables_matched, side_input) {
                 continue 'outer;
             }
         }
@@ -843,7 +844,7 @@ where
                 .enumerate()
                 .filter(|&(s_i, _)| s_i < len && !states_matched_bool[s_i])
                 .any(|(s_i, _)| {
-                    match_variables_with_existing(input, state, s_i, &mut variables_matched)
+                    match_variables_with_existing(input, &state, s_i, &mut variables_matched)
                 })
             {
                 continue 'outer;
@@ -857,25 +858,21 @@ where
             .iter()
             .filter(|pred| is_concrete_pred(pred))
             .for_each(|v| {
-                forward_concrete.push(assign_vars(v, state, &variables_matched));
+                forward_concrete.push(assign_vars(v, &state, &variables_matched));
             });
 
         outputs.iter().for_each(|v| {
             if is_side_pred(v) {
-                let pred = assign_vars(v, state, &variables_matched);
+                let pred = assign_vars(v, &state, &variables_matched);
 
                 evaluate_side_pred(&pred, side_input);
             } else {
-                outputs_concrete.push(assign_vars(v, state, &variables_matched));
+                outputs_concrete.push(assign_vars(v, &state, &variables_matched));
             }
         });
 
-        state.drain(len..);
-
         return Some(Rule::new(r.id, forward_concrete, outputs_concrete));
     }
-
-    state.drain(len..);
 
     None
 }
