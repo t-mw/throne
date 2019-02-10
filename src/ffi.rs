@@ -3,7 +3,7 @@ use std::mem::transmute;
 use std::os::raw::{c_char, c_void};
 use std::slice;
 
-use ceptre::{Atom, Context, Phrase};
+use ceptre::{Atom, Context, Token};
 
 #[repr(C)]
 pub struct CRule {
@@ -24,7 +24,7 @@ pub extern "C" fn ceptre_context_destroy(context: *mut Context) {
 #[no_mangle]
 pub extern "C" fn ceptre_update(context: *mut Context) {
     let context = unsafe { &mut *context };
-    context.update(|_: &Phrase| None);
+    context.update(|_: &[Token]| None);
 }
 
 #[no_mangle]
@@ -50,7 +50,7 @@ pub extern "C" fn ceptre_context_find_matching_rules(
 
     let mut side_input_p = vec![];
 
-    let rules = context.find_matching_rules(|p: &Phrase| {
+    let rules = context.find_matching_rules(|p: &[Token]| {
         side_input_p.clear();
         side_input_p.extend(p.iter().map(|t| t.string));
 

@@ -30,9 +30,9 @@ fn main() {
 
     let mut context = ceptre::Context::from_text(include_str!("../blocks.ceptre"));
 
-    let kd = context.str_to_atom("^kd");
-    let ku = context.str_to_atom("^ku");
-    let kp = context.str_to_atom("^kp");
+    let kd = context.str_to_atom("kd");
+    let ku = context.str_to_atom("ku");
+    let kp = context.str_to_atom("kp");
     let left = context.str_to_atom("left");
     let right = context.str_to_atom("right");
     let up = context.str_to_atom("up");
@@ -51,7 +51,7 @@ fn main() {
             _ => None,
         };
 
-        context.update(|p: &ceptre::Phrase| {
+        context.update(|p: &[ceptre::Token]| {
             if p.len() != 2 {
                 return None;
             }
@@ -59,21 +59,21 @@ fn main() {
             match &p[0].string {
                 a if *a == kd => string_to_key(&p[1].string).and_then(|k| {
                     if window.is_key_down(k) {
-                        Some(p.clone())
+                        Some(p.to_vec())
                     } else {
                         None
                     }
                 }),
                 a if *a == ku => string_to_key(&p[1].string).and_then(|k| {
                     if !window.is_key_down(k) {
-                        Some(p.clone())
+                        Some(p.to_vec())
                     } else {
                         None
                     }
                 }),
                 a if *a == kp => string_to_key(&p[1].string).and_then(|k| {
                     if window.is_key_pressed(k, KeyRepeat::Yes) {
-                        Some(p.clone())
+                        Some(p.to_vec())
                     } else {
                         None
                     }
@@ -86,7 +86,9 @@ fn main() {
 
         let is_valid_pos = |x, y| x < WIDTH && y < HEIGHT;
 
-        for p in &context.core.state {
+        for phrase_id in context.core.state.iter() {
+            let p = context.core.state.get(*phrase_id);
+
             match (
                 p.get(0).and_then(|t| t.as_str(&context.string_cache)),
                 p.get(2).and_then(|t| t.as_number()),
