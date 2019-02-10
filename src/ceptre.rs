@@ -1432,7 +1432,13 @@ pub fn build_phrase(phrase: &[Token], string_cache: &StringCache) -> String {
         tokens.push(format!(
             "{}{}{}{}",
             String::from("(").repeat(t.open_depth as usize),
-            if t.is_negated { "!" } else { "" },
+            if t.is_negated {
+                "!"
+            } else if t.flag == TokenFlag::Side {
+                "^"
+            } else {
+                ""
+            },
             string,
             String::from(")").repeat(t.close_depth as usize)
         ));
