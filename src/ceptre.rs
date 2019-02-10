@@ -209,6 +209,15 @@ pub struct Core {
     first_atoms_state: Vec<FirstAtomsState>,
 }
 
+impl Core {
+    pub fn rule_matches_state<F>(&self, rule: &Rule, mut side_input: F) -> bool
+    where
+        F: SideInput,
+    {
+        rule_matches_state(rule, &self.state, &mut side_input, &self.first_atoms_state).is_some()
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct StringCache {
     atom_to_str: Vec<String>,
