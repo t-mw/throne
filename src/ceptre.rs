@@ -180,12 +180,12 @@ impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Phrase> {}
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Rule {
     pub id: RuleId,
-    inputs: Vec<Phrase>,
-    outputs: Vec<Phrase>,
+    pub inputs: Vec<Phrase>,
+    pub outputs: Vec<Phrase>,
 }
 
 impl Rule {
-    fn new(id: i32, inputs: Vec<Phrase>, outputs: Vec<Phrase>) -> Rule {
+    pub fn new(id: i32, inputs: Vec<Phrase>, outputs: Vec<Phrase>) -> Rule {
         Rule {
             id,
             inputs,
@@ -203,7 +203,7 @@ pub struct Context {
 #[derive(Clone)]
 pub struct Core {
     pub state: Vec<Phrase>,
-    rules: Vec<Rule>,
+    pub rules: Vec<Rule>,
     rng: SmallRng,
     qui_atom: Atom,
     first_atoms_state: Vec<FirstAtomsState>,
