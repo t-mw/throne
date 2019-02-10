@@ -2201,6 +2201,34 @@ mod tests {
                 ],
                 false,
             ),
+            (
+                rule_new(
+                    vec![
+                        tokenize("has RESULT", &mut string_cache),
+                        tokenize("!RESULT", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("has bar", &mut string_cache),
+                    tokenize("foo", &mut string_cache),
+                ],
+                true,
+            ),
+            (
+                rule_new(
+                    vec![
+                        tokenize("has RESULT", &mut string_cache),
+                        tokenize("!RESULT", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("has bar", &mut string_cache),
+                    tokenize("bar", &mut string_cache),
+                ],
+                false,
+            ),
         ];
 
         for (rule, state, expected) in test_cases.drain(..) {
