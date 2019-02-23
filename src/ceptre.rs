@@ -173,6 +173,40 @@ impl Token {
 
 pub type Phrase = [Token];
 
+pub trait PhraseGroup {
+    fn get_group(&self, n: usize) -> Option<&[Token]>;
+}
+
+impl PhraseGroup for Phrase {
+    fn get_group(&self, n: usize) -> Option<&[Token]> {
+        let mut current_group = 0;
+        let mut depth = 0;
+
+        let mut start = None;
+
+        for (i, t) in self.iter().enumerate() {
+            let depth_before = depth;
+
+            depth += t.open_depth;
+            depth -= t.close_depth;
+
+            if depth_before <= 1 {
+                start = Some(i);
+            }
+
+            if depth <= 1 {
+                if current_group == n {
+                    return Some(&self[start.unwrap()..i + 1]);
+                }
+
+                current_group += 1;
+            }
+        }
+
+        None
+    }
+}
+
 // https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
 pub trait SideInput: FnMut(&Phrase) -> Option<Vec<Token>> {}
 impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
@@ -2777,6 +2811,55 @@ mod tests {
                 Token::new("string here", 1, 0, &mut string_cache),
                 Token::new("final string", 0, 2, &mut string_cache),
             ]
+        );
+    }
+
+    #[test]
+    fn phrase_get_group_simple_test() {
+        let mut string_cache = StringCache::new();
+        let phrase = tokenize("1 2 3", &mut string_cache);
+
+        assert_eq!(
+            phrase.get_group(0),
+            Some(vec![Token::new_number(1, 1, 0)].as_slice())
+        );
+        assert_eq!(
+            phrase.get_group(1),
+            Some(vec![Token::new_number(2, 0, 0)].as_slice())
+        );
+        assert_eq!(
+            phrase.get_group(2),
+            Some(vec![Token::new_number(3, 0, 1)].as_slice())
+        );
+    }
+
+    #[test]
+    fn phrase_get_group_compound_test() {
+        let mut string_cache = StringCache::new();
+        let phrase = tokenize("((1 2) 3) (4 (5 6)", &mut string_cache);
+
+        assert_eq!(
+            phrase.get_group(0),
+            Some(
+                vec![
+                    Token::new_number(1, 3, 0),
+                    Token::new_number(2, 0, 1),
+                    Token::new_number(3, 0, 1)
+                ]
+                .as_slice()
+            )
+        );
+
+        assert_eq!(
+            phrase.get_group(1),
+            Some(
+                vec![
+                    Token::new_number(4, 1, 0),
+                    Token::new_number(5, 1, 0),
+                    Token::new_number(6, 0, 2)
+                ]
+                .as_slice()
+            )
         );
     }
 
