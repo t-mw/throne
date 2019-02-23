@@ -207,6 +207,16 @@ impl PhraseGroup for Phrase {
     }
 }
 
+pub trait PhraseString {
+    fn to_string(&self, string_cache: &StringCache) -> String;
+}
+
+impl PhraseString for Phrase {
+    fn to_string(&self, string_cache: &StringCache) -> String {
+        build_phrase(self, string_cache)
+    }
+}
+
 // https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
 pub trait SideInput: FnMut(&Phrase) -> Option<Vec<Token>> {}
 impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}

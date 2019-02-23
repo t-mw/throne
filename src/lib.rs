@@ -9,5 +9,7 @@ extern crate regex;
 mod ceptre;
 mod ffi;
 
-pub use ceptre::*;
+pub use ceptre::{
+    update, Atom, Context, Phrase, PhraseGroup, PhraseString, Rule, State, StringCache, Token,
+};
 pub use ffi::*;
