@@ -236,6 +236,10 @@ impl Rule {
             outputs,
         }
     }
+
+    pub fn to_string(&self, string_cache: &StringCache) -> String {
+        rule_to_string(self, string_cache)
+    }
 }
 
 #[derive(Clone)]
