@@ -484,7 +484,7 @@ impl StringCache {
         };
     }
 
-    fn atom_to_str(&self, atom: Atom) -> Option<&str> {
+    pub fn atom_to_str(&self, atom: Atom) -> Option<&str> {
         if atom.idx <= MAX_STRING_IDX {
             Some(&self.atom_to_str[atom.idx as usize])
         } else {
