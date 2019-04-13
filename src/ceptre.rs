@@ -175,6 +175,7 @@ pub type Phrase = [Token];
 
 pub trait PhraseGroup {
     fn get_group(&self, n: usize) -> Option<&[Token]>;
+    fn normalize(&self) -> Vec<Token>;
 }
 
 impl PhraseGroup for Phrase {
@@ -204,6 +205,35 @@ impl PhraseGroup for Phrase {
         }
 
         None
+    }
+
+    fn normalize(&self) -> Vec<Token> {
+        let len = self.len();
+        if len == 0 {
+            return vec![];
+        }
+
+        let mut vec = self.to_vec();
+
+        let mut interior_depth: i32 = 0;
+        let mut min_interior_depth: i32 = 0;
+        for (i, t) in vec.iter().enumerate() {
+            if i == 0 {
+                interior_depth -= t.close_depth as i32;
+            } else if i == vec.len() - 1 {
+                interior_depth += t.open_depth as i32;
+            } else {
+                interior_depth += t.open_depth as i32;
+                interior_depth -= t.close_depth as i32;
+            }
+
+            min_interior_depth = interior_depth.min(min_interior_depth);
+        }
+
+        vec[0].open_depth = 1 + (-min_interior_depth) as u8;
+        vec[len - 1].close_depth = 1 + (interior_depth - min_interior_depth) as u8;
+
+        return vec;
     }
 }
 
@@ -2875,6 +2905,32 @@ mod tests {
                 .as_slice()
             )
         );
+    }
+
+    #[test]
+    fn phrase_normalize_compound1_test() {
+        let mut string_cache = StringCache::new();
+        let original_phrase = tokenize("((1 2) 3) (4 (5 6))", &mut string_cache);
+
+        let mut phrase = original_phrase.clone();
+        let len = phrase.len();
+        phrase[0].open_depth += 1;
+        phrase[len - 1].close_depth += 3;
+
+        assert_eq!(phrase.normalize(), original_phrase);
+    }
+
+    #[test]
+    fn phrase_normalize_compound2_test() {
+        let mut string_cache = StringCache::new();
+        let original_phrase = tokenize("((1 2) 3) (4 (5 6))", &mut string_cache);
+
+        let mut phrase = original_phrase.clone();
+        let len = phrase.len();
+        phrase[0].open_depth += 3;
+        phrase[len - 1].close_depth -= 1;
+
+        assert_eq!(phrase.normalize(), original_phrase);
     }
 
     #[test]
