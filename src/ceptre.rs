@@ -95,12 +95,12 @@ impl Token {
 
         let mut is_negated = false;
         let mut is_side = false;
-        match string.chars().next().expect("first_char") {
-            '!' => {
+        match string.chars().next() {
+            Some('!') => {
                 is_negated = true;
                 string = string.get(1..).expect("get");
             }
-            '^' => {
+            Some('^') => {
                 is_side = true;
                 string = string.get(1..).expect("get");
             }
@@ -109,7 +109,7 @@ impl Token {
 
         let mut chars = string.chars();
         let first_char = chars.next();
-        let is_var = first_char.expect("first_char").is_ascii_uppercase()
+        let is_var = first_char.map(|c| c.is_ascii_uppercase()).unwrap_or(false)
             && chars.all(|c| c.is_numeric() || !c.is_ascii_lowercase());
 
         let backwards_pred = match string {
@@ -1988,6 +1988,7 @@ mod tests {
         assert!(!is_var_token(&Token::new("tT1", 1, 1, &mut string_cache)));
         assert!(!is_var_token(&Token::new("1", 1, 1, &mut string_cache)));
         assert!(!is_var_token(&Token::new("1Tt", 1, 1, &mut string_cache)));
+        assert!(!is_var_token(&Token::new("", 1, 1, &mut string_cache)));
         assert!(is_var_token(&Token::new("T", 1, 1, &mut string_cache)));
         assert!(is_var_token(&Token::new("TT1", 1, 1, &mut string_cache)));
         assert!(is_var_token(&Token::new("TT1'", 1, 1, &mut string_cache)));
