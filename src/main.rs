@@ -41,7 +41,7 @@ fn main() {
     while window.is_open() && !window.is_key_down(Key::Escape) {
         context.append_state("#tick");
         context.append_state("dt 3");
-        context.print();
+        // context.print();
 
         let string_to_key = |s: &ceptre::Atom| match s {
             s if *s == left => Some(Key::Left),
