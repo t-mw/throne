@@ -298,7 +298,7 @@ pub struct Context {
 
 #[derive(Clone)]
 pub struct Core {
-    pub state: State,
+    state: State,
     pub rules: Vec<Rule>,
     rule_input_match_cache: RuleInputMatchCache,
     rng: SmallRng,
@@ -325,7 +325,6 @@ pub struct State {
     phrases: Vec<PhraseId>, // index into phrase_ranges
     scratch_idx: Option<(usize, usize, usize)>,
     phrase_cache: PhraseCache,
-    is_dirty: bool,
 }
 
 impl std::ops::Index<usize> for State {
@@ -338,19 +337,18 @@ impl std::ops::Index<usize> for State {
 }
 
 impl State {
-    fn new() -> Self {
+    pub fn new() -> Self {
         State {
             phrases: vec![],
             scratch_idx: None,
             phrase_cache: PhraseCache::new(),
-            is_dirty: true,
         }
     }
 
-    fn remove(&mut self, idx: usize) {
-        self.is_dirty = true;
-
+    fn remove(&mut self, idx: usize) -> Option<usize> {
         assert!(self.scratch_idx.is_none());
+
+        let mut mutated_idx = None;
 
         let remove_id = self.phrases.swap_remove(idx);
         let remove_range = self.phrase_cache.phrase_ranges[remove_id.idx];
@@ -362,9 +360,10 @@ impl State {
         let removing_last_phrase_range = remove_id.idx == self.phrase_cache.phrase_ranges.len() - 1;
         if !removing_last_phrase_range {
             let swap_source_idx = self.phrase_cache.phrase_ranges.len() - 1;
-            for id in self.phrases.iter_mut() {
+            for (i, id) in self.phrases.iter_mut().enumerate() {
                 if id.idx == swap_source_idx {
                     id.idx = remove_id.idx;
+                    mutated_idx = Some(i);
                     break;
                 }
             }
@@ -381,38 +380,31 @@ impl State {
                 range.1 -= remove_len;
             }
         }
+
+        mutated_idx
     }
 
-    fn remove_phrase(&mut self, phrase: &Phrase) {
+    fn remove_phrase(&mut self, phrase: &Phrase) -> (usize, Option<usize>) {
         let remove_idx = self
             .phrases
             .iter()
             .position(|v| self.phrase_cache.get(*v) == phrase)
             .expect("remove_idx");
 
-        self.remove(remove_idx);
+        let mutated_idx = self.remove(remove_idx);
+        (remove_idx, mutated_idx)
     }
 
     fn shuffle(&mut self, rng: &mut SmallRng) {
-        self.is_dirty = true;
-
         assert!(self.scratch_idx.is_none());
         rng.shuffle(&mut self.phrases);
     }
 
     pub fn push(&mut self, phrase: Vec<Token>) -> PhraseId {
-        self.is_dirty = true;
-
         let phrase_id = self.phrase_cache.push(phrase);
         self.phrases.push(phrase_id);
 
         phrase_id
-    }
-
-    fn take_dirty(&mut self) -> bool {
-        let result = self.is_dirty;
-        self.is_dirty = false;
-        result
     }
 
     fn len(&self) -> usize {
@@ -470,6 +462,7 @@ impl State {
 struct PhraseCache {
     phrase_ranges: Vec<(usize, usize)>, // index by phrase id, index range into tokens
     tokens: Vec<Token>,
+    next_unique: usize,
 }
 
 impl PhraseCache {
@@ -477,6 +470,7 @@ impl PhraseCache {
         PhraseCache {
             phrase_ranges: vec![],
             tokens: vec![],
+            next_unique: 0,
         }
     }
 
@@ -488,7 +482,10 @@ impl PhraseCache {
         let idx = self.phrase_ranges.len();
         self.phrase_ranges.push((begin, end));
 
-        PhraseId { idx }
+        let unique = self.next_unique;
+        self.next_unique += 1;
+
+        PhraseId { idx, unique }
     }
 
     pub fn get(&self, id: PhraseId) -> &Phrase {
@@ -500,38 +497,41 @@ impl PhraseCache {
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct PhraseId {
     idx: usize,
+    unique: usize,
 }
 
 #[derive(Clone, Debug)]
 struct RuleInputMatch {
-    input_i: usize,
+    concrete_input_i: usize,
     state_i: usize,
-    variable_match_range: (usize, usize),
+    state_phrase_id: PhraseId,
+    variable_matches: Vec<MatchLite>,
 }
 
 #[derive(Clone, Debug)]
 struct RuleInputMatchCount {
-    input_i: usize,
     match_count: usize,
+}
+
+#[derive(Clone, Debug)]
+struct KnownStatePhrases {
+    phrase_ids: Vec<Option<PhraseId>>,
+    none_range: Option<(usize, usize)>,
 }
 
 #[derive(Clone, Debug)]
 struct RuleInputMatchCache {
     inputs: Vec<Option<(usize, usize)>>, // index by rule id, index into phrases
-    input_phrases: Vec<(usize, PhraseId)>,
+    input_phrases: Vec<PhraseId>,
 
-    is_rule_cached: Vec<bool>,
+    could_match: Vec<bool>, // index by rule id
+    have_matches_changed: Vec<bool>,
+    matches: Vec<Option<Vec<RuleInputMatch>>>,
+    match_counts: Vec<Option<Vec<RuleInputMatchCount>>>,
+    permutation_counts: Vec<Option<Vec<usize>>>,
+    known_state_phrases: Vec<Option<KnownStatePhrases>>,
 
-    match_ranges: Vec<Option<(usize, usize)>>, // index by rule id, index into matches
-    matches: Vec<RuleInputMatch>,
-
-    match_count_ranges: Vec<Option<(usize, usize)>>, // index by rule id, index into match counts
-    match_counts: Vec<RuleInputMatchCount>,
-
-    permutation_count_ranges: Vec<Option<(usize, usize)>>, // index by rule id, index into permutation_counts
-    permutation_counts: Vec<usize>,
-
-    variable_matches: Vec<MatchLite>,
+    tmp_variable_matches: Vec<MatchLite>,
 
     first_atoms: Vec<(usize, Atom)>,
     phrase_cache: PhraseCache,
@@ -542,202 +542,380 @@ impl RuleInputMatchCache {
         RuleInputMatchCache {
             inputs: vec![],
             input_phrases: vec![],
-            is_rule_cached: vec![],
-            match_ranges: vec![],
+
+            could_match: vec![],
+            have_matches_changed: vec![],
             matches: vec![],
-            match_count_ranges: vec![],
             match_counts: vec![],
-            permutation_count_ranges: vec![],
             permutation_counts: vec![],
-            variable_matches: vec![],
+            known_state_phrases: vec![],
+
+            tmp_variable_matches: vec![],
+
             first_atoms: vec![],
             phrase_cache: PhraseCache::new(),
         }
     }
 
-    fn update_rule(&mut self, rule: &Rule) {
-        self.inputs.resize(rule.id as usize + 1, None);
+    fn update_rule(&mut self, rule: &Rule, state: &State) {
+        let rule_id = rule.id as usize;
+        let grow_size = rule_id + 1;
+
+        grow(&mut self.inputs, grow_size, None);
 
         let begin = self.input_phrases.len();
-        for (i_i, input) in rule.inputs.iter().enumerate() {
+        for input in rule.inputs.iter() {
             if !is_concrete_pred(input) {
                 continue;
             }
 
             let phrase_id = self.phrase_cache.push(input.clone());
-            self.input_phrases.push((i_i, phrase_id));
+            self.input_phrases.push(phrase_id);
         }
         let end = self.input_phrases.len();
 
-        self.inputs[rule.id as usize] = Some((begin, end));
+        self.inputs[rule_id] = Some((begin, end));
+
+        grow(&mut self.could_match, grow_size, false);
+        grow(&mut self.have_matches_changed, grow_size, true);
+
+        grow(&mut self.matches, grow_size, None);
+        self.matches[rule_id] = Some(vec![]);
+
+        grow(&mut self.match_counts, grow_size, None);
+        self.match_counts[rule_id] =
+            Some(vec![RuleInputMatchCount { match_count: 0 }; end - begin]);
+
+        grow(&mut self.permutation_counts, grow_size, None);
+        self.permutation_counts[rule_id] = Some(vec![1; end - begin]);
+
+        grow(&mut self.known_state_phrases, grow_size, None);
+        self.known_state_phrases[rule_id] = Some(KnownStatePhrases {
+            phrase_ids: vec![None; state.phrases.len()],
+            none_range: Some((0, state.phrases.len())),
+        });
+    }
+
+    fn assert_state_consistent(&self, state: &State) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
+
+        for known_state_phrases in &self.known_state_phrases {
+            if let Some(known_state_phrases) = known_state_phrases {
+                assert!(known_state_phrases.phrase_ids.len() == state.phrases.len());
+
+                if let Some(range) = known_state_phrases.none_range {
+                    assert!(range.0 < state.phrases.len());
+                    assert!(range.1 <= state.phrases.len());
+                }
+
+                for (i, phrase_id) in known_state_phrases.phrase_ids.iter().enumerate() {
+                    if phrase_id.is_none() {
+                        let range = known_state_phrases.none_range.expect("none_range");
+                        assert!(i >= range.0);
+                        assert!(i < range.1);
+                        continue;
+                    }
+
+                    assert!(phrase_id.unwrap() == state.phrases[i]);
+                }
+            }
+        }
+    }
+
+    fn assert_match_counts_consistent(&self, rule_id: usize) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
+
+        if self.could_match[rule_id] {
+            let match_counts = &self.match_counts[rule_id];
+            assert!(match_counts
+                .as_ref()
+                .unwrap()
+                .iter()
+                .all(|RuleInputMatchCount { match_count }| *match_count != 0));
+        }
+    }
+
+    // update the 'known state', so that its order follows the new order of the
+    // state after shuffling. this avoids expensive recomputing of matches that
+    // we already know about.
+    fn on_state_shuffle(&mut self, state: &State, shuffle_rng: &SmallRng) {
+        // clone rng, because it will be used by state to shuffle in the same order
+        let mut rng = shuffle_rng.clone();
+
+        let mut range = (0..state.len()).collect::<Vec<_>>();
+        rng.shuffle(&mut range);
+
+        let mut state_redirection = vec![0; state.len()];
+        for (i, shuffled_i) in range.iter().enumerate() {
+            state_redirection[*shuffled_i] = i;
+        }
+
+        for rule_id in 0..self.matches.len() {
+            if let Some(matches) = &mut self.matches[rule_id] {
+                for m in matches {
+                    let old_state_i = m.state_i;
+                    let new_state_i = state_redirection[old_state_i];
+                    m.state_i = new_state_i;
+                    for vm in &mut m.variable_matches {
+                        assert!(vm.state_i == old_state_i);
+                        vm.state_i = new_state_i;
+                    }
+                }
+            }
+        }
+
+        for known_state_phrases in &mut self.known_state_phrases {
+            if let Some(known_state_phrases) = known_state_phrases {
+                rng.clone_from(&shuffle_rng);
+                rng.shuffle(&mut known_state_phrases.phrase_ids);
+
+                let mut begin = known_state_phrases.phrase_ids.len() - 1;
+                let mut end = 0;
+                for (i, phrase_id) in known_state_phrases.phrase_ids.iter().enumerate() {
+                    if phrase_id.is_some() {
+                        continue;
+                    }
+
+                    begin = begin.min(i);
+                    end = end.max(i + 1);
+                }
+
+                if end > begin {
+                    known_state_phrases.none_range = Some((begin, end));
+                } else {
+                    known_state_phrases.none_range = None;
+                }
+            }
+        }
+    }
+
+    fn on_state_push(&mut self, state: &State) {
+        for known_state_phrases in &mut self.known_state_phrases {
+            if let Some(known_state_phrases) = known_state_phrases {
+                known_state_phrases.phrase_ids.push(None);
+
+                if known_state_phrases.none_range.is_some() {
+                    let range = known_state_phrases.none_range.as_mut().unwrap();
+                    range.0 = range.0.min(known_state_phrases.phrase_ids.len() - 1);
+                    range.1 = known_state_phrases.phrase_ids.len();
+                } else {
+                    known_state_phrases.none_range = Some((
+                        known_state_phrases.phrase_ids.len() - 1,
+                        known_state_phrases.phrase_ids.len(),
+                    ));
+                }
+            }
+        }
+
+        self.assert_state_consistent(state);
+    }
+
+    fn on_state_remove(&mut self, state: &State, removed_i: usize, mutated_i: Option<usize>) {
+        let final_state_idx_before_remove = state.len();
+        let removed_final = removed_i == final_state_idx_before_remove;
+
+        // calculate old index of state that was moved to replace removed index after swap_remove
+        // NB: we are comparing to the idx of the final element before anything was removed from the state
+        let swapped_state_i = if !removed_final {
+            Some(final_state_idx_before_remove)
+        } else {
+            None
+        };
+
+        for known_state_phrases in &mut self.known_state_phrases {
+            if let Some(known_state_phrases) = known_state_phrases {
+                known_state_phrases.phrase_ids.swap_remove(removed_i);
+
+                if state.len() == 0 {
+                    known_state_phrases.none_range = None;
+                } else if let Some(ref mut range) = known_state_phrases.none_range {
+                    range.0 = range.0.min(state.len() - 1);
+                    range.1 = range.1.min(state.len());
+
+                    if !removed_final && known_state_phrases.phrase_ids[removed_i].is_none() {
+                        range.0 = range.0.min(removed_i);
+                        range.1 = range.1.max(removed_i + 1);
+                    }
+                }
+
+                if let Some(mutated_i) = mutated_i {
+                    if known_state_phrases.phrase_ids[mutated_i].is_some() {
+                        known_state_phrases.phrase_ids[mutated_i] = Some(state.phrases[mutated_i]);
+                    }
+                }
+            }
+        }
+
+        // invalidate matches for state that has been removed / moved
+        for rule_id in 0..self.matches.len() {
+            if let Some(matches) = &mut self.matches[rule_id] {
+                let mut i = 0;
+                while i < matches.len() {
+                    let (match_state_i, concrete_input_i) = {
+                        let m = &mut matches[i];
+                        let match_state_i = m.state_i;
+                        let concrete_input_i = m.concrete_input_i;
+
+                        if swapped_state_i.is_some() && m.state_i == swapped_state_i.unwrap() {
+                            m.state_i = removed_i;
+                            for vm in &mut m.variable_matches {
+                                vm.state_i = removed_i;
+                            }
+                        }
+
+                        (match_state_i, concrete_input_i)
+                    };
+
+                    if match_state_i == removed_i {
+                        matches.swap_remove(i);
+                        let match_counts = self.match_counts[rule_id].as_mut().unwrap();
+                        match_counts[concrete_input_i].match_count -= 1;
+
+                        self.have_matches_changed[rule_id] = true;
+                        continue;
+                    }
+
+                    i += 1;
+                }
+            }
+        }
+
+        self.assert_state_consistent(state);
     }
 
     fn update_state(&mut self, state: &mut State, rule: &Rule) {
         let rule_id = rule.id as usize;
 
-        if state.take_dirty() {
-            self.is_rule_cached.clear();
+        self.match_unknown_state(state, rule_id);
 
-            self.match_ranges.clear();
-            self.matches.clear();
+        if self.have_matches_changed[rule_id] && self.matches[rule_id].is_some() {
+            self.have_matches_changed[rule_id] = false;
 
-            self.match_count_ranges.clear();
-            self.match_counts.clear();
+            self.matches[rule_id]
+                .as_mut()
+                .unwrap()
+                .sort_unstable_by(|a, b| a.concrete_input_i.cmp(&b.concrete_input_i));
 
-            self.permutation_count_ranges.clear();
-            self.permutation_counts.clear();
-
-            self.first_atoms = extract_first_atoms_state(state);
-            self.variable_matches.clear();
+            self.update_permutations(rule_id);
         }
 
-        let is_rule_cached = self.is_rule_cached.get(rule_id).cloned().unwrap_or(false);
-        if is_rule_cached {
-            return;
-        }
+        self.assert_state_consistent(state);
+        self.assert_match_counts_consistent(rule_id);
+    }
 
-        self.is_rule_cached.resize(rule_id + 1, false);
-        self.is_rule_cached[rule_id] = true;
+    fn match_unknown_state(&mut self, state: &State, rule_id: usize) {
+        if let Some(KnownStatePhrases {
+            phrase_ids: known_phrase_ids,
+            ref mut none_range,
+        }) = &mut self.known_state_phrases[rule_id]
+        {
+            assert!(known_phrase_ids.len() == state.phrases.len());
 
-        let match_ranges_begin = self.matches.len();
-        let match_count_ranges_begin = self.match_counts.len();
-        let permutation_count_ranges_begin = self.permutation_counts.len();
-
-        let mut abort = false;
-
-        if let Some((begin, end)) = self.inputs[rule_id] {
-            for (input_i, input_phrase_id) in self.input_phrases[begin..end].iter().cloned() {
-                let input_phrase = self.phrase_cache.get(input_phrase_id);
-
-                // test first atoms
-                let rule_first_atoms = extract_first_atoms_rule_input(input_phrase);
-                let start_idx = if let Some(first) = rule_first_atoms {
-                    if let Ok(idx) = self
-                        .first_atoms
-                        .binary_search_by(|probe| probe.1.cmp(&first))
-                    {
-                        // binary search won't always find the first match,
-                        // so search backwards until we find it
-                        self.first_atoms
-                            .iter()
-                            .enumerate()
-                            .rev()
-                            .skip(self.first_atoms.len() - 1 - idx)
-                            .take_while(|(_, a)| a.1 == first)
-                            .last()
-                            .expect("start_idx")
-                            .0
-                    } else {
-                        abort = true;
-                        break;
-                    }
-                } else {
-                    0
-                };
-
-                let mut match_count = 0;
-
-                for (state_i, _) in self
-                    .first_atoms
-                    .iter()
-                    .skip(start_idx)
-                    .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
-                    .cloned()
-                {
-                    let variable_matches_begin = self.variable_matches.len();
-                    if match_variables_with_existing(
-                        input_phrase,
-                        state,
-                        state_i,
-                        &mut self.variable_matches,
-                        false,
-                    ) {
-                        let variable_matches_end = self.variable_matches.len();
-
-                        self.matches.push(RuleInputMatch {
-                            input_i,
-                            state_i,
-                            variable_match_range: (variable_matches_begin, variable_matches_end),
-                        });
-
-                        match_count += 1;
-                    }
-                }
-
-                // if at least one input does not match any state, the rule will not match
-                if match_count == 0 {
-                    abort = true;
-                    break;
-                }
-
-                self.match_counts.push(RuleInputMatchCount {
-                    input_i,
-                    match_count,
-                });
-            }
-
-            if abort {
-                self.matches.drain(match_ranges_begin..);
-                self.match_counts.drain(match_count_ranges_begin..);
-                self.permutation_counts
-                    .drain(permutation_count_ranges_begin..);
+            if none_range.is_none() {
                 return;
             }
 
-            // update matches
-            let match_ranges_end = self.matches.len();
-            self.match_ranges.resize(rule_id + 1, None);
-            self.match_ranges[rule_id] = Some((match_ranges_begin, match_ranges_end));
+            let (none_begin, none_end) = none_range.unwrap();
 
-            // update match counts
-            let match_count_ranges_end = self.match_counts.len();
-            self.match_count_ranges.resize(rule_id + 1, None);
-            self.match_count_ranges[rule_id] =
-                Some((match_count_ranges_begin, match_count_ranges_end));
+            // check new state for matches
+            for state_i in none_begin..none_end {
+                let known_phrase_id = known_phrase_ids[state_i];
 
-            // update permutations
-            // precompute values required for deriving branch indices.
-            let mut input_reverse_permutation_counts = vec![1; end - begin];
-            let mut permutation_count = 1;
+                if known_phrase_id.is_some() {
+                    assert!(known_phrase_id.unwrap() == state.phrases[state_i]);
+                    continue;
+                }
 
-            for (i, RuleInputMatchCount { match_count, .. }) in self.match_counts
-                [match_count_ranges_begin..match_count_ranges_end]
-                .iter()
-                .enumerate()
-                .rev()
-            {
-                permutation_count *= match_count;
-                input_reverse_permutation_counts[i] = permutation_count;
+                let phrase_id = state.phrases[state_i];
+                known_phrase_ids[state_i] = Some(phrase_id);
+
+                let range = self.inputs[rule_id];
+                if let Some((begin, end)) = range.clone() {
+                    for (concrete_input_i, phrase_id) in
+                        self.input_phrases[begin..end].iter().cloned().enumerate()
+                    {
+                        let input_phrase = self.phrase_cache.get(phrase_id);
+
+                        if match_variables_with_existing(
+                            input_phrase,
+                            state,
+                            state_i,
+                            &mut self.tmp_variable_matches,
+                            false,
+                        ) {
+                            let matches = self.matches[rule_id].as_mut().unwrap();
+                            matches.push(RuleInputMatch {
+                                concrete_input_i,
+                                state_i,
+                                state_phrase_id: state.phrases[state_i],
+                                variable_matches: self.tmp_variable_matches.drain(..).collect(),
+                            });
+
+                            let match_counts = self.match_counts[rule_id].as_mut().unwrap();
+                            match_counts[concrete_input_i].match_count += 1;
+
+                            self.have_matches_changed[rule_id] = true;
+                        }
+                    }
+                }
             }
 
-            self.permutation_counts
-                .append(&mut input_reverse_permutation_counts);
-            let permutation_count_ranges_end = self.permutation_counts.len();
-            self.permutation_count_ranges.resize(rule_id + 1, None);
-            self.permutation_count_ranges[rule_id] =
-                Some((permutation_count_ranges_begin, permutation_count_ranges_end));
+            *none_range = None;
         }
     }
 
-    fn get_rule_input_matches(&self, rule: &Rule) -> Option<&[RuleInputMatch]> {
-        if let Some(Some((begin, end))) = self.match_ranges.get(rule.id as usize) {
-            Some(&self.matches[*begin..*end])
+    fn update_permutations(&mut self, rule_id: usize) {
+        // update permutations
+        // precompute values required for deriving branch indices.
+        let match_counts = self.match_counts[rule_id].as_ref().unwrap();
+        let permutation_counts = self.permutation_counts[rule_id].as_mut().unwrap();
+
+        assert!(match_counts.len() == permutation_counts.len());
+
+        let mut permutation_count = 1;
+        for (i, RuleInputMatchCount { match_count, .. }) in match_counts.iter().enumerate().rev() {
+            if *match_count == 0 {
+                self.could_match[rule_id] = false;
+                return;
+            }
+
+            permutation_count *= match_count;
+            permutation_counts[i] = permutation_count;
+        }
+
+        self.could_match[rule_id] = true;
+    }
+
+    fn get_could_rule_match(&self, rule: &Rule) -> bool {
+        *self.could_match.get(rule.id as usize).expect("could_match")
+    }
+
+    fn get_rule_input_matches(&self, rule: &Rule) -> &Option<Vec<RuleInputMatch>> {
+        if let Some(v) = self.matches.get(rule.id as usize) {
+            v
         } else {
-            None
+            &None
         }
     }
 
-    fn get_rule_input_match_counts(&self, rule: &Rule) -> Option<&[RuleInputMatchCount]> {
-        self.match_count_ranges[rule.id as usize].map(|(begin, end)| &self.match_counts[begin..end])
+    fn get_rule_input_match_counts(&self, rule: &Rule) -> &Option<Vec<RuleInputMatchCount>> {
+        if let Some(v) = self.match_counts.get(rule.id as usize) {
+            v
+        } else {
+            &None
+        }
     }
 
-    fn get_rule_input_reverse_permutations(&self, rule: &Rule) -> Option<&[usize]> {
-        self.permutation_count_ranges[rule.id as usize]
-            .map(|(begin, end)| &self.permutation_counts[begin..end])
-    }
-
-    fn get_variable_matches_from_range(&self, range: (usize, usize)) -> &[MatchLite] {
-        &self.variable_matches[range.0..range.1]
+    fn get_rule_input_reverse_permutations(&self, rule: &Rule) -> &Option<Vec<usize>> {
+        if let Some(v) = self.permutation_counts.get(rule.id as usize) {
+            v
+        } else {
+            &None
+        }
     }
 }
 
@@ -949,7 +1127,7 @@ impl Context {
         let qui_atom = string_cache.str_to_atom("qui");
 
         for rule in &rules {
-            rule_input_match_cache.update_rule(rule);
+            rule_input_match_cache.update_rule(rule, &state);
         }
 
         Context {
@@ -982,8 +1160,24 @@ impl Context {
         self
     }
 
+    pub fn get_state(&self) -> &State {
+        &self.core.state
+    }
+
+    pub fn set_state(&mut self, state: State) {
+        let mut rule_input_match_cache = RuleInputMatchCache::new();
+        for rule in &self.core.rules {
+            rule_input_match_cache.update_rule(rule, &state);
+        }
+        self.core.rule_input_match_cache = rule_input_match_cache;
+
+        self.core.state = state;
+    }
+
     pub fn append_state(&mut self, text: &str) {
-        self.core.state.push(tokenize(text, &mut self.string_cache));
+        let state = &mut self.core.state;
+        state.push(tokenize(text, &mut self.string_cache));
+        self.core.rule_input_match_cache.on_state_push(state);
     }
 
     pub fn find_matching_rules<F>(&self, mut side_input: F) -> Vec<ConcreteRule>
@@ -1010,7 +1204,11 @@ impl Context {
     }
 
     pub fn execute_rule(&mut self, rule: &ConcreteRule) {
-        execute_rule(rule, &mut self.core.state);
+        execute_rule(
+            rule,
+            &mut self.core.state,
+            &mut self.core.rule_input_match_cache,
+        );
     }
 
     pub fn print(&self) {
@@ -1159,16 +1357,22 @@ impl fmt::Display for Context {
     }
 }
 
-fn execute_rule(rule: &ConcreteRule, state: &mut State) {
+fn execute_rule(
+    rule: &ConcreteRule,
+    state: &mut State,
+    rule_input_match_cache: &mut RuleInputMatchCache,
+) {
     let inputs = &rule.inputs;
     let outputs = &rule.outputs;
 
     inputs.iter().for_each(|input| {
-        state.remove_phrase(input);
+        let (remove_idx, mutated_idx) = state.remove_phrase(input);
+        rule_input_match_cache.on_state_remove(state, remove_idx, mutated_idx);
     });
 
     outputs.iter().for_each(|output| {
         state.push(output.clone());
+        rule_input_match_cache.on_state_push(state);
     });
 }
 
@@ -1183,7 +1387,9 @@ where
 
     // shuffle state so that a given rule with multiple potential
     // matches does not always match the same permutation of state.
+    rule_input_match_cache.on_state_shuffle(state, &rng);
     state.shuffle(rng);
+    rule_input_match_cache.assert_state_consistent(state);
 
     // shuffle rules so that each has an equal chance of selection.
     rng.shuffle(rules);
@@ -1198,6 +1404,7 @@ where
 
         if quiescence {
             state.push(vec![Token::new_atom(core.qui_atom, 0, 0)]);
+            rule_input_match_cache.on_state_push(state);
         }
 
         for i in 0..rules.len() {
@@ -1230,14 +1437,15 @@ where
                 );
 
                 let idx = state.len() - 1;
-                state.remove(idx);
+                let mutated_idx = state.remove(idx);
+                rule_input_match_cache.on_state_remove(state, idx, mutated_idx);
 
                 return;
             }
         }
 
         if let Some(ref matching_rule) = matching_rule {
-            execute_rule(matching_rule, state);
+            execute_rule(matching_rule, state, rule_input_match_cache);
         } else {
             quiescence = true;
         }
@@ -1249,7 +1457,7 @@ where
 // predicates removed.
 fn rule_matches_state<F>(
     r: &Rule,
-    state: &mut State,
+    state: &mut State, // state is effectively immutable, but is also used as temporary storage for phrases
     rule_input_match_cache: Option<&mut RuleInputMatchCache>,
     side_input: &mut F,
 ) -> Option<ConcreteRule>
@@ -1263,7 +1471,7 @@ where
     let mut test_rule_input_match_cache = None;
     let rule_input_match_cache = rule_input_match_cache.unwrap_or_else(|| {
         let mut cache = RuleInputMatchCache::new();
-        cache.update_rule(r);
+        cache.update_rule(r, state);
 
         test_rule_input_match_cache = Some(cache);
         test_rule_input_match_cache.as_mut().unwrap()
@@ -1271,31 +1479,33 @@ where
 
     rule_input_match_cache.update_state(state, r);
 
-    // a list of (input, state) pairs that match
-    let input_state_matches;
-    if let Some(matches) = rule_input_match_cache.get_rule_input_matches(r) {
-        input_state_matches = matches;
-    } else {
+    if !rule_input_match_cache.get_could_rule_match(r) {
         return None;
     }
-
-    let input_reverse_permutation_counts = rule_input_match_cache
-        .get_rule_input_reverse_permutations(r)
-        .expect("input_reverse_permutation_counts");
-    let permutation_count = input_reverse_permutation_counts
-        .get(0)
-        .cloned()
-        .unwrap_or(1);
-
-    let mut variables_matched: Vec<MatchLite> = vec![];
 
     // we'll use state as a scratchpad for other token allocations
     let len = state.len();
     state.lock_scratch();
 
+    // a list of (input, state) pairs that match
+    let input_state_matches = rule_input_match_cache
+        .get_rule_input_matches(r)
+        .as_ref()
+        .expect("input_state_matches");
+
     let match_counts = rule_input_match_cache
         .get_rule_input_match_counts(r)
+        .as_ref()
         .expect("match_counts");
+
+    let permutation_counts = rule_input_match_cache
+        .get_rule_input_reverse_permutations(r)
+        .as_ref()
+        .expect("permutation_counts");
+
+    let mut variables_matched: Vec<MatchLite> = vec![];
+
+    let permutation_count = permutation_counts.get(0).cloned().unwrap_or(1);
 
     'outer: for p_i in 0..permutation_count {
         variables_matched.clear();
@@ -1307,28 +1517,18 @@ where
         // level of the tree is an input, and each branch is a match against a state.
         // TODO: improve performance by checking inputs ordered from least to most matches
         let mut input_match_offset = 0;
-        for (
-            i,
-            RuleInputMatchCount {
-                input_i,
-                match_count,
-            },
-        ) in match_counts.iter().cloned().enumerate()
-        {
-            let permutation_size = input_reverse_permutation_counts
-                .get(i + 1)
-                .cloned()
-                .unwrap_or(1);
+        for (i, RuleInputMatchCount { match_count }) in match_counts.iter().cloned().enumerate() {
+            let permutation_size = permutation_counts.get(i + 1).cloned().unwrap_or(1);
             let branch_idx = (p_i / permutation_size) % match_count;
 
             let RuleInputMatch {
-                input_i: test_input_i,
+                concrete_input_i,
                 state_i: s_i,
-                variable_match_range,
+                ref variable_matches,
                 ..
             } = input_state_matches[input_match_offset + branch_idx];
 
-            assert!(test_input_i == input_i);
+            assert!(concrete_input_i == i);
 
             input_match_offset += match_count;
 
@@ -1338,9 +1538,6 @@ where
             } else {
                 states_matched_bool[s_i] = true;
             }
-
-            let variable_matches =
-                rule_input_match_cache.get_variable_matches_from_range(variable_match_range);
 
             for new_match in variable_matches {
                 let variable_already_matched = if let Some(ref existing_match) =
@@ -1841,7 +2038,7 @@ fn extract_first_atoms_state(state: &State) -> Vec<(usize, Atom)> {
     atoms
 }
 
-#[inline]
+#[inline(always)]
 fn phrase_equal(a: &Phrase, b: &Phrase, a_depths: (u8, u8), b_depths: (u8, u8)) -> bool {
     if a.len() != b.len() {
         return false;
@@ -1873,7 +2070,7 @@ fn phrase_equal(a: &Phrase, b: &Phrase, a_depths: (u8, u8), b_depths: (u8, u8)) 
     }
 }
 
-#[inline]
+#[inline(always)]
 fn token_equal(
     a: &Token,
     b: &Token,
@@ -2027,6 +2224,12 @@ fn rule_to_string(rule: &Rule, string_cache: &StringCache) -> String {
         .join(" . ");
 
     format!("{:5}: {} = {}", rule.id, inputs, outputs)
+}
+
+fn grow<T: Clone>(v: &mut Vec<T>, size: usize, default: T) {
+    if v.len() < size {
+        v.resize(size, default);
+    }
 }
 
 fn test_rng() -> SmallRng {
