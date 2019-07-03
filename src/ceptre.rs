@@ -272,24 +272,6 @@ impl Rule {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
-// A rule with all variables resolved and backwards/side predicates removed.
-pub struct ConcreteRule {
-    pub id: RuleId,
-    inputs: Vec<Vec<Token>>,
-    outputs: Vec<Vec<Token>>,
-}
-
-impl ConcreteRule {
-    fn new(id: i32, inputs: Vec<Vec<Token>>, outputs: Vec<Vec<Token>>) -> ConcreteRule {
-        ConcreteRule {
-            id,
-            inputs,
-            outputs,
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct Context {
     pub core: Core,
@@ -300,7 +282,6 @@ pub struct Context {
 pub struct Core {
     pub state: State,
     pub rules: Vec<Rule>,
-    rule_input_match_cache: RuleInputMatchCache,
     rng: SmallRng,
     qui_atom: Atom,
 }
@@ -310,72 +291,81 @@ impl Core {
     where
         F: SideInput,
     {
-        rule_matches_state(
-            rule,
-            &mut self.state.clone(),
-            Some(&mut self.rule_input_match_cache.clone()),
-            &mut side_input,
-        )
-        .is_some()
+        rule_matches_state(rule, &mut self.state.clone(), &mut side_input).is_some()
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct State {
-    phrases: Vec<PhraseId>, // index into phrase_ranges
-    scratch_idx: Option<(usize, usize, usize)>,
-    phrase_cache: PhraseCache,
-    is_dirty: bool,
+    phrases: Vec<PhraseId>,
+    phrase_ranges: Vec<(usize, usize)>,
+    tokens: Vec<Token>,
+    first_atoms: Vec<(usize, Atom)>,
+    scratch_idx: Option<(usize, usize)>,
 }
 
-impl std::ops::Index<usize> for State {
-    type Output = [Token];
-
-    fn index(&self, i: usize) -> &Phrase {
-        let id = self.phrases[i];
-        self.get(id)
+fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
+    if is_concrete_pred(phrase) {
+        phrase
+            .get(0)
+            .option_filter(|t| !is_var_token(t))
+            .map(|t| t.string)
+    } else {
+        None
     }
 }
 
+fn extract_first_atoms_state(state: &State) -> Vec<(usize, Atom)> {
+    let mut atoms: Vec<(usize, Atom)> = state
+        .iter()
+        .enumerate()
+        .map(|(s_i, phrase_id)| (s_i, state.get(*phrase_id)[0].string))
+        .collect();
+
+    atoms.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+
+    atoms
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub struct PhraseId {
+    idx: usize,
+}
+
 impl State {
-    fn new() -> Self {
+    pub fn new() -> State {
         State {
             phrases: vec![],
+            phrase_ranges: vec![],
+            tokens: vec![],
+            first_atoms: vec![],
             scratch_idx: None,
-            phrase_cache: PhraseCache::new(),
-            is_dirty: true,
         }
     }
 
     fn remove(&mut self, idx: usize) {
-        self.is_dirty = true;
-
         assert!(self.scratch_idx.is_none());
 
         let remove_id = self.phrases.swap_remove(idx);
-        let remove_range = self.phrase_cache.phrase_ranges[remove_id.idx];
+        let remove_range = self.phrase_ranges[remove_id.idx];
         let remove_len = remove_range.1 - remove_range.0;
 
-        // after phrase_ranges.swap_remove, the phrase that pointed
-        // to the final phrase range needs to be updated to point to
-        // the phrase range's new location.
-        let removing_last_phrase_range = remove_id.idx == self.phrase_cache.phrase_ranges.len() - 1;
-        if !removing_last_phrase_range {
-            let swap_source_idx = self.phrase_cache.phrase_ranges.len() - 1;
-            for id in self.phrases.iter_mut() {
-                if id.idx == swap_source_idx {
-                    id.idx = remove_id.idx;
-                    break;
-                }
+        // after swap_remove, this is the id that will take the old one's place
+        let replace_id = PhraseId {
+            idx: self.phrase_ranges.len() - 1,
+        };
+        self.phrase_ranges.swap_remove(remove_id.idx);
+
+        // update the references to the swapped id
+        for id in self.phrases.iter_mut() {
+            if *id == replace_id {
+                *id = remove_id;
             }
         }
 
-        self.phrase_cache.phrase_ranges.swap_remove(remove_id.idx);
+        self.tokens.drain(remove_range.0..remove_range.1);
 
-        self.phrase_cache
-            .tokens
-            .drain(remove_range.0..remove_range.1);
-        for range in self.phrase_cache.phrase_ranges.iter_mut() {
+        for range in self.phrase_ranges.iter_mut() {
             if range.0 >= remove_range.1 {
                 range.0 -= remove_len;
                 range.1 -= remove_len;
@@ -383,36 +373,37 @@ impl State {
         }
     }
 
+    fn update_first_atoms(&mut self) {
+        self.first_atoms = extract_first_atoms_state(self);
+    }
+
     fn remove_phrase(&mut self, phrase: &Phrase) {
         let remove_idx = self
             .phrases
             .iter()
-            .position(|v| self.phrase_cache.get(*v) == phrase)
+            .position(|v| self.get(*v) == phrase)
             .expect("remove_idx");
 
         self.remove(remove_idx);
     }
 
     fn shuffle(&mut self, rng: &mut SmallRng) {
-        self.is_dirty = true;
-
         assert!(self.scratch_idx.is_none());
         rng.shuffle(&mut self.phrases);
     }
 
-    pub fn push(&mut self, phrase: Vec<Token>) -> PhraseId {
-        self.is_dirty = true;
+    pub fn push(&mut self, mut phrase: Vec<Token>) -> PhraseId {
+        let begin = self.tokens.len();
+        self.tokens.append(&mut phrase);
+        let end = self.tokens.len();
 
-        let phrase_id = self.phrase_cache.push(phrase);
-        self.phrases.push(phrase_id);
+        let idx = self.phrase_ranges.len();
+        self.phrase_ranges.push((begin, end));
 
-        phrase_id
-    }
+        let id = PhraseId { idx };
+        self.phrases.push(id);
 
-    fn take_dirty(&mut self) -> bool {
-        let result = self.is_dirty;
-        self.is_dirty = false;
-        result
+        id
     }
 
     fn len(&self) -> usize {
@@ -424,15 +415,16 @@ impl State {
     }
 
     pub fn get(&self, id: PhraseId) -> &Phrase {
-        self.phrase_cache.get(id)
+        let (begin, end) = self.phrase_ranges[id.idx];
+        &self.tokens[begin..end]
     }
 
     fn get_all(&self) -> Vec<Vec<Token>> {
         self.phrases
             .iter()
             .map(|id| {
-                let (begin, end) = self.phrase_cache.phrase_ranges[id.idx];
-                self.phrase_cache.tokens[begin..end].to_vec()
+                let (begin, end) = self.phrase_ranges[id.idx];
+                self.tokens[begin..end].to_vec()
             })
             .collect::<Vec<_>>()
     }
@@ -442,15 +434,13 @@ impl State {
         for p in phrases {
             state.push(p.clone());
         }
+        state.update_first_atoms();
         state
     }
 
     fn lock_scratch(&mut self) {
-        self.scratch_idx = Some((
-            self.phrases.len(),
-            self.phrase_cache.phrase_ranges.len(),
-            self.phrase_cache.tokens.len(),
-        ));
+        assert!(self.phrases.len() == self.phrase_ranges.len());
+        self.scratch_idx = Some((self.phrases.len(), self.tokens.len()));
     }
 
     fn unlock_scratch(&mut self) {
@@ -459,285 +449,19 @@ impl State {
     }
 
     fn reset_scratch(&mut self) {
-        let (phrase_len, phrase_ranges_len, token_len) = self.scratch_idx.expect("scratch_idx");
+        let (phrase_len, token_len) = self.scratch_idx.expect("scratch_idx");
         self.phrases.drain(phrase_len..);
-        self.phrase_cache.phrase_ranges.drain(phrase_ranges_len..);
-        self.phrase_cache.tokens.drain(token_len..);
+        self.phrase_ranges.drain(phrase_len..);
+        self.tokens.drain(token_len..);
     }
 }
 
-#[derive(Clone, Debug)]
-struct PhraseCache {
-    phrase_ranges: Vec<(usize, usize)>, // index by phrase id, index range into tokens
-    tokens: Vec<Token>,
-}
+impl std::ops::Index<usize> for State {
+    type Output = [Token];
 
-impl PhraseCache {
-    fn new() -> Self {
-        PhraseCache {
-            phrase_ranges: vec![],
-            tokens: vec![],
-        }
-    }
-
-    fn push(&mut self, mut phrase: Vec<Token>) -> PhraseId {
-        let begin = self.tokens.len();
-        self.tokens.append(&mut phrase);
-        let end = self.tokens.len();
-
-        let idx = self.phrase_ranges.len();
-        self.phrase_ranges.push((begin, end));
-
-        PhraseId { idx }
-    }
-
-    pub fn get(&self, id: PhraseId) -> &Phrase {
-        let (begin, end) = self.phrase_ranges[id.idx];
-        &self.tokens[begin..end]
-    }
-}
-
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub struct PhraseId {
-    idx: usize,
-}
-
-#[derive(Clone, Debug)]
-struct RuleInputMatch {
-    input_i: usize,
-    state_i: usize,
-    variable_match_range: (usize, usize),
-}
-
-#[derive(Clone, Debug)]
-struct RuleInputMatchCount {
-    input_i: usize,
-    match_count: usize,
-}
-
-#[derive(Clone, Debug)]
-struct RuleInputMatchCache {
-    inputs: Vec<Option<(usize, usize)>>, // index by rule id, index into phrases
-    input_phrases: Vec<(usize, PhraseId)>,
-
-    is_rule_cached: Vec<bool>,
-
-    match_ranges: Vec<Option<(usize, usize)>>, // index by rule id, index into matches
-    matches: Vec<RuleInputMatch>,
-
-    match_count_ranges: Vec<Option<(usize, usize)>>, // index by rule id, index into match counts
-    match_counts: Vec<RuleInputMatchCount>,
-
-    permutation_count_ranges: Vec<Option<(usize, usize)>>, // index by rule id, index into permutation_counts
-    permutation_counts: Vec<usize>,
-
-    variable_matches: Vec<MatchLite>,
-
-    first_atoms: Vec<(usize, Atom)>,
-    phrase_cache: PhraseCache,
-}
-
-impl RuleInputMatchCache {
-    fn new() -> Self {
-        RuleInputMatchCache {
-            inputs: vec![],
-            input_phrases: vec![],
-            is_rule_cached: vec![],
-            match_ranges: vec![],
-            matches: vec![],
-            match_count_ranges: vec![],
-            match_counts: vec![],
-            permutation_count_ranges: vec![],
-            permutation_counts: vec![],
-            variable_matches: vec![],
-            first_atoms: vec![],
-            phrase_cache: PhraseCache::new(),
-        }
-    }
-
-    fn update_rule(&mut self, rule: &Rule) {
-        self.inputs.resize(rule.id as usize + 1, None);
-
-        let begin = self.input_phrases.len();
-        for (i_i, input) in rule.inputs.iter().enumerate() {
-            if !is_concrete_pred(input) {
-                continue;
-            }
-
-            let phrase_id = self.phrase_cache.push(input.clone());
-            self.input_phrases.push((i_i, phrase_id));
-        }
-        let end = self.input_phrases.len();
-
-        self.inputs[rule.id as usize] = Some((begin, end));
-    }
-
-    fn update_state(&mut self, state: &mut State, rule: &Rule) {
-        let rule_id = rule.id as usize;
-
-        if state.take_dirty() {
-            self.is_rule_cached.clear();
-
-            self.match_ranges.clear();
-            self.matches.clear();
-
-            self.match_count_ranges.clear();
-            self.match_counts.clear();
-
-            self.permutation_count_ranges.clear();
-            self.permutation_counts.clear();
-
-            self.first_atoms = extract_first_atoms_state(state);
-            self.variable_matches.clear();
-        }
-
-        let is_rule_cached = self.is_rule_cached.get(rule_id).cloned().unwrap_or(false);
-        if is_rule_cached {
-            return;
-        }
-
-        self.is_rule_cached.resize(rule_id + 1, false);
-        self.is_rule_cached[rule_id] = true;
-
-        let match_ranges_begin = self.matches.len();
-        let match_count_ranges_begin = self.match_counts.len();
-        let permutation_count_ranges_begin = self.permutation_counts.len();
-
-        let mut abort = false;
-
-        if let Some((begin, end)) = self.inputs[rule_id] {
-            for (input_i, input_phrase_id) in self.input_phrases[begin..end].iter().cloned() {
-                let input_phrase = self.phrase_cache.get(input_phrase_id);
-
-                // test first atoms
-                let rule_first_atoms = extract_first_atoms_rule_input(input_phrase);
-                let start_idx = if let Some(first) = rule_first_atoms {
-                    if let Ok(idx) = self
-                        .first_atoms
-                        .binary_search_by(|probe| probe.1.cmp(&first))
-                    {
-                        // binary search won't always find the first match,
-                        // so search backwards until we find it
-                        self.first_atoms
-                            .iter()
-                            .enumerate()
-                            .rev()
-                            .skip(self.first_atoms.len() - 1 - idx)
-                            .take_while(|(_, a)| a.1 == first)
-                            .last()
-                            .expect("start_idx")
-                            .0
-                    } else {
-                        abort = true;
-                        break;
-                    }
-                } else {
-                    0
-                };
-
-                let mut match_count = 0;
-
-                for (state_i, _) in self
-                    .first_atoms
-                    .iter()
-                    .skip(start_idx)
-                    .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
-                    .cloned()
-                {
-                    let variable_matches_begin = self.variable_matches.len();
-                    if match_variables_with_existing(
-                        input_phrase,
-                        state,
-                        state_i,
-                        &mut self.variable_matches,
-                        false,
-                    ) {
-                        let variable_matches_end = self.variable_matches.len();
-
-                        self.matches.push(RuleInputMatch {
-                            input_i,
-                            state_i,
-                            variable_match_range: (variable_matches_begin, variable_matches_end),
-                        });
-
-                        match_count += 1;
-                    }
-                }
-
-                // if at least one input does not match any state, the rule will not match
-                if match_count == 0 {
-                    abort = true;
-                    break;
-                }
-
-                self.match_counts.push(RuleInputMatchCount {
-                    input_i,
-                    match_count,
-                });
-            }
-
-            if abort {
-                self.matches.drain(match_ranges_begin..);
-                self.match_counts.drain(match_count_ranges_begin..);
-                self.permutation_counts
-                    .drain(permutation_count_ranges_begin..);
-                return;
-            }
-
-            // update matches
-            let match_ranges_end = self.matches.len();
-            self.match_ranges.resize(rule_id + 1, None);
-            self.match_ranges[rule_id] = Some((match_ranges_begin, match_ranges_end));
-
-            // update match counts
-            let match_count_ranges_end = self.match_counts.len();
-            self.match_count_ranges.resize(rule_id + 1, None);
-            self.match_count_ranges[rule_id] =
-                Some((match_count_ranges_begin, match_count_ranges_end));
-
-            // update permutations
-            // precompute values required for deriving branch indices.
-            let mut input_reverse_permutation_counts = vec![1; end - begin];
-            let mut permutation_count = 1;
-
-            for (i, RuleInputMatchCount { match_count, .. }) in self.match_counts
-                [match_count_ranges_begin..match_count_ranges_end]
-                .iter()
-                .enumerate()
-                .rev()
-            {
-                permutation_count *= match_count;
-                input_reverse_permutation_counts[i] = permutation_count;
-            }
-
-            self.permutation_counts
-                .append(&mut input_reverse_permutation_counts);
-            let permutation_count_ranges_end = self.permutation_counts.len();
-            self.permutation_count_ranges.resize(rule_id + 1, None);
-            self.permutation_count_ranges[rule_id] =
-                Some((permutation_count_ranges_begin, permutation_count_ranges_end));
-        }
-    }
-
-    fn get_rule_input_matches(&self, rule: &Rule) -> Option<&[RuleInputMatch]> {
-        if let Some(Some((begin, end))) = self.match_ranges.get(rule.id as usize) {
-            Some(&self.matches[*begin..*end])
-        } else {
-            None
-        }
-    }
-
-    fn get_rule_input_match_counts(&self, rule: &Rule) -> Option<&[RuleInputMatchCount]> {
-        self.match_count_ranges[rule.id as usize].map(|(begin, end)| &self.match_counts[begin..end])
-    }
-
-    fn get_rule_input_reverse_permutations(&self, rule: &Rule) -> Option<&[usize]> {
-        self.permutation_count_ranges[rule.id as usize]
-            .map(|(begin, end)| &self.permutation_counts[begin..end])
-    }
-
-    fn get_variable_matches_from_range(&self, range: (usize, usize)) -> &[MatchLite] {
-        &self.variable_matches[range.0..range.1]
+    fn index(&self, i: usize) -> &Phrase {
+        let id = self.phrases[i];
+        self.get(id)
     }
 }
 
@@ -808,7 +532,7 @@ impl StringCache {
 }
 
 impl Context {
-    pub fn from_text(text: &str) -> Self {
+    pub fn from_text(text: &str) -> Context {
         use pest::iterators::Pair;
         use pest::Parser;
 
@@ -821,7 +545,6 @@ impl Context {
 
         let mut state = State::new();
         let mut rules: Vec<Rule> = vec![];
-        let mut rule_input_match_cache = RuleInputMatchCache::new();
 
         let mut string_cache = StringCache::new();
 
@@ -946,17 +669,14 @@ impl Context {
         ];
 
         let rng = SmallRng::from_seed(seed);
-        let qui_atom = string_cache.str_to_atom("qui");
 
-        for rule in &rules {
-            rule_input_match_cache.update_rule(rule);
-        }
+        state.update_first_atoms();
+        let qui_atom = string_cache.str_to_atom("qui");
 
         Context {
             core: Core {
                 state,
                 rules,
-                rule_input_match_cache,
                 rng,
                 qui_atom,
             },
@@ -976,7 +696,7 @@ impl Context {
         self.string_cache.atom_to_str(atom).unwrap()
     }
 
-    pub fn with_test_rng(mut self) -> Self {
+    pub fn with_test_rng(mut self) -> Context {
         self.core.rng = test_rng();
 
         self
@@ -986,19 +706,16 @@ impl Context {
         self.core.state.push(tokenize(text, &mut self.string_cache));
     }
 
-    pub fn find_matching_rules<F>(&self, mut side_input: F) -> Vec<ConcreteRule>
+    pub fn find_matching_rules<F>(&self, mut side_input: F) -> Vec<Rule>
     where
         F: SideInput,
     {
         let state = &mut self.core.state.clone();
-        let rule_input_match_cache = &mut self.core.rule_input_match_cache.clone();
 
         self.core
             .rules
             .iter()
-            .filter_map(|rule| {
-                rule_matches_state(&rule, state, Some(rule_input_match_cache), &mut side_input)
-            })
+            .filter_map(|rule| rule_matches_state(&rule, state, &mut side_input))
             .collect()
     }
 
@@ -1009,7 +726,7 @@ impl Context {
         update(&mut self.core, side_input);
     }
 
-    pub fn execute_rule(&mut self, rule: &ConcreteRule) {
+    pub fn execute_rule(&mut self, rule: &Rule) {
         execute_rule(rule, &mut self.core.state);
     }
 
@@ -1159,7 +876,7 @@ impl fmt::Display for Context {
     }
 }
 
-fn execute_rule(rule: &ConcreteRule, state: &mut State) {
+fn execute_rule(rule: &Rule, state: &mut State) {
     let inputs = &rule.inputs;
     let outputs = &rule.outputs;
 
@@ -1178,7 +895,6 @@ where
 {
     let state = &mut core.state;
     let rules = &mut core.rules;
-    let rule_input_match_cache = &mut core.rule_input_match_cache;
     let rng = &mut core.rng;
 
     // shuffle state so that a given rule with multiple potential
@@ -1200,12 +916,12 @@ where
             state.push(vec![Token::new_atom(core.qui_atom, 0, 0)]);
         }
 
+        state.update_first_atoms();
+
         for i in 0..rules.len() {
             let rule = &rules[(start_rule_idx + i) % rules.len()];
 
-            if let Some(rule) =
-                rule_matches_state(&rule, state, Some(rule_input_match_cache), &mut side_input)
-            {
+            if let Some(rule) = rule_matches_state(&rule, state, &mut side_input) {
                 matching_rule = Some(rule);
                 break;
             }
@@ -1247,55 +963,93 @@ where
 // Checks whether the rule's forward and backward predicates match the state.
 // Returns a new rule with all variables resolved, with backwards/side
 // predicates removed.
-fn rule_matches_state<F>(
-    r: &Rule,
-    state: &mut State,
-    rule_input_match_cache: Option<&mut RuleInputMatchCache>,
-    side_input: &mut F,
-) -> Option<ConcreteRule>
+fn rule_matches_state<F>(r: &Rule, state: &mut State, side_input: &mut F) -> Option<Rule>
 where
     F: SideInput,
 {
     let inputs = &r.inputs;
     let outputs = &r.outputs;
 
-    // for tests
-    let mut test_rule_input_match_cache = None;
-    let rule_input_match_cache = rule_input_match_cache.unwrap_or_else(|| {
-        let mut cache = RuleInputMatchCache::new();
-        cache.update_rule(r);
+    // per input, a list of states that match the input.
+    let mut input_state_matches = vec![];
 
-        test_rule_input_match_cache = Some(cache);
-        test_rule_input_match_cache.as_mut().unwrap()
-    });
+    for (i_i, input) in inputs.iter().enumerate() {
+        // TODO: exit early if we already know that side predicate won't match
+        if is_concrete_pred(input) {
+            let rule_first_atoms = extract_first_atoms_rule_input(input);
 
-    rule_input_match_cache.update_state(state, r);
+            let start_idx = if let Some(first) = rule_first_atoms {
+                if let Ok(idx) = state
+                    .first_atoms
+                    .binary_search_by(|probe| probe.1.cmp(&first))
+                {
+                    // binary search won't always find the first match,
+                    // so search backwards until we find it
+                    state
+                        .first_atoms
+                        .iter()
+                        .enumerate()
+                        .rev()
+                        .skip(state.first_atoms.len() - 1 - idx)
+                        .take_while(|(_, a)| a.1 == first)
+                        .last()
+                        .expect("start_idx")
+                        .0
+                } else {
+                    return None;
+                }
+            } else {
+                0
+            };
 
-    // a list of (input, state) pairs that match
-    let input_state_matches;
-    if let Some(matches) = rule_input_match_cache.get_rule_input_matches(r) {
-        input_state_matches = matches;
-    } else {
-        return None;
+            let mut matches = vec![];
+
+            state
+                .first_atoms
+                .iter()
+                .skip(start_idx)
+                .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
+                .for_each(|(s_i, _)| {
+                    if let Some(has_var) = test_match_without_variables(input, &state[*s_i]) {
+                        matches.push((*s_i, has_var));
+                    }
+                });
+
+            if matches.len() == 0 {
+                return None;
+            }
+
+            input_state_matches.push((i_i, matches));
+        } else if input.len() == 1 && is_var_pred(&input) {
+            let matches = state
+                .iter()
+                .enumerate()
+                .map(|(i, _)| (i, true))
+                .collect::<Vec<_>>();
+            input_state_matches.push((i_i, matches))
+        }
     }
 
-    let input_reverse_permutation_counts = rule_input_match_cache
-        .get_rule_input_reverse_permutations(r)
-        .expect("input_reverse_permutation_counts");
-    let permutation_count = input_reverse_permutation_counts
-        .get(0)
-        .cloned()
-        .unwrap_or(1);
+    // precompute values required for deriving branch indices.
+    let mut input_rev_permutation_counts = vec![1; input_state_matches.len()];
+    let mut permutation_count = 1;
+    input_state_matches
+        .iter()
+        .enumerate()
+        .rev()
+        .for_each(|(i, (_, matches))| {
+            permutation_count *= matches.len();
+
+            if i > 0 {
+                input_rev_permutation_counts[i - 1] = permutation_count;
+            }
+        });
 
     let mut variables_matched: Vec<MatchLite> = vec![];
 
     // we'll use state as a scratchpad for other token allocations
     let len = state.len();
     state.lock_scratch();
-
-    let match_counts = rule_input_match_cache
-        .get_rule_input_match_counts(r)
-        .expect("match_counts");
 
     'outer: for p_i in 0..permutation_count {
         variables_matched.clear();
@@ -1306,31 +1060,9 @@ where
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
         // TODO: improve performance by checking inputs ordered from least to most matches
-        let mut input_match_offset = 0;
-        for (
-            i,
-            RuleInputMatchCount {
-                input_i,
-                match_count,
-            },
-        ) in match_counts.iter().cloned().enumerate()
-        {
-            let permutation_size = input_reverse_permutation_counts
-                .get(i + 1)
-                .cloned()
-                .unwrap_or(1);
-            let branch_idx = (p_i / permutation_size) % match_count;
-
-            let RuleInputMatch {
-                input_i: test_input_i,
-                state_i: s_i,
-                variable_match_range,
-                ..
-            } = input_state_matches[input_match_offset + branch_idx];
-
-            assert!(test_input_i == input_i);
-
-            input_match_offset += match_count;
+        for (c_i, (i_i, matches)) in input_state_matches.iter().enumerate() {
+            let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % matches.len();
+            let (s_i, has_var) = matches[branch_idx];
 
             // a previous input in this permutation has already matched the state being checked
             if states_matched_bool[s_i] {
@@ -1339,30 +1071,15 @@ where
                 states_matched_bool[s_i] = true;
             }
 
-            let variable_matches =
-                rule_input_match_cache.get_variable_matches_from_range(variable_match_range);
-
-            for new_match in variable_matches {
-                let variable_already_matched = if let Some(ref existing_match) =
-                    variables_matched.iter().find(|m| m.atom == new_match.atom)
-                {
-                    if !phrase_equal(
-                        &existing_match.as_slice(state),
-                        &new_match.as_slice(state),
-                        existing_match.depths,
-                        new_match.depths,
-                    ) {
-                        // this match of the variable conflicted with an existing match
-                        continue 'outer;
-                    }
-
-                    true
-                } else {
-                    false
-                };
-
-                if !variable_already_matched {
-                    variables_matched.push(new_match.clone());
+            if has_var {
+                // we know the structures are compatible from the earlier matching check
+                if !match_variables_assuming_compatible_structure(
+                    &inputs[*i_i],
+                    &state,
+                    s_i,
+                    &mut variables_matched,
+                ) {
+                    continue 'outer;
                 }
             }
         }
@@ -1387,7 +1104,7 @@ where
                 .enumerate()
                 .filter(|&(s_i, _)| s_i < len && !states_matched_bool[s_i])
                 .any(|(s_i, _)| {
-                    match_variables_with_existing(input, state, s_i, &mut variables_matched, true)
+                    match_variables_with_existing(input, state, s_i, &mut variables_matched)
                 })
             {
                 continue 'outer;
@@ -1416,7 +1133,7 @@ where
 
         state.unlock_scratch();
 
-        return Some(ConcreteRule::new(r.id, forward_concrete, outputs_concrete));
+        return Some(Rule::new(r.id, forward_concrete, outputs_concrete));
     }
 
     state.unlock_scratch();
@@ -1435,7 +1152,7 @@ fn match_backwards_variables(
         let s_i = state.len();
         state.push(eval_result);
 
-        match_variables_with_existing(&pred, state, s_i, existing_matches_and_result, true)
+        match_variables_with_existing(&pred, state, s_i, existing_matches_and_result)
     } else {
         false
     }
@@ -1460,7 +1177,7 @@ where
         let s_i = state.len();
         state.push(eval_result);
 
-        match_variables_with_existing(&pred, state, s_i, existing_matches_and_result, true)
+        match_variables_with_existing(&pred, state, s_i, existing_matches_and_result)
     } else {
         false
     }
@@ -1522,8 +1239,11 @@ fn is_negated_pred(tokens: &Phrase) -> bool {
 }
 
 fn is_concrete_pred(tokens: &Phrase) -> bool {
-    !is_negated_pred(tokens)
-        && (tokens[0].flag == TokenFlag::None || tokens[0].flag == TokenFlag::Variable)
+    !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::None
+}
+
+fn is_var_pred(tokens: &Vec<Token>) -> bool {
+    !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::Variable
 }
 
 fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Vec<Token>> {
@@ -1675,7 +1395,6 @@ fn match_variables_with_existing(
     state: &State,
     s_i: usize,
     existing_matches_and_result: &mut Vec<MatchLite>,
-    test_existing_matches: bool,
 ) -> bool {
     if let Some(has_var) = test_match_without_variables(input_tokens, &state[s_i]) {
         if has_var {
@@ -1684,7 +1403,6 @@ fn match_variables_with_existing(
                 state,
                 s_i,
                 existing_matches_and_result,
-                test_existing_matches,
             )
         } else {
             true
@@ -1694,7 +1412,7 @@ fn match_variables_with_existing(
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug)]
 struct MatchLite {
     atom: Atom,
     state_i: usize,
@@ -1729,7 +1447,6 @@ fn match_variables_assuming_compatible_structure(
     state: &State,
     state_i: usize,
     existing_matches_and_result: &mut Vec<MatchLite>,
-    test_existing_matches: bool,
 ) -> bool {
     let pred_tokens = &state[state_i];
 
@@ -1739,9 +1456,6 @@ fn match_variables_assuming_compatible_structure(
 
     let mut input_depth = 0;
     let mut pred_depth = 0;
-
-    let mut abort = false;
-    let existing_matches_begin = existing_matches_and_result.len();
 
     for token in input_tokens {
         let pred_token = &pred_tokens[pred_token_i];
@@ -1767,13 +1481,9 @@ fn match_variables_assuming_compatible_structure(
             let end_i = pred_token_i;
 
             let variable_already_matched = if let Some(ref existing_match) =
-                (if test_existing_matches {
-                    &existing_matches_and_result[..]
-                } else {
-                    &existing_matches_and_result[existing_matches_begin..]
-                })
-                .iter()
-                .find(|m| m.atom == token.string)
+                existing_matches_and_result
+                    .iter()
+                    .find(|m| m.atom == token.string)
             {
                 if !phrase_equal(
                     &existing_match.as_slice(state),
@@ -1782,8 +1492,7 @@ fn match_variables_assuming_compatible_structure(
                     (token.open_depth, token.close_depth),
                 ) {
                     // this match of the variable conflicted with an existing match
-                    abort = true;
-                    break;
+                    return false;
                 }
 
                 true
@@ -1807,38 +1516,7 @@ fn match_variables_assuming_compatible_structure(
         input_depth -= token.close_depth;
     }
 
-    if abort {
-        // if we weren't testing the existing matches, we may now have
-        // added variables to the result that are incompatible with the existing
-        // matches. clear them so that the vec is the same as when it came in.
-        existing_matches_and_result.drain(existing_matches_begin..);
-        return false;
-    }
-
     true
-}
-
-fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
-    if is_concrete_pred(phrase) {
-        phrase
-            .get(0)
-            .option_filter(|t| !is_var_token(t))
-            .map(|t| t.string)
-    } else {
-        None
-    }
-}
-
-fn extract_first_atoms_state(state: &State) -> Vec<(usize, Atom)> {
-    let mut atoms: Vec<(usize, Atom)> = state
-        .iter()
-        .enumerate()
-        .map(|(s_i, phrase_id)| (s_i, state.get(*phrase_id)[0].string))
-        .collect();
-
-    atoms.sort_unstable_by(|a, b| a.1.cmp(&b.1));
-
-    atoms
 }
 
 #[inline]
@@ -2045,10 +1723,6 @@ mod tests {
         Rule::new(0, inputs, outputs)
     }
 
-    fn concrete_rule_new(inputs: Vec<Vec<Token>>, outputs: Vec<Vec<Token>>) -> ConcreteRule {
-        ConcreteRule::new(0, inputs, outputs)
-    }
-
     fn match_variables(
         input_tokens: &Phrase,
         pred_tokens: &Phrase,
@@ -2058,7 +1732,7 @@ mod tests {
         let mut state = State::new();
         state.push(pred_tokens.to_vec());
 
-        if match_variables_with_existing(input_tokens, &state, 0, &mut result, true) {
+        if match_variables_with_existing(input_tokens, &state, 0, &mut result) {
             Some(
                 result
                     .iter()
@@ -2261,7 +1935,7 @@ mod tests {
         assert_eq!(
             context.find_matching_rules(&mut |_: &Phrase| None),
             [
-                ConcreteRule::new(
+                Rule::new(
                     0,
                     vec![
                         tokenize("test 1 2", &mut context.string_cache),
@@ -2269,7 +1943,7 @@ mod tests {
                     ],
                     vec![tokenize("match", &mut context.string_cache)]
                 ),
-                ConcreteRule::new(
+                Rule::new(
                     2,
                     vec![
                         tokenize("test 3 4", &mut context.string_cache),
@@ -2515,7 +2189,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, None, &mut |_: &Phrase| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
 
             if expected {
                 assert!(result.is_some());
@@ -2639,7 +2313,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, None, &mut |_: &Phrase| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
 
             if expected {
                 assert!(result.is_some());
@@ -2667,7 +2341,7 @@ mod tests {
                     ],
                 ),
                 vec![tokenize("t1 3 4", &mut string_cache)],
-                concrete_rule_new(
+                rule_new(
                     vec![tokenize("t1 3 4", &mut string_cache)],
                     vec![
                         tokenize("t3 7", &mut string_cache),
@@ -2698,7 +2372,7 @@ mod tests {
                     tokenize("block-falling 6 5 2", &mut string_cache),
                     tokenize("block-set 2 5 0", &mut string_cache),
                 ],
-                concrete_rule_new(
+                rule_new(
                     vec![
                         tokenize("#collision", &mut string_cache),
                         tokenize("block-falling 7 6 2", &mut string_cache),
@@ -2716,7 +2390,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, None, &mut |_: &Phrase| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
 
             assert!(result.is_some());
             assert_eq!(result.unwrap(), expected);
@@ -2733,7 +2407,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, None, &mut |_: &Phrase| None);
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
 
         assert!(result.is_none());
     }
@@ -2748,7 +2422,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, None, &mut |_: &Phrase| {
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^nah no", &mut string_cache))
         });
 
@@ -2768,7 +2442,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, None, &mut |_: &Phrase| {
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^test 3", &mut string_cache))
         });
 
@@ -2788,7 +2462,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, None, &mut |p: &Phrase| {
+        let result = rule_matches_state(&rule, &mut state, &mut |p: &Phrase| {
             assert_eq!(
                 p.get(1).and_then(|t| StringCache::atom_to_number(t.string)),
                 Some(5)
@@ -2799,7 +2473,7 @@ mod tests {
         assert!(result.is_some());
         assert_eq!(
             result.unwrap(),
-            concrete_rule_new(vec![], vec![tokenize("5", &mut string_cache)])
+            rule_new(vec![], vec![tokenize("5", &mut string_cache)])
         );
     }
 
@@ -2816,14 +2490,14 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, None, &mut |_: &Phrase| {
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^test 2", &mut string_cache))
         });
 
         assert!(result.is_some());
         assert_eq!(
             result.unwrap(),
-            concrete_rule_new(vec![], vec![tokenize("2", &mut string_cache)])
+            rule_new(vec![], vec![tokenize("2", &mut string_cache)])
         );
     }
 
@@ -3072,7 +2746,7 @@ mod tests {
             range: (1, 2),
         }];
 
-        let result = match_variables_with_existing(&input_tokens, &state, 0, &mut matches, true);
+        let result = match_variables_with_existing(&input_tokens, &state, 0, &mut matches);
 
         assert!(result);
 
