@@ -1060,8 +1060,8 @@ where
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
         // TODO: improve performance by checking inputs ordered from least to most matches
-        for (c_i, (i_i, matches)) in input_state_matches.iter().enumerate() {
-            let branch_idx = (p_i / input_rev_permutation_counts[c_i]) % matches.len();
+        for (concrete_input_i, (i_i, matches)) in input_state_matches.iter().enumerate() {
+            let branch_idx = (p_i / input_rev_permutation_counts[concrete_input_i]) % matches.len();
             let (s_i, has_var) = matches[branch_idx];
 
             // a previous input in this permutation has already matched the state being checked
