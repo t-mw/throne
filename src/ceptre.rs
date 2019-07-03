@@ -503,9 +503,10 @@ pub struct PhraseId {
 #[derive(Clone, Debug)]
 struct RuleInputMatch {
     concrete_input_i: usize,
+    input_phrase_id: PhraseId,
     state_i: usize,
     state_phrase_id: PhraseId,
-    variable_matches: Vec<MatchLite>,
+    has_variables: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -531,8 +532,6 @@ struct RuleInputMatchCache {
     permutation_counts: Vec<Option<Vec<usize>>>,
     known_state_phrases: Vec<Option<KnownStatePhrases>>,
 
-    tmp_variable_matches: Vec<MatchLite>,
-
     first_atoms: Vec<(usize, Atom)>,
     phrase_cache: PhraseCache,
 }
@@ -549,8 +548,6 @@ impl RuleInputMatchCache {
             match_counts: vec![],
             permutation_counts: vec![],
             known_state_phrases: vec![],
-
-            tmp_variable_matches: vec![],
 
             first_atoms: vec![],
             phrase_cache: PhraseCache::new(),
@@ -657,13 +654,7 @@ impl RuleInputMatchCache {
         for rule_id in 0..self.matches.len() {
             if let Some(matches) = &mut self.matches[rule_id] {
                 for m in matches {
-                    let old_state_i = m.state_i;
-                    let new_state_i = state_redirection[old_state_i];
-                    m.state_i = new_state_i;
-                    for vm in &mut m.variable_matches {
-                        assert!(vm.state_i == old_state_i);
-                        vm.state_i = new_state_i;
-                    }
+                    m.state_i = state_redirection[m.state_i];
                 }
             }
         }
@@ -762,9 +753,6 @@ impl RuleInputMatchCache {
 
                         if swapped_state_i.is_some() && m.state_i == swapped_state_i.unwrap() {
                             m.state_i = removed_i;
-                            for vm in &mut m.variable_matches {
-                                vm.state_i = removed_i;
-                            }
                         }
 
                         (match_state_i, concrete_input_i)
@@ -835,24 +823,21 @@ impl RuleInputMatchCache {
 
                 let range = self.inputs[rule_id];
                 if let Some((begin, end)) = range.clone() {
-                    for (concrete_input_i, phrase_id) in
+                    for (concrete_input_i, input_phrase_id) in
                         self.input_phrases[begin..end].iter().cloned().enumerate()
                     {
-                        let input_phrase = self.phrase_cache.get(phrase_id);
+                        let input_phrase = self.phrase_cache.get(input_phrase_id);
 
-                        if match_variables_with_existing(
-                            input_phrase,
-                            state,
-                            state_i,
-                            &mut self.tmp_variable_matches,
-                            false,
-                        ) {
+                        if let Some(has_variables) =
+                            test_match_without_variables(input_phrase, &state[state_i])
+                        {
                             let matches = self.matches[rule_id].as_mut().unwrap();
                             matches.push(RuleInputMatch {
                                 concrete_input_i,
+                                input_phrase_id,
                                 state_i,
                                 state_phrase_id: state.phrases[state_i],
-                                variable_matches: self.tmp_variable_matches.drain(..).collect(),
+                                has_variables,
                             });
 
                             let match_counts = self.match_counts[rule_id].as_mut().unwrap();
@@ -1523,8 +1508,9 @@ where
 
             let RuleInputMatch {
                 concrete_input_i,
+                input_phrase_id,
                 state_i: s_i,
-                ref variable_matches,
+                has_variables,
                 ..
             } = input_state_matches[input_match_offset + branch_idx];
 
@@ -1539,28 +1525,17 @@ where
                 states_matched_bool[s_i] = true;
             }
 
-            for new_match in variable_matches {
-                let variable_already_matched = if let Some(ref existing_match) =
-                    variables_matched.iter().find(|m| m.atom == new_match.atom)
-                {
-                    if !phrase_equal(
-                        &existing_match.as_slice(state),
-                        &new_match.as_slice(state),
-                        existing_match.depths,
-                        new_match.depths,
-                    ) {
-                        // this match of the variable conflicted with an existing match
-                        continue 'outer;
-                    }
-
-                    true
-                } else {
-                    false
-                };
-
-                if !variable_already_matched {
-                    variables_matched.push(new_match.clone());
-                }
+            // we know the structures are compatible from the earlier matching check
+            if has_variables
+                && !match_variables_assuming_compatible_structure(
+                    rule_input_match_cache.phrase_cache.get(input_phrase_id),
+                    &state,
+                    s_i,
+                    &mut variables_matched,
+                    true,
+                )
+            {
+                continue 'outer;
             }
         }
 
@@ -1937,9 +1912,6 @@ fn match_variables_assuming_compatible_structure(
     let mut input_depth = 0;
     let mut pred_depth = 0;
 
-    let mut abort = false;
-    let existing_matches_begin = existing_matches_and_result.len();
-
     for token in input_tokens {
         let pred_token = &pred_tokens[pred_token_i];
         pred_token_i += 1;
@@ -1964,13 +1936,9 @@ fn match_variables_assuming_compatible_structure(
             let end_i = pred_token_i;
 
             let variable_already_matched = if let Some(ref existing_match) =
-                (if test_existing_matches {
-                    &existing_matches_and_result[..]
-                } else {
-                    &existing_matches_and_result[existing_matches_begin..]
-                })
-                .iter()
-                .find(|m| m.atom == token.string)
+                existing_matches_and_result
+                    .iter()
+                    .find(|m| m.atom == token.string)
             {
                 if !phrase_equal(
                     &existing_match.as_slice(state),
@@ -1979,8 +1947,7 @@ fn match_variables_assuming_compatible_structure(
                     (token.open_depth, token.close_depth),
                 ) {
                     // this match of the variable conflicted with an existing match
-                    abort = true;
-                    break;
+                    return false;
                 }
 
                 true
@@ -2002,14 +1969,6 @@ fn match_variables_assuming_compatible_structure(
 
         pred_depth -= pred_token.close_depth;
         input_depth -= token.close_depth;
-    }
-
-    if abort {
-        // if we weren't testing the existing matches, we may now have
-        // added variables to the result that are incompatible with the existing
-        // matches. clear them so that the vec is the same as when it came in.
-        existing_matches_and_result.drain(existing_matches_begin..);
-        return false;
     }
 
     true
