@@ -2,7 +2,10 @@
 - wildcard variable: _
 - support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
 - decide on consistent syntax for arguments e.g. keywords?
-- support defining own backwards predicates
+- support defining own backwards predicates:
+  - defined as rule without '=': <test A B . + A B C . required state C
+  - can be compiled by replacing instances of <test _ _ in the full rule, making the appropriate variable name substitutions
+  - predicate does not consume state, which needs a small change in the matching loop
 - comment syntax
 - allow hex colors / named colors to be passed directly to sprite
 - add hex overload to 'color' predicate
