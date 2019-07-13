@@ -1,5 +1,6 @@
 use rand;
 use rand::rngs::SmallRng;
+use rand::thread_rng;
 use rand::{Rng, SeedableRng};
 use regex::Regex;
 
@@ -58,6 +59,7 @@ enum BackwardsPred {
     Lte,
     Gte,
     ModNeg,
+    Custom,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -112,13 +114,16 @@ impl Token {
         let is_var = first_char.map(|c| c.is_ascii_uppercase()).unwrap_or(false)
             && chars.all(|c| c.is_numeric() || !c.is_ascii_lowercase());
 
-        let backwards_pred = match string {
-            "+" => Some(BackwardsPred::Plus),
-            "<" => Some(BackwardsPred::Lt),
-            ">" => Some(BackwardsPred::Gt),
-            "<=" => Some(BackwardsPred::Lte),
-            ">=" => Some(BackwardsPred::Gte),
-            "%%" => Some(BackwardsPred::ModNeg),
+        let second_char = string.chars().nth(1);
+
+        let backwards_pred = match (first_char.unwrap_or(' '), second_char.unwrap_or(' ')) {
+            ('<', '<') => Some(BackwardsPred::Custom),
+            ('%', '%') => Some(BackwardsPred::ModNeg),
+            ('<', '=') => Some(BackwardsPred::Lte),
+            ('>', '=') => Some(BackwardsPred::Gte),
+            ('<', _) => Some(BackwardsPred::Lt),
+            ('>', _) => Some(BackwardsPred::Gt),
+            ('+', _) => Some(BackwardsPred::Plus),
 
             _ => None,
         };
@@ -533,6 +538,11 @@ impl StringCache {
 
 impl Context {
     pub fn from_text(text: &str) -> Context {
+        let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
+        Context::from_text_rng(text, &mut rng)
+    }
+
+    pub fn from_text_rng(text: &str, rng: &mut SmallRng) -> Context {
         use pest::iterators::Pair;
         use pest::Parser;
 
@@ -545,6 +555,7 @@ impl Context {
 
         let mut state = State::new();
         let mut rules: Vec<Rule> = vec![];
+        let mut backwards_preds: Vec<(Vec<Token>, Vec<Vec<Token>>)> = vec![];
 
         let mut string_cache = StringCache::new();
 
@@ -593,6 +604,42 @@ impl Context {
             (Rule::new(idx, inputs, outputs), has_input_qui)
         };
 
+        // replace all variable tokens in a phrase with unique tokens,
+        // optionally using any existing mappings provided
+        let mut replace_variables = |phrase: &mut Vec<Token>,
+                                     string_cache: &mut StringCache,
+                                     existing_map: Option<HashMap<Atom, Atom>>|
+         -> HashMap<Atom, Atom> {
+            let mut existing_map = existing_map.unwrap_or(HashMap::new());
+
+            for token in phrase {
+                if token.flag != TokenFlag::Variable {
+                    continue;
+                }
+
+                if let Some(replacement) = existing_map.get(&token.string) {
+                    token.string = *replacement;
+                } else {
+                    loop {
+                        let s = string_cache.atom_to_str(token.string).unwrap();
+                        let replacement_s =
+                            format!("{}_BACK{}{}", s, rng.gen::<u32>(), rng.gen::<u32>());
+                        let replacement = string_cache.str_to_atom(&replacement_s);
+
+                        if existing_map.contains_key(&replacement) {
+                            continue;
+                        }
+
+                        existing_map.insert(token.string, replacement);
+                        token.string = replacement;
+                        break;
+                    }
+                }
+            }
+
+            existing_map
+        };
+
         for line in file.into_inner() {
             match line.as_rule() {
                 parser::Rule::stage => {
@@ -636,6 +683,26 @@ impl Context {
                         rules.push(r);
                     }
                 }
+                parser::Rule::backwards_def => {
+                    let mut backwards_def = line.into_inner();
+
+                    let mut first_phrase =
+                        tokenize(backwards_def.next().unwrap().as_str(), &mut string_cache);
+
+                    let mut var_replacements =
+                        replace_variables(&mut first_phrase, &mut string_cache, None);
+
+                    let mut other_phrases = backwards_def
+                        .map(|phrase| tokenize(phrase.as_str(), &mut string_cache))
+                        .collect::<Vec<_>>();
+
+                    for phrase in &mut other_phrases {
+                        var_replacements =
+                            replace_variables(phrase, &mut string_cache, Some(var_replacements));
+                    }
+
+                    backwards_preds.push((first_phrase, other_phrases));
+                }
                 parser::Rule::rule => {
                     rules.push(pair_to_ceptre_rule(line, &mut string_cache).0);
                 }
@@ -647,6 +714,35 @@ impl Context {
                 parser::Rule::EOI => (),
                 _ => unreachable!("{}", line),
             }
+        }
+
+        // for each backwards predicate, replace it with the corresponding phrase
+        let replace_backwards_preds = |rule: &mut Rule| {
+            let mut new_inputs = vec![];
+
+            for input in &mut rule.inputs {
+                if input[0].flag == TokenFlag::BackwardsPred(BackwardsPred::Custom) {
+                    for (first_phrase, other_phrases) in &backwards_preds {
+                        // get matches mapping from backwards predicate variable -> rule input phrase
+                        if let Some(matches) = match_variables(first_phrase, input) {
+                            for phrase in other_phrases {
+                                // replace variable names in backwards predicate phrase
+                                // with variable names from original rule
+                                let complete_phrase = assign_vars(phrase, &matches);
+                                new_inputs.push(complete_phrase);
+                            }
+                        }
+                    }
+                } else {
+                    new_inputs.push(input.clone());
+                }
+            }
+
+            rule.inputs = new_inputs;
+        };
+
+        for rule in &mut rules {
+            replace_backwards_preds(rule);
         }
 
         let seed = [
@@ -1073,7 +1169,7 @@ where
 
             if has_var {
                 // we know the structures are compatible from the earlier matching check
-                if !match_variables_assuming_compatible_structure(
+                if !match_state_variables_assuming_compatible_structure(
                     &inputs[*i_i],
                     &state,
                     s_i,
@@ -1104,7 +1200,7 @@ where
                 .enumerate()
                 .filter(|&(s_i, _)| s_i < len && !states_matched_bool[s_i])
                 .any(|(s_i, _)| {
-                    match_variables_with_existing(input, state, s_i, &mut variables_matched)
+                    match_state_variables_with_existing(input, state, s_i, &mut variables_matched)
                 })
             {
                 continue 'outer;
@@ -1118,16 +1214,16 @@ where
             .iter()
             .filter(|pred| is_concrete_pred(pred))
             .for_each(|v| {
-                forward_concrete.push(assign_vars(v, state, &variables_matched));
+                forward_concrete.push(assign_state_vars(v, state, &variables_matched));
             });
 
         outputs.iter().for_each(|v| {
             if is_side_pred(v) {
-                let pred = assign_vars(v, state, &variables_matched);
+                let pred = assign_state_vars(v, state, &variables_matched);
 
                 evaluate_side_pred(&pred, side_input);
             } else {
-                outputs_concrete.push(assign_vars(v, state, &variables_matched));
+                outputs_concrete.push(assign_state_vars(v, state, &variables_matched));
             }
         });
 
@@ -1146,13 +1242,13 @@ fn match_backwards_variables(
     state: &mut State,
     existing_matches_and_result: &mut Vec<MatchLite>,
 ) -> bool {
-    let pred = assign_vars(pred, state, existing_matches_and_result);
+    let pred = assign_state_vars(pred, state, existing_matches_and_result);
 
     if let Some(eval_result) = evaluate_backwards_pred(&pred) {
         let s_i = state.len();
         state.push(eval_result);
 
-        match_variables_with_existing(&pred, state, s_i, existing_matches_and_result)
+        match_state_variables_with_existing(&pred, state, s_i, existing_matches_and_result)
     } else {
         false
     }
@@ -1167,7 +1263,7 @@ fn match_side_variables<F>(
 where
     F: SideInput,
 {
-    let pred = assign_vars(pred, state, existing_matches_and_result);
+    let pred = assign_state_vars(pred, state, existing_matches_and_result);
 
     if let Some(eval_result) = evaluate_side_pred(&pred, side_input) {
         if eval_result.len() == 0 {
@@ -1177,37 +1273,19 @@ where
         let s_i = state.len();
         state.push(eval_result);
 
-        match_variables_with_existing(&pred, state, s_i, existing_matches_and_result)
+        match_state_variables_with_existing(&pred, state, s_i, existing_matches_and_result)
     } else {
         false
     }
 }
 
-fn assign_vars(tokens: &Phrase, state: &State, matches: &[MatchLite]) -> Vec<Token> {
+fn assign_state_vars(tokens: &Phrase, state: &State, matches: &[MatchLite]) -> Vec<Token> {
     let mut result: Vec<Token> = vec![];
 
     for token in tokens {
         if is_var_token(token) {
             if let Some(m) = matches.iter().find(|m| m.atom == token.string) {
-                let mut tokens = m.to_phrase(state);
-                let len = tokens.len();
-
-                if len == 1 {
-                    tokens[0].is_negated = token.is_negated;
-                    tokens[0].open_depth = token.open_depth;
-                    tokens[len - 1].close_depth = token.close_depth;
-                } else {
-                    tokens[0].is_negated = token.is_negated;
-                    if token.open_depth > 0 {
-                        tokens[0].open_depth += token.open_depth
-                    }
-                    if token.close_depth > 0 {
-                        tokens[len - 1].close_depth += token.close_depth
-                    }
-                }
-
-                result.append(&mut tokens);
-
+                result.append(&mut normalize_match_phrase(token, m.to_phrase(state)));
                 continue;
             }
         }
@@ -1216,6 +1294,43 @@ fn assign_vars(tokens: &Phrase, state: &State, matches: &[MatchLite]) -> Vec<Tok
     }
 
     result
+}
+
+fn assign_vars(tokens: &Phrase, matches: &[Match]) -> Vec<Token> {
+    let mut result: Vec<Token> = vec![];
+
+    for token in tokens {
+        if is_var_token(token) {
+            if let Some(m) = matches.iter().find(|m| m.atom == token.string) {
+                result.append(&mut normalize_match_phrase(token, m.phrase.clone()));
+                continue;
+            }
+        }
+
+        result.push(token.clone());
+    }
+
+    result
+}
+
+fn normalize_match_phrase(variable_token: &Token, mut match_phrase: Vec<Token>) -> Vec<Token> {
+    let len = match_phrase.len();
+
+    if len == 1 {
+        match_phrase[0].is_negated = variable_token.is_negated;
+        match_phrase[0].open_depth = variable_token.open_depth;
+        match_phrase[len - 1].close_depth = variable_token.close_depth;
+    } else {
+        match_phrase[0].is_negated = variable_token.is_negated;
+        if variable_token.open_depth > 0 {
+            match_phrase[0].open_depth += variable_token.open_depth
+        }
+        if variable_token.close_depth > 0 {
+            match_phrase[len - 1].close_depth += variable_token.close_depth
+        }
+    }
+
+    match_phrase
 }
 
 fn is_var_token(token: &Token) -> bool {
@@ -1390,7 +1505,7 @@ fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> 
     Some(has_var)
 }
 
-fn match_variables_with_existing(
+fn match_state_variables_with_existing(
     input_tokens: &Phrase,
     state: &State,
     s_i: usize,
@@ -1398,7 +1513,7 @@ fn match_variables_with_existing(
 ) -> bool {
     if let Some(has_var) = test_match_without_variables(input_tokens, &state[s_i]) {
         if has_var {
-            match_variables_assuming_compatible_structure(
+            match_state_variables_assuming_compatible_structure(
                 input_tokens,
                 state,
                 s_i,
@@ -1409,6 +1524,18 @@ fn match_variables_with_existing(
         }
     } else {
         false
+    }
+}
+
+fn match_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<Vec<Match>> {
+    if let Some(has_var) = test_match_without_variables(input_tokens, pred_tokens) {
+        if has_var {
+            match_variables_assuming_compatible_structure(input_tokens, pred_tokens)
+        } else {
+            Some(vec![])
+        }
+    } else {
+        None
     }
 }
 
@@ -1442,7 +1569,7 @@ impl MatchLite {
     }
 }
 
-fn match_variables_assuming_compatible_structure(
+fn match_state_variables_assuming_compatible_structure(
     input_tokens: &Phrase,
     state: &State,
     state_i: usize,
@@ -1517,6 +1644,101 @@ fn match_variables_assuming_compatible_structure(
     }
 
     true
+}
+
+#[derive(Eq, PartialEq, Debug)]
+struct Match {
+    atom: Atom,
+    depths: (u8, u8),
+    phrase: Vec<Token>,
+}
+
+impl Match {
+    fn new(token: &Token, mut phrase: Vec<Token>) -> Match {
+        let len = phrase.len();
+        let depths = (token.open_depth, token.close_depth);
+
+        if len == 1 {
+            phrase[0].open_depth = 0;
+            phrase[0].close_depth = 0;
+        } else {
+            phrase[0].open_depth -= depths.0;
+            phrase[len - 1].close_depth -= depths.1;
+        }
+
+        Match {
+            atom: token.string,
+            depths,
+            phrase: phrase,
+        }
+    }
+}
+
+fn match_variables_assuming_compatible_structure(
+    input_tokens: &Phrase,
+    pred_tokens: &Phrase,
+) -> Option<Vec<Match>> {
+    assert!(test_match_without_variables(input_tokens, pred_tokens).is_some());
+
+    let mut existing_matches: Vec<Match> = vec![];
+
+    let mut pred_token_i = 0;
+
+    let mut input_depth = 0;
+    let mut pred_depth = 0;
+
+    for token in input_tokens {
+        let pred_token = &pred_tokens[pred_token_i];
+        pred_token_i += 1;
+
+        input_depth += token.open_depth;
+        pred_depth += pred_token.open_depth;
+
+        let is_var = is_var_token(token);
+
+        if is_var {
+            // colect tokens to assign to the input variable
+            let start_i = pred_token_i - 1;
+
+            while input_depth < pred_depth {
+                let pred_token = &pred_tokens[pred_token_i];
+                pred_token_i += 1;
+
+                pred_depth += pred_token.open_depth;
+                pred_depth -= pred_token.close_depth;
+            }
+
+            let end_i = pred_token_i;
+
+            let variable_already_matched = if let Some(ref existing_match) =
+                existing_matches.iter().find(|m| m.atom == token.string)
+            {
+                if !phrase_equal(
+                    &existing_match.phrase[..],
+                    &pred_tokens[start_i..end_i],
+                    existing_match.depths,
+                    (token.open_depth, token.close_depth),
+                ) {
+                    // this match of the variable conflicted with an existing match
+                    return None;
+                }
+
+                true
+            } else {
+                false
+            };
+
+            if !variable_already_matched {
+                let phrase = pred_tokens[start_i..end_i].to_vec();
+                existing_matches.push(Match::new(token, phrase));
+            }
+        }
+
+        pred_depth -= pred_token.close_depth;
+        input_depth -= token.close_depth;
+    }
+
+    Some(existing_matches)
 }
 
 #[inline]
@@ -1732,7 +1954,7 @@ mod tests {
         let mut state = State::new();
         state.push(pred_tokens.to_vec());
 
-        if match_variables_with_existing(input_tokens, &state, 0, &mut result) {
+        if match_state_variables_with_existing(input_tokens, &state, 0, &mut result) {
             Some(
                 result
                     .iter()
@@ -1847,6 +2069,37 @@ mod tests {
                     vec![tokenize("`broken\ntext`", &mut context.string_cache)],
                 )
             ]
+        );
+    }
+
+    #[test]
+    fn context_from_text_backwards_predicate_simple_test() {
+        let mut rng = test_rng();
+        let mut context = Context::from_text_rng(
+            "<<back1 A . state1 A B\n\
+             <<back2 A . state2 A B\n\
+             <<back1 A . <<back2 B = ()",
+            &mut rng,
+        );
+
+        context.print();
+
+        assert_eq!(
+            context.core.rules,
+            [Rule::new(
+                0,
+                vec![
+                    tokenize(
+                        "state1 A B_BACK36822967802071690107",
+                        &mut context.string_cache
+                    ),
+                    tokenize(
+                        "state2 B B_BACK36822967922071690095",
+                        &mut context.string_cache
+                    )
+                ],
+                vec![]
+            )]
         );
     }
 
@@ -2527,7 +2780,7 @@ mod tests {
     }
 
     #[test]
-    fn assign_vars_test() {
+    fn assign_state_vars_test() {
         let mut string_cache = StringCache::new();
 
         let mut test_cases = vec![
@@ -2586,8 +2839,8 @@ mod tests {
         ];
 
         for (tokens, state, matches, expected) in test_cases.drain(..) {
-            let mut state = State::from_phrases(&state);
-            assert_eq!(assign_vars(&tokens, &state, &matches), expected);
+            let state = State::from_phrases(&state);
+            assert_eq!(assign_state_vars(&tokens, &state, &matches), expected);
         }
     }
 
@@ -2746,7 +2999,7 @@ mod tests {
             range: (1, 2),
         }];
 
-        let result = match_variables_with_existing(&input_tokens, &state, 0, &mut matches);
+        let result = match_state_variables_with_existing(&input_tokens, &state, 0, &mut matches);
 
         assert!(result);
 

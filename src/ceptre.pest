@@ -14,15 +14,19 @@ stage_phrase = { "#" ~ phrase }
 copy_phrase = { "$" ~ phrase }
 side_phrase = { "^" ~ phrase }
 negate_phrase = { "!" ~ phrase }
+backwards_phrase = { "<<" ~ phrase }
 
 state_phrase = { stage_phrase | phrase }
 state = { state_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ state_phrase)* }
 
-input_phrase = { qui | stage_phrase | copy_phrase | side_phrase | negate_phrase | phrase }
+input_phrase = { qui | stage_phrase | copy_phrase | side_phrase | negate_phrase | backwards_phrase | phrase }
 inputs = { input_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ input_phrase)* }
 output_phrase = { qui | stage_phrase | side_phrase | phrase }
 outputs = { output_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ output_phrase)* }
 rule = { inputs ~ NEWLINE? ~ "=" ~ NEWLINE? ~ outputs }
+
+backwards_def_phrase = { stage_phrase | side_phrase | negate_phrase | phrase }
+backwards_def = { backwards_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ backwards_def_phrase)+ }
 
 stage_block = _{ NEWLINE ~ rule ~ (NEWLINE ~ rule)* }
 stage_braced = _{ "{" ~ NEWLINE* ~ rule ~ (NEWLINE+ ~ rule)* ~ NEWLINE* ~ "}" }
@@ -30,6 +34,6 @@ stage = { inputs ~ ":" ~ (stage_block | stage_braced) }
 
 file = {
   SOI ~
-  (NEWLINE* ~ (stage | rule | state))* ~
+  (NEWLINE* ~ (stage | backwards_def | rule | state))* ~
   NEWLINE* ~ EOI
 }
