@@ -74,6 +74,7 @@ enum TokenFlag {
 pub struct Token {
     pub string: Atom,
     is_negated: bool,
+    is_consuming: bool,
     flag: TokenFlag,
     open_depth: u8,
     close_depth: u8,
@@ -94,6 +95,13 @@ impl Token {
         string_cache: &mut StringCache,
     ) -> Token {
         let mut string = string;
+
+        let is_consuming = if let Some('?') = string.chars().next() {
+            string = string.get(1..).expect("get");
+            false
+        } else {
+            true
+        };
 
         let mut is_negated = false;
         let mut is_side = false;
@@ -142,6 +150,7 @@ impl Token {
             string: atom,
             flag,
             is_negated,
+            is_consuming,
             open_depth,
             close_depth,
         }
@@ -152,6 +161,7 @@ impl Token {
             string: atom,
             flag: TokenFlag::None,
             is_negated: false,
+            is_consuming: true,
             open_depth,
             close_depth,
         }
@@ -162,6 +172,7 @@ impl Token {
             string: StringCache::number_to_atom(n),
             flag: TokenFlag::None,
             is_negated: false,
+            is_consuming: true,
             open_depth,
             close_depth,
         }
@@ -693,7 +704,11 @@ impl Context {
                         replace_variables(&mut first_phrase, &mut string_cache, None);
 
                     let mut other_phrases = backwards_def
-                        .map(|phrase| tokenize(phrase.as_str(), &mut string_cache))
+                        .map(|phrase| {
+                            let mut phrase = tokenize(phrase.as_str(), &mut string_cache);
+                            phrase[0].is_consuming = false;
+                            phrase
+                        })
                         .collect::<Vec<_>>();
 
                     for phrase in &mut other_phrases {
@@ -1160,17 +1175,21 @@ where
             let branch_idx = (p_i / input_rev_permutation_counts[concrete_input_i]) % matches.len();
             let (s_i, has_var) = matches[branch_idx];
 
+            let input_phrase = &inputs[*i_i];
+
             // a previous input in this permutation has already matched the state being checked
-            if states_matched_bool[s_i] {
-                continue 'outer;
-            } else {
-                states_matched_bool[s_i] = true;
+            if input_phrase[0].is_consuming {
+                if states_matched_bool[s_i] {
+                    continue 'outer;
+                } else {
+                    states_matched_bool[s_i] = true;
+                }
             }
 
             if has_var {
                 // we know the structures are compatible from the earlier matching check
                 if !match_state_variables_assuming_compatible_structure(
-                    &inputs[*i_i],
+                    input_phrase,
                     &state,
                     s_i,
                     &mut variables_matched,
@@ -2090,11 +2109,11 @@ mod tests {
                 0,
                 vec![
                     tokenize(
-                        "state1 A B_BACK36822967802071690107",
+                        "?state1 A B_BACK36822967802071690107",
                         &mut context.string_cache
                     ),
                     tokenize(
-                        "state2 B B_BACK36822967922071690095",
+                        "?state2 B B_BACK36822967922071690095",
                         &mut context.string_cache
                     )
                 ],
@@ -2560,6 +2579,60 @@ mod tests {
                     tokenize("bar", &mut string_cache),
                 ],
                 false,
+            ),
+        ];
+
+        for (rule, state, expected) in test_cases.drain(..) {
+            let mut state = State::from_phrases(&state);
+
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
+
+            if expected {
+                assert!(result.is_some());
+            } else {
+                assert!(result.is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn rule_matches_state_truthiness_nonconsuming_test() {
+        let mut string_cache = StringCache::new();
+
+        let mut test_cases = vec![
+            (
+                rule_new(
+                    vec![
+                        tokenize("?t1 T1 T2", &mut string_cache),
+                        tokenize("?t1 T1 T2", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![tokenize("t1 0 2", &mut string_cache)],
+                true,
+            ),
+            (
+                rule_new(
+                    vec![
+                        tokenize("?test", &mut string_cache),
+                        tokenize("?!test", &mut string_cache),
+                    ],
+                    vec![],
+                ),
+                vec![
+                    tokenize("foo", &mut string_cache),
+                    tokenize("test", &mut string_cache),
+                    tokenize("bar", &mut string_cache),
+                ],
+                false,
+            ),
+            (
+                rule_new(vec![tokenize("?!test", &mut string_cache)], vec![]),
+                vec![
+                    tokenize("foo", &mut string_cache),
+                    tokenize("bar", &mut string_cache),
+                ],
+                true,
             ),
         ];
 

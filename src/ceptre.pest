@@ -8,13 +8,13 @@ qui = { "qui" }
 prefix = { !(string | atom) ~ ("+" | "-" | "%%" | "<=" | ">=" | "<" | ">" | "#") }
 
 phrase_compound = { prefix? ~ ((string | atom)+ | "(" ~ phrase_compound+ ~ ")") }
-phrase = { phrase_compound+ }
+phrase = !{ phrase_compound+ }
 
-stage_phrase = { "#" ~ phrase }
-copy_phrase = { "$" ~ phrase }
-side_phrase = { "^" ~ phrase }
-negate_phrase = { "!" ~ phrase }
-backwards_phrase = { "<<" ~ phrase }
+stage_phrase = ${ "#" ~ phrase }
+copy_phrase = ${ "$" ~ phrase }
+side_phrase = ${ "^" ~ phrase }
+negate_phrase = ${ "!" ~ phrase }
+backwards_phrase = ${ "<<" ~ phrase }
 
 state_phrase = { stage_phrase | phrase }
 state = { state_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ state_phrase)* }
