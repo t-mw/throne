@@ -577,8 +577,6 @@ impl Context {
             let inputs_pair = pairs.next().unwrap();
             let outputs_pair = pairs.next().unwrap();
 
-            idx += 1;
-
             let mut inputs = vec![];
             let mut outputs = vec![];
             let mut has_input_qui = false;
@@ -612,7 +610,7 @@ impl Context {
                 }
             }
 
-            (Rule::new(idx, inputs, outputs), has_input_qui)
+            (Rule::new(0, inputs, outputs), has_input_qui)
         };
 
         // replace all variable tokens in a phrase with unique tokens,
@@ -732,15 +730,48 @@ impl Context {
         }
 
         // for each backwards predicate, replace it with the corresponding phrase
-        let replace_backwards_preds = |rule: &mut Rule| {
-            let mut new_inputs = vec![];
+        let replace_backwards_preds = |rule: &Rule| {
+            let mut backwards_preds_per_input = vec![vec![]; rule.inputs.len()];
+            let mut backwards_pred_pointers = vec![0; rule.inputs.len()];
 
-            let mut nonvariable_matches: Vec<Match> = vec![];
-            let mut matches: Vec<Match> = vec![];
-
-            for input in &mut rule.inputs {
+            for (i_i, input) in rule.inputs.iter().enumerate() {
                 if input[0].flag == TokenFlag::BackwardsPred(BackwardsPred::Custom) {
-                    for (first_phrase, other_phrases) in &backwards_preds {
+                    for (b_i, (first_phrase, _)) in backwards_preds.iter().enumerate() {
+                        if test_match_without_variables(input, first_phrase).is_some() {
+                            backwards_preds_per_input[i_i].push(b_i);
+                        }
+                    }
+                }
+            }
+
+            let first = backwards_preds_per_input.iter().position(|v| v.len() > 0);
+            let last = backwards_preds_per_input
+                .iter()
+                .rev()
+                .position(|v| v.len() > 0)
+                .map(|idx| backwards_preds_per_input.len() - 1 - idx);
+
+            let backwards_pred_input_range = match (first, last) {
+                (Some(first), Some(last)) => (first, last),
+                _ => return vec![rule.clone()],
+            };
+
+            let mut new_rules = vec![];
+            'outer: loop {
+                let mut new_inputs = vec![];
+
+                let mut nonvariable_matches: Vec<Match> = vec![];
+                let mut matches: Vec<Match> = vec![];
+
+                let mut matched = true;
+
+                for (i_i, input) in rule.inputs.iter().enumerate() {
+                    let backwards_preds_for_input = &backwards_preds_per_input[i_i];
+                    if backwards_preds_for_input.len() > 0 {
+                        let backwards_pred_pointer = backwards_pred_pointers[i_i];
+                        let (first_phrase, other_phrases) =
+                            &backwards_preds[backwards_preds_for_input[backwards_pred_pointer]];
+
                         // Match variables from rule input b.p. to b.p. definition first phrase,
                         // ignoring matches that have already been made, unless those matches
                         // were to non-variables in the backwards predicate definition.
@@ -749,54 +780,86 @@ impl Context {
                         // we only need to check that the variables between the
                         // backwards predicates are compatible, if they match
                         // non-variable atoms in the backwards predicate definition.
-                        if match_variables_with_existing(
+                        if !match_variables_assuming_compatible_structure(
                             input,
                             first_phrase,
                             &mut nonvariable_matches,
                         ) {
-                            for m in &nonvariable_matches {
-                                if matches
-                                    .iter()
-                                    .find(|other_m| other_m.atom == m.atom)
-                                    .is_none()
-                                {
-                                    matches.push(m.clone());
-                                }
-                            }
+                            matched = false;
+                            break;
+                        }
 
-                            nonvariable_matches = nonvariable_matches
+                        for m in &nonvariable_matches {
+                            if matches
                                 .iter()
-                                .filter(|m| !is_var_token(&m.phrase[0]))
-                                .cloned()
-                                .collect::<Vec<_>>();
-
-                            let complete_input_phrase = assign_vars(input, &nonvariable_matches);
-                            let mut inverse_matches = vec![];
-
-                            match_variables_assuming_compatible_structure(
-                                &first_phrase,
-                                &complete_input_phrase,
-                                &mut inverse_matches,
-                            );
-
-                            for phrase in other_phrases {
-                                // replace variable names in backwards predicate phrase
-                                // with variable names from original rule
-                                let complete_phrase = assign_vars(phrase, &inverse_matches);
-                                new_inputs.push(complete_phrase);
+                                .find(|other_m| other_m.atom == m.atom)
+                                .is_none()
+                            {
+                                matches.push(m.clone());
                             }
                         }
+
+                        nonvariable_matches = nonvariable_matches
+                            .iter()
+                            .filter(|m| !is_var_token(&m.phrase[0]))
+                            .cloned()
+                            .collect::<Vec<_>>();
+
+                        let complete_input_phrase = assign_vars(input, &nonvariable_matches);
+                        let mut inverse_matches = vec![];
+
+                        match_variables_assuming_compatible_structure(
+                            &first_phrase,
+                            &complete_input_phrase,
+                            &mut inverse_matches,
+                        );
+
+                        for phrase in other_phrases {
+                            // replace variable names in backwards predicate phrase
+                            // with variable names from original rule
+                            let complete_phrase = assign_vars(phrase, &inverse_matches);
+                            new_inputs.push(complete_phrase);
+                        }
+                    } else {
+                        new_inputs.push(assign_vars(input, &nonvariable_matches));
                     }
-                } else {
-                    new_inputs.push(assign_vars(input, &nonvariable_matches));
+                }
+
+                if matched {
+                    let mut new_rule = rule.clone();
+                    new_rule.inputs = new_inputs;
+                    new_rules.push(new_rule);
+                }
+
+                // find next permutation of backwards predicates in rule
+                for i in (backwards_pred_input_range.0..=backwards_pred_input_range.1).rev() {
+                    let at_end =
+                        backwards_pred_pointers[i] == backwards_preds_per_input[i].len() - 1;
+
+                    if at_end && i == backwards_pred_input_range.0 {
+                        // finished checking all permutations
+                        break 'outer;
+                    }
+
+                    if at_end {
+                        backwards_pred_pointers[i] = 0;
+                    } else {
+                        backwards_pred_pointers[i] += 1;
+                        break;
+                    }
                 }
             }
 
-            rule.inputs = new_inputs;
+            new_rules
         };
 
-        for rule in &mut rules {
-            replace_backwards_preds(rule);
+        let mut new_rules = vec![];
+        for rule in &rules {
+            new_rules.append(&mut replace_backwards_preds(&rule));
+        }
+
+        for (i, rule) in new_rules.iter_mut().enumerate() {
+            rule.id = i as i32;
         }
 
         let seed = [
@@ -826,7 +889,7 @@ impl Context {
         Context {
             core: Core {
                 state,
-                rules,
+                rules: new_rules,
                 rng,
                 qui_atom,
             },
@@ -2195,6 +2258,57 @@ mod tests {
                 ],
                 vec![]
             )]
+        );
+    }
+
+    #[test]
+    fn context_from_text_backwards_predicate_permutations_test() {
+        let mut context = Context::from_text(
+            "<<back1 . state11\n\
+             <<back1 . state12\n\
+             <<back2 . state21\n\
+             <<back2 . state22\n\
+             <<back1 . <<back2 = ()",
+        );
+
+        context.print();
+
+        assert_eq!(
+            context.core.rules,
+            [
+                Rule::new(
+                    0,
+                    vec![
+                        tokenize("state11", &mut context.string_cache),
+                        tokenize("state21", &mut context.string_cache),
+                    ],
+                    vec![]
+                ),
+                Rule::new(
+                    1,
+                    vec![
+                        tokenize("state11", &mut context.string_cache),
+                        tokenize("state22", &mut context.string_cache),
+                    ],
+                    vec![]
+                ),
+                Rule::new(
+                    2,
+                    vec![
+                        tokenize("state12", &mut context.string_cache),
+                        tokenize("state21", &mut context.string_cache),
+                    ],
+                    vec![]
+                ),
+                Rule::new(
+                    3,
+                    vec![
+                        tokenize("state12", &mut context.string_cache),
+                        tokenize("state22", &mut context.string_cache),
+                    ],
+                    vec![]
+                ),
+            ]
         );
     }
 
