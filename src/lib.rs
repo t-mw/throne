@@ -8,8 +8,16 @@ extern crate regex;
 
 mod ceptre;
 mod ffi;
+mod matching;
+mod parser;
+mod rule;
+mod state;
+mod string_cache;
+mod token;
 
-pub use crate::ceptre::{
-    update, Atom, Context, Core, Phrase, PhraseGroup, PhraseString, Rule, State, StringCache, Token,
-};
+pub use crate::ceptre::{update, Context, Core, PhraseString};
 pub use crate::ffi::*;
+pub use crate::rule::Rule;
+pub use crate::state::State;
+pub use crate::string_cache::{Atom, StringCache};
+pub use crate::token::{Phrase, PhraseGroup, Token};

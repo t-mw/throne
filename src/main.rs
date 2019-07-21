@@ -11,6 +11,12 @@ extern crate regex;
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
 mod ceptre;
+mod matching;
+mod parser;
+mod rule;
+mod state;
+mod string_cache;
+mod token;
 
 use std::{thread, time};
 
@@ -43,7 +49,7 @@ fn main() {
         context.append_state("dt 3");
         // context.print();
 
-        let string_to_key = |s: &ceptre::Atom| match s {
+        let string_to_key = |s: &string_cache::Atom| match s {
             s if *s == left => Some(Key::Left),
             s if *s == right => Some(Key::Right),
             s if *s == up => Some(Key::Up),
@@ -51,7 +57,7 @@ fn main() {
             _ => None,
         };
 
-        context.update(|p: &ceptre::Phrase| {
+        context.update(|p: &token::Phrase| {
             if p.len() != 2 {
                 return None;
             }

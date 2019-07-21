@@ -3,7 +3,9 @@ use std::mem::transmute;
 use std::os::raw::{c_char, c_void};
 use std::slice;
 
-use crate::ceptre::{Atom, Context, Token};
+use crate::ceptre::Context;
+use crate::string_cache::Atom;
+use crate::token::Token;
 
 #[repr(C)]
 pub struct CRule {
