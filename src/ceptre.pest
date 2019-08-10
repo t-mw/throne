@@ -26,7 +26,7 @@ outputs = { output_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ output_phrase)* }
 rule = { inputs ~ NEWLINE? ~ "=" ~ NEWLINE? ~ outputs }
 
 backwards_def_phrase = { stage_phrase | side_phrase | negate_phrase | phrase }
-backwards_def = { backwards_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ backwards_def_phrase)+ }
+backwards_def = { backwards_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ backwards_def_phrase)* }
 
 stage_block = _{ NEWLINE ~ rule ~ (NEWLINE ~ rule)* }
 stage_braced = _{ "{" ~ NEWLINE* ~ rule ~ (NEWLINE+ ~ rule)* ~ NEWLINE* ~ "}" }
