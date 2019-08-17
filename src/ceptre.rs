@@ -567,6 +567,35 @@ mod tests {
     }
 
     #[test]
+    fn context_from_text_backwards_predicate_standalone_test() {
+        let mut rng = test_rng();
+        let mut context = Context::from_text_rng(
+            "<<back foo foo1\n\
+             <<back bar bar1\n\
+             <<back A B . state A = B",
+            &mut rng,
+        );
+
+        context.print();
+
+        assert_eq!(
+            context.core.rules,
+            [
+                Rule::new(
+                    0,
+                    vec![tokenize("state foo", &mut context.string_cache),],
+                    vec![tokenize("foo1", &mut context.string_cache)]
+                ),
+                Rule::new(
+                    1,
+                    vec![tokenize("state bar", &mut context.string_cache),],
+                    vec![tokenize("bar1", &mut context.string_cache)]
+                )
+            ]
+        );
+    }
+
+    #[test]
     fn context_from_text_backwards_predicate_constant_test() {
         let mut rng = test_rng();
         let mut context = Context::from_text_rng(

@@ -276,6 +276,11 @@ fn replace_backwards_preds(
         if matched {
             let mut new_rule = rule.clone();
             new_rule.inputs = new_inputs;
+            new_rule.outputs = rule
+                .outputs
+                .iter()
+                .map(|output| assign_vars(output, &nonvariable_matches))
+                .collect();
             new_rules.push(new_rule);
         }
 
