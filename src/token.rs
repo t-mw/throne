@@ -360,7 +360,11 @@ pub fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
         let mut string = String::new();
 
         if let Some(s) = t.as_str(string_cache) {
-            string += s;
+            if s.chars().any(|c| c.is_whitespace()) {
+                string += &format!("`{}`", s);
+            } else {
+                string += s;
+            }
         } else {
             string += &t.as_number().expect("number").to_string();
         }
