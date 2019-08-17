@@ -298,7 +298,9 @@ fn execute_rule(rule: &Rule, state: &mut State) {
     let outputs = &rule.outputs;
 
     inputs.iter().for_each(|input| {
-        state.remove_phrase(input);
+        if input[0].is_consuming {
+            state.remove_phrase(input);
+        }
     });
 
     outputs.iter().for_each(|output| {
@@ -567,31 +569,46 @@ mod tests {
     }
 
     #[test]
-    fn context_from_text_backwards_predicate_standalone_test() {
+    fn context_from_text_backwards_predicate_update_test() {
         let mut rng = test_rng();
         let mut context = Context::from_text_rng(
-            "<<back foo foo1\n\
-             <<back bar bar1\n\
-             state A . <<back A B = B",
+            "state1 foo bar . once
+             <<back C D . state1 C D\n\
+             once . <<back A B = foo A B",
             &mut rng,
         );
+
+        context.update(|_: &Phrase| None);
 
         context.print();
 
         assert_eq!(
-            context.core.rules,
+            context.core.state.get_all(),
             [
-                Rule::new(
-                    0,
-                    vec![tokenize("state foo", &mut context.string_cache),],
-                    vec![tokenize("foo1", &mut context.string_cache)]
-                ),
-                Rule::new(
-                    1,
-                    vec![tokenize("state bar", &mut context.string_cache),],
-                    vec![tokenize("bar1", &mut context.string_cache)]
-                )
+                tokenize("state1 foo bar", &mut context.string_cache),
+                tokenize("foo foo bar", &mut context.string_cache),
             ]
+        );
+    }
+
+    #[test]
+    fn context_from_text_backwards_predicate_update2_test() {
+        let mut rng = test_rng();
+        let mut context = Context::from_text_rng(
+            "state1 foo bar
+             <<back C D . state1 C D\n\
+             state1 foo bar . <<back A B = foo A B",
+            &mut rng,
+        );
+
+        context.print();
+        context.update(|_: &Phrase| None);
+
+        context.print();
+
+        assert_eq!(
+            context.core.state.get_all(),
+            [tokenize("foo foo bar", &mut context.string_cache),]
         );
     }
 

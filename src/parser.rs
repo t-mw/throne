@@ -206,8 +206,6 @@ fn replace_backwards_preds(
 
     let mut new_rules = vec![];
     'outer: loop {
-        let mut new_inputs = vec![];
-
         let mut nonvariable_matches: Vec<Match> = vec![];
         let mut matches: Vec<Match> = vec![];
 
@@ -256,6 +254,8 @@ fn replace_backwards_preds(
         }
 
         if matched {
+            let mut new_inputs = vec![];
+
             for (i_i, input) in rule.inputs.iter().enumerate() {
                 let backwards_preds_for_input = &backwards_preds_per_input[i_i];
                 if backwards_preds_for_input.len() > 0 {
@@ -284,6 +284,7 @@ fn replace_backwards_preds(
             }
 
             let mut new_rule = rule.clone();
+
             new_rule.inputs = new_inputs;
             new_rule.outputs = rule
                 .outputs
