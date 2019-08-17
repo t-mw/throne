@@ -217,7 +217,7 @@ fn replace_backwards_preds(
             let backwards_preds_for_input = &backwards_preds_per_input[i_i];
             if backwards_preds_for_input.len() > 0 {
                 let backwards_pred_pointer = backwards_pred_pointers[i_i];
-                let (first_phrase, other_phrases) =
+                let (first_phrase, _) =
                     &backwards_preds[backwards_preds_for_input[backwards_pred_pointer]];
 
                 // Match variables from rule input b.p. to b.p. definition first phrase,
@@ -252,28 +252,37 @@ fn replace_backwards_preds(
                     .filter(|m| !is_var_token(&m.phrase[0]))
                     .cloned()
                     .collect::<Vec<_>>();
-
-                let complete_input_phrase = assign_vars(input, &nonvariable_matches);
-                let mut inverse_matches = vec![];
-
-                match_variables_assuming_compatible_structure(
-                    &first_phrase,
-                    &complete_input_phrase,
-                    &mut inverse_matches,
-                );
-
-                for phrase in other_phrases {
-                    // replace variable names in backwards predicate phrase
-                    // with variable names from original rule
-                    let complete_phrase = assign_vars(phrase, &inverse_matches);
-                    new_inputs.push(complete_phrase);
-                }
-            } else {
-                new_inputs.push(assign_vars(input, &nonvariable_matches));
             }
         }
 
         if matched {
+            for (i_i, input) in rule.inputs.iter().enumerate() {
+                let backwards_preds_for_input = &backwards_preds_per_input[i_i];
+                if backwards_preds_for_input.len() > 0 {
+                    let backwards_pred_pointer = backwards_pred_pointers[i_i];
+                    let (first_phrase, other_phrases) =
+                        &backwards_preds[backwards_preds_for_input[backwards_pred_pointer]];
+
+                    let complete_input_phrase = assign_vars(input, &nonvariable_matches);
+                    let mut inverse_matches = vec![];
+
+                    match_variables_assuming_compatible_structure(
+                        &first_phrase,
+                        &complete_input_phrase,
+                        &mut inverse_matches,
+                    );
+
+                    for phrase in other_phrases {
+                        // replace variable names in backwards predicate phrase
+                        // with variable names from original rule
+                        let complete_phrase = assign_vars(phrase, &inverse_matches);
+                        new_inputs.push(complete_phrase);
+                    }
+                } else {
+                    new_inputs.push(assign_vars(input, &nonvariable_matches));
+                }
+            }
+
             let mut new_rule = rule.clone();
             new_rule.inputs = new_inputs;
             new_rule.outputs = rule

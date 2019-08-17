@@ -572,7 +572,7 @@ mod tests {
         let mut context = Context::from_text_rng(
             "<<back foo foo1\n\
              <<back bar bar1\n\
-             <<back A B . state A = B",
+             state A . <<back A B = B",
             &mut rng,
         );
 
