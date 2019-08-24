@@ -638,32 +638,32 @@ mod tests {
                 Rule::new(
                     0,
                     vec![
-                        tokenize("state11", &mut context.string_cache),
-                        tokenize("state21", &mut context.string_cache),
+                        tokenize("?state11", &mut context.string_cache),
+                        tokenize("?state21", &mut context.string_cache),
                     ],
                     vec![]
                 ),
                 Rule::new(
                     1,
                     vec![
-                        tokenize("state11", &mut context.string_cache),
-                        tokenize("state22", &mut context.string_cache),
+                        tokenize("?state11", &mut context.string_cache),
+                        tokenize("?state22", &mut context.string_cache),
                     ],
                     vec![]
                 ),
                 Rule::new(
                     2,
                     vec![
-                        tokenize("state12", &mut context.string_cache),
-                        tokenize("state21", &mut context.string_cache),
+                        tokenize("?state12", &mut context.string_cache),
+                        tokenize("?state21", &mut context.string_cache),
                     ],
                     vec![]
                 ),
                 Rule::new(
                     3,
                     vec![
-                        tokenize("state12", &mut context.string_cache),
-                        tokenize("state22", &mut context.string_cache),
+                        tokenize("?state12", &mut context.string_cache),
+                        tokenize("?state22", &mut context.string_cache),
                     ],
                     vec![]
                 ),
@@ -1659,6 +1659,11 @@ mod tests {
 
         assert_eq!(
             tokenize("t1", &mut string_cache),
+            [Token::new("t1", 0, 0, &mut string_cache)]
+        );
+
+        assert_ne!(
+            tokenize("?t1", &mut string_cache),
             [Token::new("t1", 0, 0, &mut string_cache)]
         );
 

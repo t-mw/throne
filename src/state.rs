@@ -1,6 +1,7 @@
 use rand::rngs::SmallRng;
 use rand::Rng;
 
+use crate::matching::phrase_equal;
 use crate::string_cache::Atom;
 use crate::token::*;
 
@@ -67,7 +68,7 @@ impl State {
         let remove_idx = self
             .phrases
             .iter()
-            .position(|v| self.get(*v) == phrase)
+            .position(|v| phrase_equal(self.get(*v), phrase, (0, 0), (0, 0)))
             .expect("remove_idx");
 
         self.remove(remove_idx);

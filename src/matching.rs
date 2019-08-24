@@ -671,7 +671,7 @@ where
 }
 
 #[inline]
-fn phrase_equal(a: &Phrase, b: &Phrase, a_depths: (u8, u8), b_depths: (u8, u8)) -> bool {
+pub fn phrase_equal(a: &Phrase, b: &Phrase, a_depths: (u8, u8), b_depths: (u8, u8)) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -691,7 +691,8 @@ fn phrase_equal(a: &Phrase, b: &Phrase, a_depths: (u8, u8), b_depths: (u8, u8)) 
             .iter()
             .skip(1)
             .take(len - 2)
-            .eq(b.iter().skip(1).take(len - 2))
+            .zip(b.iter().skip(1).take(len - 2))
+            .all(|(t1, t2)| token_equal(t1, t2, false, None, None))
             && token_equal(
                 &a[len - 1],
                 &b[len - 1],

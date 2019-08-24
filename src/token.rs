@@ -21,7 +21,7 @@ pub enum BackwardsPred {
     Custom,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Token {
     pub string: Atom,
     pub is_negated: bool,
@@ -30,13 +30,6 @@ pub struct Token {
     pub open_depth: u8,
     pub close_depth: u8,
 }
-
-impl PartialEq for Token {
-    fn eq(&self, other: &Token) -> bool {
-        token_equal(self, other, false, None, None)
-    }
-}
-impl Eq for Token {}
 
 impl Token {
     pub fn new(
