@@ -370,8 +370,9 @@ pub fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
         }
 
         tokens.push(format!(
-            "{}{}{}{}",
+            "{}{}{}{}{}",
             String::from("(").repeat(t.open_depth as usize),
+            if !t.is_consuming { "?" } else { "" },
             if t.is_negated {
                 "!"
             } else if t.flag == TokenFlag::Side {
