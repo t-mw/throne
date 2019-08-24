@@ -659,7 +659,27 @@ pub fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Vec<Token>> {
                 _ => None,
             }
         }
-        _ => unreachable!(),
+        TokenFlag::BackwardsPred(BackwardsPred::Equal) => {
+            if phrase_equal(
+                tokens.get_group(1).expect("== : first argument missing"),
+                tokens.get_group(2).expect("== : second argument missing"),
+                (0, 0),
+                (0, 1),
+            ) {
+                if tokens[0].is_negated {
+                    None
+                } else {
+                    Some(tokens.to_owned())
+                }
+            } else {
+                if tokens[0].is_negated {
+                    Some(tokens.to_owned())
+                } else {
+                    None
+                }
+            }
+        }
+        _ => unreachable!("{:?}", tokens[0].flag),
     }
 }
 

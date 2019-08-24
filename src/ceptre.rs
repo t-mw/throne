@@ -1411,6 +1411,15 @@ mod tests {
                 Some(tokenize("+ 1 2 3", &mut string_cache)),
             ),
             (tokenize("+ 1 2 4", &mut string_cache), None),
+            (
+                tokenize("!== (a b c) (a b)", &mut string_cache),
+                Some(tokenize("!== (a b c) (a b)", &mut string_cache)),
+            ),
+            (tokenize("!== (a b c) (a b c)", &mut string_cache), None),
+            (
+                tokenize("== (a b c) (a b c)", &mut string_cache),
+                Some(tokenize("== (a b c) (a b c)", &mut string_cache)),
+            ),
         ];
 
         for (input, expected) in test_cases.drain(..) {

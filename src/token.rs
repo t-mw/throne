@@ -18,6 +18,7 @@ pub enum BackwardsPred {
     Lte,
     Gte,
     ModNeg,
+    Equal,
     Custom,
 }
 
@@ -76,6 +77,7 @@ impl Token {
             ('<', _) => Some(BackwardsPred::Lt),
             ('>', _) => Some(BackwardsPred::Gt),
             ('+', _) => Some(BackwardsPred::Plus),
+            ('=', '=') => Some(BackwardsPred::Equal),
 
             _ => None,
         };

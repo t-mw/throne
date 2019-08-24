@@ -23,3 +23,4 @@
 - improve performance by, for each phrase in a rule, recording the states that could match the phrase. needs to be re-evaluated each time state is added or removed.
 - make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
 - replace #foo -> stage foo, because # does not have special effects like other symbols
+- replace !== backwards predicate with ability to use '!' anywhere in a phrase

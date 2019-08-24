@@ -5,7 +5,7 @@ string = { "`" ~ (!"`" ~ ANY)* ~ "`" }
 qui = { "qui" }
 
 // list <= and >= first, to give precendence over < and >
-prefix = { !(string | atom) ~ ("+" | "-" | "%%" | "<=" | ">=" | "<" | ">" | "#") }
+prefix = { !(string | atom) ~ ("+" | "-" | "%%" | "<=" | ">=" | "<" | ">" | "#" | "==") }
 
 phrase_compound = { prefix? ~ ((string | atom)+ | "(" ~ phrase_compound+ ~ ")") }
 phrase = !{ phrase_compound+ }
