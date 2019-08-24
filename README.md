@@ -24,3 +24,5 @@
 - make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
 - replace #foo -> stage foo, because # does not have special effects like other symbols
 - replace !== backwards predicate with ability to use '!' anywhere in a phrase
+- ability to arbitrarily nest 'stage' scopes
+- ability to put rule output in 'stage' scopes e.g. in1 . in2 = out1 { subset = () } === in1 . in2 . subset = out1
