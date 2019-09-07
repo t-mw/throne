@@ -131,11 +131,7 @@ pub fn parse(text: &str, rng: &mut SmallRng) -> ParseResult {
                     replace_variables(&mut first_phrase, &mut string_cache, None, rng);
 
                 let mut other_phrases = backwards_def
-                    .map(|phrase| {
-                        let mut phrase = tokenize(phrase.as_str(), &mut string_cache);
-                        phrase[0].is_consuming = false;
-                        phrase
-                    })
+                    .map(|phrase| tokenize(phrase.as_str(), &mut string_cache))
                     .collect::<Vec<_>>();
 
                 for phrase in &mut other_phrases {

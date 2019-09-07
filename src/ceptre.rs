@@ -544,8 +544,8 @@ mod tests {
     fn context_from_text_backwards_predicate_simple_test() {
         let mut rng = test_rng();
         let mut context = Context::from_text_rng(
-            "<<back1 C . state1 C D\n\
-             <<back2 E F . state2 E F\n\
+            "<<back1 C . ?state1 C D\n\
+             <<back2 E F . ?state2 E F\n\
              <<back1 A . <<back2 B A = ()",
             &mut rng,
         );
@@ -569,11 +569,39 @@ mod tests {
     }
 
     #[test]
+    fn context_from_text_backwards_predicate_consuming_test() {
+        let mut rng = test_rng();
+        let mut context = Context::from_text_rng(
+            "<<back1 C . state1 C D\n\
+             <<back2 E F . state2 E F\n\
+             <<back1 A . <<back2 B A = ()",
+            &mut rng,
+        );
+
+        context.print();
+
+        assert_eq!(
+            context.core.rules,
+            [Rule::new(
+                0,
+                vec![
+                    tokenize(
+                        "state1 A D_BACK36822967802071690107",
+                        &mut context.string_cache
+                    ),
+                    tokenize("state2 B A", &mut context.string_cache)
+                ],
+                vec![]
+            )]
+        );
+    }
+
+    #[test]
     fn context_from_text_backwards_predicate_update_test() {
         let mut rng = test_rng();
         let mut context = Context::from_text_rng(
             "state1 foo bar . once
-             <<back C D . state1 C D\n\
+             <<back C D . ?state1 C D\n\
              once . <<back A B = foo A B",
             &mut rng,
         );
@@ -596,7 +624,7 @@ mod tests {
         let mut rng = test_rng();
         let mut context = Context::from_text_rng(
             "state1 foo bar
-             <<back C D . state1 C D\n\
+             <<back C D . ?state1 C D\n\
              state1 foo bar . <<back A B = foo A B",
             &mut rng,
         );
@@ -616,7 +644,7 @@ mod tests {
     fn context_from_text_backwards_predicate_constant_test() {
         let mut rng = test_rng();
         let mut context = Context::from_text_rng(
-            "<<back C bar . state C\n\
+            "<<back C bar . ?state C\n\
              <<back A B . test A . foo B = ()",
             &mut rng,
         );
@@ -640,10 +668,10 @@ mod tests {
     #[test]
     fn context_from_text_backwards_predicate_permutations_test() {
         let mut context = Context::from_text(
-            "<<back1 . state11\n\
-             <<back1 . state12\n\
-             <<back2 . state21\n\
-             <<back2 . state22\n\
+            "<<back1 . ?state11\n\
+             <<back1 . ?state12\n\
+             <<back2 . ?state21\n\
+             <<back2 . ?state22\n\
              <<back1 . <<back2 = ()",
         );
 
