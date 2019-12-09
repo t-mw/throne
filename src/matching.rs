@@ -432,7 +432,10 @@ where
             }
         }
 
-        for input in inputs.iter().filter(|input| is_backwards_pred(input)) {
+        for input in inputs
+            .iter()
+            .filter(|input| is_twoway_backwards_pred(input))
+        {
             if !match_backwards_variables(input, state, &mut variables_matched) {
                 continue 'outer;
             }
@@ -440,6 +443,15 @@ where
 
         for input in inputs.iter().filter(|input| is_side_pred(input)) {
             if !match_side_variables(input, state, &mut variables_matched, side_input) {
+                continue 'outer;
+            }
+        }
+
+        for input in inputs
+            .iter()
+            .filter(|input| is_oneway_backwards_pred(input))
+        {
+            if !match_backwards_variables(input, state, &mut variables_matched) {
                 continue 'outer;
             }
         }

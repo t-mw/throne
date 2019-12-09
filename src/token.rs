@@ -311,11 +311,18 @@ pub fn is_var_token(token: &Token) -> bool {
     token.flag == TokenFlag::Variable
 }
 
-pub fn is_backwards_pred(tokens: &Phrase) -> bool {
-    if let TokenFlag::BackwardsPred(_) = tokens[0].flag {
-        true
-    } else {
-        false
+pub fn is_twoway_backwards_pred(tokens: &Phrase) -> bool {
+    match tokens[0].flag {
+        TokenFlag::BackwardsPred(BackwardsPred::Plus) => true,
+        _ => false,
+    }
+}
+
+pub fn is_oneway_backwards_pred(tokens: &Phrase) -> bool {
+    match tokens[0].flag {
+        TokenFlag::BackwardsPred(BackwardsPred::Plus) => false,
+        TokenFlag::BackwardsPred(_) => true,
+        _ => false,
     }
 }
 

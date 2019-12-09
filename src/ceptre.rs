@@ -1404,7 +1404,7 @@ mod tests {
         let rule = rule_new(
             vec![
                 tokenize("^test A", &mut string_cache),
-                tokenize("+ 1 1 A", &mut string_cache),
+                tokenize("+ 1 A 3", &mut string_cache),
             ],
             vec![tokenize("A", &mut string_cache)],
         );
@@ -1418,6 +1418,30 @@ mod tests {
         assert_eq!(
             result.unwrap(),
             rule_new(vec![], vec![tokenize("2", &mut string_cache)])
+        );
+    }
+
+    #[test]
+    fn rule_matches_state_input_side_predicate_some_pass3_test() {
+        let mut string_cache = StringCache::new();
+
+        let rule = rule_new(
+            vec![
+                tokenize("^test A", &mut string_cache),
+                tokenize("< 3 A", &mut string_cache),
+            ],
+            vec![tokenize("A", &mut string_cache)],
+        );
+        let mut state = State::new();
+
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
+            Some(tokenize("^test 4", &mut string_cache))
+        });
+
+        assert!(result.is_some());
+        assert_eq!(
+            result.unwrap(),
+            rule_new(vec![], vec![tokenize("4", &mut string_cache)])
         );
     }
 
