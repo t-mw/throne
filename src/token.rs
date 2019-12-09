@@ -131,6 +131,13 @@ impl Token {
     pub fn as_number(&self) -> Option<i32> {
         StringCache::atom_to_number(self.string)
     }
+
+    pub fn to_string(&self, string_cache: &StringCache) -> String {
+        self.as_str(string_cache)
+            .map(|s| s.to_string())
+            .or_else(|| self.as_number().map(|n| n.to_string()))
+            .expect("to_string")
+    }
 }
 
 pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
