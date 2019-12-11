@@ -717,6 +717,33 @@ mod tests {
     }
 
     #[test]
+    fn context_from_text_wildcard_test() {
+        let mut context = Context::from_text(
+            "test1 . _ = any _\n\
+             test2 _ = _ any",
+        );
+
+        assert_eq!(
+            context.core.rules,
+            [
+                Rule::new(
+                    0,
+                    vec![
+                        tokenize("test1", &mut context.string_cache),
+                        tokenize("WILDCARD0", &mut context.string_cache)
+                    ],
+                    vec![tokenize("any WILDCARD1", &mut context.string_cache)]
+                ),
+                Rule::new(
+                    1,
+                    vec![tokenize("test2 WILDCARD2", &mut context.string_cache)],
+                    vec![tokenize("WILDCARD3 any", &mut context.string_cache)]
+                )
+            ]
+        );
+    }
+
+    #[test]
     fn context_from_text_comment_test() {
         let mut context = Context::from_text(
             "// comment 1\n\
@@ -1818,6 +1845,45 @@ mod tests {
                 Token::new("final string", 0, 2, &mut string_cache),
             ]
         );
+    }
+
+    #[test]
+    fn tokenize_wildcard_test() {
+        {
+            let mut string_cache = StringCache::new();
+
+            assert_eq!(
+                tokenize("_", &mut string_cache),
+                [Token::new("WILDCARD0", 0, 0, &mut string_cache),]
+            );
+        }
+
+        {
+            let mut string_cache = StringCache::new();
+
+            assert_eq!(
+                tokenize("t1 t2 (((_ )) _)", &mut string_cache),
+                [
+                    Token::new("t1", 1, 0, &mut string_cache),
+                    Token::new("t2", 0, 0, &mut string_cache),
+                    Token::new("WILDCARD0", 1, 0, &mut string_cache),
+                    Token::new("WILDCARD1", 0, 2, &mut string_cache),
+                ]
+            );
+        }
+
+        {
+            let mut string_cache = StringCache::new();
+
+            assert_eq!(
+                tokenize("_ _test _TEST", &mut string_cache),
+                [
+                    Token::new("WILDCARD0", 1, 0, &mut string_cache),
+                    Token::new("_test", 0, 0, &mut string_cache),
+                    Token::new("WILDCARD1", 0, 1, &mut string_cache),
+                ]
+            );
+        }
     }
 
     #[test]

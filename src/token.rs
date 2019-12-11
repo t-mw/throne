@@ -32,6 +32,23 @@ pub struct Token {
     pub close_depth: u8,
 }
 
+fn are_var_chars(mut chars: impl Iterator<Item = char>) -> bool {
+    chars
+        .next()
+        .map(|c| c.is_ascii_uppercase())
+        .unwrap_or(false)
+        && chars.all(|c| c.is_numeric() || !c.is_ascii_lowercase())
+}
+
+fn is_wildcard_token(token: &str) -> bool {
+    if token == "_" {
+        return true;
+    }
+
+    let mut chars = token.chars();
+    chars.next() == Some('_') && are_var_chars(chars)
+}
+
 impl Token {
     pub fn new(
         string: &str,
@@ -62,11 +79,10 @@ impl Token {
             _ => {}
         }
 
+        let is_var = are_var_chars(string.chars());
+
         let mut chars = string.chars();
         let first_char = chars.next();
-        let is_var = first_char.map(|c| c.is_ascii_uppercase()).unwrap_or(false)
-            && chars.all(|c| c.is_numeric() || !c.is_ascii_lowercase());
-
         let second_char = string.chars().nth(1);
 
         let backwards_pred = match (first_char.unwrap_or(' '), second_char.unwrap_or(' ')) {
@@ -143,12 +159,12 @@ impl Token {
 pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
     let mut string = format!("({})", string);
 
+    // remove instances of brackets surrounding single atoms
     lazy_static! {
         static ref RE1: Regex = Regex::new(r"\(\s*(\S+|`[^`]+`)\s*\)").unwrap();
     }
 
     loop {
-        // remove instances of brackets surrounding single atoms
         let string1 = string.clone();
         let string2 = RE1.replace_all(&string1, "$1");
 
@@ -159,6 +175,7 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
         }
     }
 
+    // create iterator for strings surrounded by backticks
     lazy_static! {
         static ref RE2: Regex = Regex::new(r"`(.*?)`").unwrap();
     }
@@ -170,6 +187,7 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
 
     string = RE2.replace_all(&string, "`").to_string();
 
+    // split into tokens
     lazy_static! {
         static ref RE3: Regex = Regex::new(r"\(|\)|\s+|[^\(\)\s]+").unwrap();
     }
@@ -206,6 +224,16 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
         if *token == "`" {
             result.push(Token::new(
                 strings.next().expect("string"),
+                open_depth,
+                close_depth,
+                string_cache,
+            ));
+        } else if is_wildcard_token(token) {
+            let var_string = format!("WILDCARD{}", string_cache.wildcard_counter);
+            string_cache.wildcard_counter += 1;
+
+            result.push(Token::new(
+                &var_string,
                 open_depth,
                 close_depth,
                 string_cache,

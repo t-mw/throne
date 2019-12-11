@@ -16,6 +16,7 @@ pub struct Atom {
 pub struct StringCache {
     atom_to_str: Vec<String>,
     str_to_atom: HashMap<String, Atom>,
+    pub wildcard_counter: i32,
 }
 
 impl StringCache {
