@@ -1,29 +1,29 @@
 # Ideas
-- wildcard variable: _
-- support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
-- decide on consistent syntax for arguments e.g. keywords?
-- support defining own backwards predicates:
+- [x] wildcard variable: _
+- [ ] support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
+- [ ] decide on consistent syntax for arguments e.g. keywords?
+- [ ] support defining own backwards predicates:
   - defined as rule without '=': <test A B . + A B C . required state C
   - can be compiled by replacing instances of <test _ _ in the full rule, making the appropriate variable name substitutions
   - predicate does not consume state, which needs a small change in the matching loop
-- comment syntax
-- allow hex colors / named colors to be passed directly to sprite
-- add hex overload to 'color' predicate
-- syntax to check absence of state: ^
-- nested labels
-- arbitrary math expressions e.g. 'expr 2 + A / 3 + 1.5 = B'
-- move drawing outside of rules - just draw with js by iterating over state
-- handle frames by 'injecting' atom i.e. insert '#frame' atom and let rules handle it
-- option to only process a variable once per stage
-- 'derived' state i.e. able to match on Z where Z is equivalent to X + Y, when only X + Y are present
-- performance improvement by sorting states by atom indices + jumping to known ranges during matching or do binary search
-- modulo
-- lispy key properties to enable pattern matching
-- syntax to match rule only once per update / permanently. or even make matching one per update the default.
-- improve performance by, for each phrase in a rule, recording the states that could match the phrase. needs to be re-evaluated each time state is added or removed.
-- make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
-- replace #foo -> stage foo, because # does not have special effects like other symbols
-- replace !== backwards predicate with ability to use '!' anywhere in a phrase
-- ability to arbitrarily nest 'stage' scopes
-- ability to put rule output in 'stage' scopes e.g. in1 . in2 = out1 { subset = () } === in1 . in2 . subset = out1
-- reduce serialization boilerplate with either serde or generated code (like with pest)
+- [ ] comment syntax
+- [ ] allow hex colors / named colors to be passed directly to sprite
+- [ ] add hex overload to 'color' predicate
+- [ ] syntax to check absence of state: ^
+- [ ] nested labels
+- [ ] arbitrary math expressions e.g. 'expr 2 + A / 3 + 1.5 = B'
+- [ ] move drawing outside of rules - just draw with js by iterating over state
+- [ ] handle frames by 'injecting' atom i.e. insert '#frame' atom and let rules handle it
+- [ ] option to only process a variable once per stage
+- [ ] 'derived' state i.e. able to match on Z where Z is equivalent to X + Y, when only X + Y are present
+- [ ] performance improvement by sorting states by atom indices + jumping to known ranges during matching or do binary search
+- [ ] modulo
+- [ ] lispy key properties to enable pattern matching
+- [ ] syntax to match rule only once per update / permanently. or even make matching one per update the default.
+- [ ] improve performance by, for each phrase in a rule, recording the states that could match the phrase. needs to be re-evaluated each time state is added or removed.
+- [ ] make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
+- [ ] replace #foo -> stage foo, because # does not have special effects like other symbols
+- [ ] replace !== backwards predicate with ability to use '!' anywhere in a phrase
+- [ ] ability to arbitrarily nest 'stage' scopes
+- [ ] ability to put rule output in 'stage' scopes e.g. in1 . in2 = out1 { subset = () } === in1 . in2 . subset = out1
+- [ ] reduce serialization boilerplate with either serde or generated code (like with pest)
