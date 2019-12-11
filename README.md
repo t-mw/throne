@@ -1,5 +1,6 @@
 # Ideas
 - [x] wildcard variable: _
+- [ ] support custom backwards predicate (<<) under stage label
 - [ ] support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
 - [ ] decide on consistent syntax for arguments e.g. keywords?
 - [ ] support defining own backwards predicates:
