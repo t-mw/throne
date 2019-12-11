@@ -720,7 +720,7 @@ mod tests {
     fn context_from_text_wildcard_test() {
         let mut context = Context::from_text(
             "test1 . _ = any _\n\
-             test2 _ = _ any",
+             $test2 _ = _ any",
         );
 
         assert_eq!(
@@ -737,7 +737,10 @@ mod tests {
                 Rule::new(
                     1,
                     vec![tokenize("test2 WILDCARD2", &mut context.string_cache)],
-                    vec![tokenize("WILDCARD3 any", &mut context.string_cache)]
+                    vec![
+                        tokenize("test2 WILDCARD2", &mut context.string_cache),
+                        tokenize("WILDCARD3 any", &mut context.string_cache),
+                    ]
                 )
             ]
         );
