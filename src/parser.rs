@@ -37,7 +37,28 @@ pub fn parse(text: &str, rng: &mut SmallRng) -> ParseResult {
 
     let mut string_cache = StringCache::new();
 
+    let check_rule_variables = |pair: Pair<generated::Rule>| {
+        let rule_str = pair.as_str();
+        let inner = pair.into_inner();
+        let mut var_counts = HashMap::new();
+
+        for p in inner.flatten() {
+            if let generated::Rule::atom_var = p.as_rule() {
+                let count = var_counts.entry(p.as_str()).or_insert(0);
+                *count += 1;
+            }
+        }
+
+        for (var_name, count) in &var_counts {
+            if *count == 1 {
+                println!("WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.", var_name, rule_str);
+            }
+        }
+    };
+
     let pair_to_ceptre_rule = |pair: Pair<generated::Rule>, string_cache: &mut StringCache| {
+        check_rule_variables(pair.clone());
+
         let mut pairs = pair.into_inner();
         let inputs_pair = pairs.next().unwrap();
         let outputs_pair = pairs.next().unwrap();
@@ -122,6 +143,8 @@ pub fn parse(text: &str, rng: &mut SmallRng) -> ParseResult {
                 }
             }
             generated::Rule::backwards_def => {
+                check_rule_variables(line.clone());
+
                 let mut backwards_def = line.into_inner();
 
                 let mut first_phrase =

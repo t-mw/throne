@@ -1,13 +1,15 @@
 WHITESPACE = _{ " " }
 COMMENT = _{ ("//" ~ (!NEWLINE ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
 atom = @{ (ASCII_ALPHANUMERIC | "_")+ ~ "'"* }
+atom_var = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "_")* ~ "'"* }
 string = { "`" ~ (!"`" ~ ANY)* ~ "`" }
+wildcard = @{ "_" ~ atom_var? }
 qui = { "qui" }
 
 // list <= and >= first, to give precendence over < and >
-prefix = { !(string | atom) ~ ("+" | "-" | "%%" | "<=" | ">=" | "<" | ">" | "#" | "==") }
+prefix = { !(wildcard | string | atom_var | atom) ~ ("+" | "-" | "%%" | "<=" | ">=" | "<" | ">" | "#" | "==") }
 
-phrase_compound = { prefix? ~ ((string | atom)+ | "(" ~ phrase_compound+ ~ ")") }
+phrase_compound = { prefix? ~ ((wildcard | string | atom_var | atom)+ | "(" ~ phrase_compound+ ~ ")") }
 phrase = !{ phrase_compound+ }
 
 stage_phrase = ${ "#" ~ phrase }
