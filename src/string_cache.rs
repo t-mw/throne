@@ -9,10 +9,10 @@ pub type AtomIdx = i32;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Atom {
-    idx: AtomIdx,
+    pub idx: AtomIdx,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct StringCache {
     atom_to_str: Vec<String>,
     str_to_atom: HashMap<String, Atom>,

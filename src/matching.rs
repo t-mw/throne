@@ -41,8 +41,11 @@ pub fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase)
                 if token.string != pred_token.string || input_depth != pred_depth {
                     return None;
                 }
+
+                pred_depth -= pred_token.close_depth;
             } else {
                 has_var = true;
+                pred_depth -= pred_token.close_depth;
 
                 while input_depth < pred_depth {
                     if let Some(pred_token) = pred_token_iter.next() {
@@ -53,8 +56,6 @@ pub fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase)
                     }
                 }
             }
-
-            pred_depth -= pred_token.close_depth;
         } else {
             return None;
         }
@@ -176,6 +177,8 @@ pub fn match_state_variables_assuming_compatible_structure(
         let is_var = is_var_token(token);
 
         if is_var {
+            pred_depth -= pred_token.close_depth;
+
             // colect tokens to assign to the input variable
             let start_i = pred_token_i - 1;
 
@@ -220,9 +223,10 @@ pub fn match_state_variables_assuming_compatible_structure(
 
                 existing_matches_and_result.push(m);
             }
+        } else {
+            pred_depth -= pred_token.close_depth;
         }
 
-        pred_depth -= pred_token.close_depth;
         input_depth -= token.close_depth;
     }
 
@@ -253,6 +257,8 @@ pub fn match_variables_assuming_compatible_structure(
         let is_var = is_var_token(token);
 
         if is_var {
+            pred_depth -= pred_token.close_depth;
+
             // colect tokens to assign to the input variable
             let start_i = pred_token_i - 1;
 
@@ -291,9 +297,10 @@ pub fn match_variables_assuming_compatible_structure(
                 let phrase = pred_tokens[start_i..end_i].to_vec();
                 existing_matches_and_result.push(Match::new(token, phrase));
             }
+        } else {
+            pred_depth -= pred_token.close_depth;
         }
 
-        pred_depth -= pred_token.close_depth;
         input_depth -= token.close_depth;
     }
 

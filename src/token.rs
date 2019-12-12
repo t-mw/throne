@@ -209,16 +209,16 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
             continue;
         }
 
+        if *token == ")" {
+            continue;
+        }
+
         for t in tokens.iter().skip(i + 1) {
             if *t == ")" {
                 close_depth += 1;
             } else {
                 break;
             }
-        }
-
-        if *token == ")" {
-            continue;
         }
 
         if *token == "`" {

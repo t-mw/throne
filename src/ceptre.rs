@@ -1973,4 +1973,28 @@ mod tests {
 
         assert_eq!(state.get_all(), [tokenize("test 123", &mut string_cache)]);
     }
+
+    #[test]
+    fn test_match_without_variables_test() {
+        let mut string_cache = StringCache::new();
+
+        // test complicated match that caused integer overflow in the past
+        let input_tokens = tokenize("ui-action ID RESULT HINT", &mut string_cache);
+        let pred_tokens = tokenize("ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan `to your team`)", &mut string_cache);
+
+        let result = test_match_without_variables(&input_tokens, &pred_tokens);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_match_without_variables2_test() {
+        let mut string_cache = StringCache::new();
+
+        // test complicated match that caused integer overflow in the past
+        let input_tokens = tokenize("RESULT", &mut string_cache);
+        let pred_tokens = tokenize("ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan `to your team`)", &mut string_cache);
+
+        let result = test_match_without_variables(&input_tokens, &pred_tokens);
+        assert!(result.is_some());
+    }
 }
