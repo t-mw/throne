@@ -1360,6 +1360,32 @@ mod tests {
                     ],
                 ),
             ),
+            (
+                rule_new(
+                    vec![
+                        tokenize("foo RESULT", &mut string_cache),
+                        tokenize("RESULT", &mut string_cache),
+                    ],
+                    vec![
+                        tokenize("bar RESULT", &mut string_cache),
+                        tokenize("RESULT", &mut string_cache),
+                    ],
+                ),
+                vec![
+                    tokenize("foo 1", &mut string_cache),
+                    tokenize("1", &mut string_cache),
+                ],
+                rule_new(
+                    vec![
+                        tokenize("foo 1", &mut string_cache),
+                        tokenize("1", &mut string_cache),
+                    ],
+                    vec![
+                        tokenize("bar 1", &mut string_cache),
+                        tokenize("1", &mut string_cache),
+                    ],
+                ),
+            ),
         ];
 
         for (rule, state, expected) in test_cases.drain(..) {
@@ -1368,7 +1394,15 @@ mod tests {
             let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
 
             assert!(result.is_some());
-            assert_eq!(result.unwrap(), expected);
+
+            let actual = result.unwrap();
+            assert_eq!(
+                actual,
+                expected,
+                "actual: {} expected: {}",
+                actual.to_string(&string_cache),
+                expected.to_string(&string_cache),
+            );
         }
     }
 

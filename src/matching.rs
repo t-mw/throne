@@ -617,7 +617,7 @@ where
 
         inputs
             .iter()
-            .filter(|pred| is_concrete_pred(pred))
+            .filter(|pred| is_concrete_pred(pred) || is_var_pred(pred))
             .for_each(|v| {
                 forward_concrete.push(assign_state_vars(v, state, &variables_matched));
             });
