@@ -28,3 +28,4 @@
 - [ ] ability to arbitrarily nest 'stage' scopes
 - [ ] ability to put rule output in 'stage' scopes e.g. in1 . in2 = out1 { subset = () } === in1 . in2 . subset = out1
 - [ ] reduce serialization boilerplate with either serde or generated code (like with pest)
+- [ ] allow output in custom backwards predicate, i.e. output is appended to rule
