@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::i32;
 
 const MAX_STRING_IDX: AtomIdx = i32::MAX - MAX_NUMBER * 2 - 1;
-const MAX_NUMBER: i32 = 99999;
+const MAX_NUMBER: i32 = 99999999;
 
 pub type AtomIdx = i32;
 
