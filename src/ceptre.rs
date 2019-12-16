@@ -666,6 +666,31 @@ mod tests {
     }
 
     #[test]
+    fn context_from_text_backwards_predicate_constant2_test() {
+        let mut rng = test_rng();
+        let mut context = Context::from_text_rng(
+            "<<back C D . ?state C . ?state D\n\
+             <<back A bar . test A = ()",
+            &mut rng,
+        );
+
+        context.print();
+
+        assert_eq!(
+            context.core.rules,
+            [Rule::new(
+                0,
+                vec![
+                    tokenize("?state A", &mut context.string_cache),
+                    tokenize("?state bar", &mut context.string_cache),
+                    tokenize("test A", &mut context.string_cache),
+                ],
+                vec![]
+            )]
+        );
+    }
+
+    #[test]
     fn context_from_text_backwards_predicate_permutations_test() {
         let mut context = Context::from_text(
             "<<back1 . ?state11\n\

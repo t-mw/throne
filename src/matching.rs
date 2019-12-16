@@ -20,54 +20,188 @@ impl<T> OptionFilter<T> for Option<T> {
 }
 
 pub fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<bool> {
-    let mut pred_token_iter = pred_tokens.iter();
+    let mut matcher = NoVariablesMatcher { has_var: false };
 
-    let mut input_depth = 0;
-    let mut pred_depth = 0;
+    if base_match(input_tokens, pred_tokens, &mut matcher) {
+        Some(matcher.has_var)
+    } else {
+        None
+    }
+}
 
-    let mut has_var = false;
+pub fn match_variables_twoway(
+    tokens1: &Phrase,
+    tokens2: &Phrase,
+    existing_matches_and_result: &mut Vec<Match>,
+) -> bool {
+    let initial_matches_len = existing_matches_and_result.len();
 
-    for token in input_tokens {
-        let pred_token = pred_token_iter.next();
+    let mut matcher = TwoWayMatcher {
+        existing_matches_and_result,
+        initial_matches_len,
+    };
 
-        input_depth += token.open_depth;
+    base_match(tokens1, tokens2, &mut matcher)
+}
 
-        if let Some(pred_token) = pred_token {
-            pred_depth += pred_token.open_depth;
+trait BaseMatcher {
+    fn is_twoway_matcher(&self) -> bool;
+    fn do_match(&mut self, token: &Token, phrase: &Phrase) -> bool;
+}
 
-            let is_var = is_var_token(token);
+struct NoVariablesMatcher {
+    has_var: bool,
+}
 
-            if !is_var {
-                if token.string != pred_token.string || input_depth != pred_depth {
-                    return None;
-                }
+impl BaseMatcher for NoVariablesMatcher {
+    fn is_twoway_matcher(&self) -> bool {
+        false
+    }
 
-                pred_depth -= pred_token.close_depth;
-            } else {
-                has_var = true;
-                pred_depth -= pred_token.close_depth;
+    fn do_match(&mut self, _token: &Token, _phrase: &Phrase) -> bool {
+        self.has_var = true;
+        true
+    }
+}
 
-                while input_depth < pred_depth {
-                    if let Some(pred_token) = pred_token_iter.next() {
-                        pred_depth += pred_token.open_depth;
-                        pred_depth -= pred_token.close_depth;
-                    } else {
-                        return None;
-                    }
-                }
+struct TwoWayMatcher<'a> {
+    existing_matches_and_result: &'a mut Vec<Match>,
+    initial_matches_len: usize,
+}
+
+impl BaseMatcher for TwoWayMatcher<'_> {
+    fn is_twoway_matcher(&self) -> bool {
+        true
+    }
+
+    fn do_match(&mut self, token: &Token, phrase: &Phrase) -> bool {
+        let variable_already_matched = if let Some(ref existing_match) = self
+            .existing_matches_and_result
+            .iter()
+            .find(|m| m.atom == token.string)
+        {
+            if !phrase_equal(
+                &existing_match.phrase[..],
+                phrase,
+                existing_match.depths,
+                (token.open_depth, token.close_depth),
+            ) {
+                // this match of the variable conflicted with an existing match
+                self.existing_matches_and_result
+                    .drain(self.initial_matches_len..);
+                return false;
             }
+
+            true
         } else {
-            return None;
+            false
+        };
+
+        if !variable_already_matched {
+            self.existing_matches_and_result
+                .push(Match::new(token, phrase.to_vec()));
         }
 
-        input_depth -= token.close_depth;
+        true
+    }
+}
+
+fn base_match(tokens1: &Phrase, tokens2: &Phrase, matcher: &mut impl BaseMatcher) -> bool {
+    let mut token1_iter = tokens1.iter();
+    let mut token2_iter = tokens2.iter();
+
+    let mut depth1 = 0;
+    let mut depth2 = 0;
+
+    let mut token1_i = 0;
+    let mut token2_i = 0;
+
+    loop {
+        let token1 = token1_iter.next();
+        let token2 = token2_iter.next();
+
+        match (token1, token2) {
+            (None, None) => break,
+            (Some(_), None) => return false,
+            (None, Some(_)) => return false,
+            (Some(token1), Some(token2)) => {
+                depth1 += token1.open_depth;
+                depth2 += token2.open_depth;
+
+                let is_var1 = is_var_token(token1);
+                let is_var2 = is_var_token(token2) && matcher.is_twoway_matcher();
+
+                if !is_var1 && !is_var2 {
+                    if token1.string != token2.string || depth1 != depth2 {
+                        return false;
+                    }
+
+                    depth1 -= token1.close_depth;
+                    depth2 -= token2.close_depth;
+                } else if is_var1 && is_var2 {
+                    if depth1 != depth2 {
+                        return false;
+                    }
+
+                    depth1 -= token1.close_depth;
+                    depth2 -= token2.close_depth;
+                } else if is_var1 {
+                    depth2 -= token2.close_depth;
+
+                    // colect tokens to assign to the input variable
+                    let start_i = token2_i;
+
+                    while depth1 < depth2 {
+                        if let Some(token2) = token2_iter.next() {
+                            depth2 += token2.open_depth;
+                            depth2 -= token2.close_depth;
+
+                            token2_i += 1;
+                        } else {
+                            return false;
+                        }
+                    }
+
+                    let end_i = token2_i + 1;
+
+                    if !matcher.do_match(token1, &tokens2[start_i..end_i]) {
+                        return false;
+                    }
+
+                    depth1 -= token1.close_depth;
+                } else if is_var2 {
+                    depth1 -= token1.close_depth;
+
+                    // colect tokens to assign to the input variable
+                    let start_i = token1_i;
+
+                    while depth2 < depth1 {
+                        if let Some(token1) = token1_iter.next() {
+                            depth1 += token1.open_depth;
+                            depth1 -= token1.close_depth;
+
+                            token1_i += 1;
+                        } else {
+                            return false;
+                        }
+                    }
+
+                    let end_i = token1_i + 1;
+
+                    if !matcher.do_match(token2, &tokens1[start_i..end_i]) {
+                        return false;
+                    }
+
+                    depth2 -= token2.close_depth;
+                }
+
+                token1_i += 1;
+                token2_i += 1;
+            }
+        }
     }
 
-    if pred_token_iter.next().is_some() {
-        return None;
-    }
-
-    Some(has_var)
+    true
 }
 
 #[derive(Eq, PartialEq, Debug)]

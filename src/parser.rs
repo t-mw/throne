@@ -179,7 +179,11 @@ pub fn parse(text: &str, rng: &mut SmallRng) -> ParseResult {
 
     let mut new_rules = vec![];
     for rule in &rules {
-        new_rules.append(&mut replace_backwards_preds(&rule, &backwards_preds));
+        new_rules.append(&mut replace_backwards_preds(
+            &rule,
+            &backwards_preds,
+            &string_cache,
+        ));
     }
 
     for (i, rule) in new_rules.iter_mut().enumerate() {
@@ -197,16 +201,24 @@ pub fn parse(text: &str, rng: &mut SmallRng) -> ParseResult {
 fn replace_backwards_preds(
     rule: &Rule,
     backwards_preds: &Vec<(VecPhrase, Vec<VecPhrase>)>,
+    string_cache: &StringCache,
 ) -> Vec<Rule> {
     let mut backwards_preds_per_input = vec![vec![]; rule.inputs.len()];
     let mut backwards_pred_pointers = vec![0; rule.inputs.len()];
 
     for (i_i, input) in rule.inputs.iter().enumerate() {
         if input[0].flag == TokenFlag::BackwardsPred(BackwardsPred::Custom) {
+            let mut matched = false;
+
             for (b_i, (first_phrase, _)) in backwards_preds.iter().enumerate() {
-                if test_match_without_variables(input, first_phrase).is_some() {
+                if match_variables_twoway(input, first_phrase, &mut vec![]) {
                     backwards_preds_per_input[i_i].push(b_i);
+                    matched = true;
                 }
+            }
+
+            if !matched {
+                println!("WARNING: backwards predicate in rule did not match '{}'. Check that the backwards predicate is defined.", rule.to_string(string_cache));
             }
         }
     }
@@ -245,11 +257,7 @@ fn replace_backwards_preds(
                 // we only need to check that the variables between the
                 // backwards predicates are compatible, if they match
                 // non-variable atoms in the backwards predicate definition.
-                if !match_variables_assuming_compatible_structure(
-                    input,
-                    first_phrase,
-                    &mut nonvariable_matches,
-                ) {
+                if !match_variables_twoway(input, first_phrase, &mut nonvariable_matches) {
                     matched = false;
                     break;
                 }
