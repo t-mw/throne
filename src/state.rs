@@ -152,6 +152,12 @@ impl std::ops::Index<usize> for State {
     }
 }
 
+impl std::fmt::Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.get_all())
+    }
+}
+
 fn extract_first_atoms_state(state: &State) -> Vec<(usize, Atom)> {
     let mut atoms: Vec<(usize, Atom)> = state
         .iter()
