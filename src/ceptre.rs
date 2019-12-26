@@ -12,6 +12,7 @@ use crate::state::State;
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
 
+#[allow(unused_macros)]
 macro_rules! dump {
     ($($a:expr),*) => ({
         let mut txt = format!("{}:{}:", file!(), line!());
