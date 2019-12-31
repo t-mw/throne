@@ -1,0 +1,35 @@
+* TODO support custom backwards predicate (<<) under stage label
+* TODO support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
+* TODO decide on consistent syntax for arguments e.g. keywords?
+* TODO allow hex colors / named colors to be passed directly to sprite
+* TODO add hex overload to 'color' predicate
+* TODO arbitrary math expressions e.g. 'expr 2 + A / 3 + 1.5 = B'
+* TODO option to only process a variable once per stage
+* TODO lispy key properties to enable pattern matching
+* TODO syntax to match rule only once per update / permanently. or even make matching once per update the default.
+* TODO make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
+* TODO replace #foo -> stage foo, because # does not have special effects like other symbols
+* TODO replace !== backwards predicate with ability to use '!' anywhere in a phrase
+* TODO ability to arbitrarily nest 'stage' scopes
+* TODO nested labels
+* TODO ability to put rule output in 'stage' scopes e.g. in1 . in2 = out1 { subset = () } === in1 . in2 . subset = out1
+* TODO reduce serialization boilerplate with either serde or generated code (like with pest)
+* TODO allow output in custom backwards predicate, i.e. output is appended to rule
+* TODO test doing initial matching through ecs instead of first atoms (e.g. https://github.com/TomGillen)
+  - requires a macro to generate rust structs for ceptre identifiers
+  - an item of state is then e.g. &[FooAtom::N1, Var::N2, BarAtom::N2, etc..]
+  - possible matching rules are found using a component query
+* DONE wildcard variable: _
+* DONE support defining own backwards predicates:
+  - defined as rule without '=': <test A B . + A B C . required state C
+  - can be compiled by replacing instances of <test _ _ in the full rule, making the appropriate variable name substitutions
+  - predicate does not consume state, which needs a small change in the matching loop
+* DONE comment syntax
+* DONE syntax to check absence of state: ^
+* DONE move drawing outside of rules - just draw with js by iterating over state
+* DONE handle frames by 'injecting' atom i.e. insert '#frame' atom and let rules handle it
+* DONE 'derived' state i.e. able to match on Z where Z is equivalent to X + Y, when only X + Y are present
+* DONE performance improvement by sorting states by atom indices + jumping to known ranges during matching or do binary search
+* DONE modulo
+* DONE improve performance by, for each phrase in a rule, recording the states that could match the phrase. needs to be re-evaluated each time state is added or removed.
+  - Attempted in 7d27586, worsened performance.
