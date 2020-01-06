@@ -457,8 +457,9 @@ mod tests {
     fn context_from_text_rules_test() {
         let mut context = Context::from_text(
             "at 0 0 wood . at 1 2 wood = at 1 0 wood \n\
-             asdf . #test: \n\
-             at 3 4 wood = at 5 6 wood . at 7 8 wood",
+             asdf . #test: { \n\
+             at 3 4 wood = at 5 6 wood . at 7 8 wood \n\
+             }",
         );
 
         assert_eq!(
@@ -881,10 +882,10 @@ mod tests {
     fn update_test() {
         let mut context = Context::from_text(
             "at 0 0 wood . at 0 1 wood . at 1 1 wood . at 0 1 fire . #update\n\
-             #update:\n\
+             #update: {\n\
              at X Y wood . at X Y fire = at X Y fire\n\
              () = #spread\n\
-             \n\
+             }\n\
              #spread . $at X Y fire . + X 1 X' . + Y' 1 Y = at X' Y fire . at X Y' fire",
         )
         .with_test_rng();

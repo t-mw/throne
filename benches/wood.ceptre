@@ -1,11 +1,13 @@
 at 1 1 wood . at 1 1 wood . at 1 1 wood . at 1 1 wood . at 1 1 wood
 
-#update:
+#update: {
   at X Y wood . + X 1 X' . + Y 1 Y' . + X'' 1 X . + Y'' 1 Y = at X' Y' fire . at X' Y'' fire . at X'' Y' fire . at X'' Y'' fire
   at X Y fire . + X 1 X' = at' X' Y fire
   at X Y fire . + Y 1 Y' = at' X Y' fire
   () = #process
+}
 
-#process:
+#process: {
   at' X Y I = at X Y I
   () = ()
+}
