@@ -7,6 +7,7 @@
 * TODO option to only process a variable once per stage
 * TODO lispy key properties to enable pattern matching
 * TODO syntax to match rule only once per update / permanently. or even make matching once per update the default.
+  - option to scope permanence by a variable
 * TODO make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
 * TODO replace #foo -> stage foo, because # does not have special effects like other symbols
 * TODO replace !== backwards predicate with ability to use '!' anywhere in a phrase
@@ -19,6 +20,7 @@
   - requires a macro to generate rust structs for ceptre identifiers
   - an item of state is then e.g. &[FooAtom::N1, Var::N2, BarAtom::N2, etc..]
   - possible matching rules are found using a component query
+* TODO support marking state phrases immutable in debug builds, logging warning when the state is consumed by a rule. or do compile-time check.
 * DONE wildcard variable: _
 * DONE support defining own backwards predicates:
   - defined as rule without '=': <test A B . + A B C . required state C
