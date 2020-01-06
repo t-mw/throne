@@ -21,6 +21,7 @@
   - an item of state is then e.g. &[FooAtom::N1, Var::N2, BarAtom::N2, etc..]
   - possible matching rules are found using a component query
 * TODO support marking state phrases immutable in debug builds, logging warning when the state is consumed by a rule. or do compile-time check.
+* TODO support matching phrases while binding to them, to avoid retyping them in output e.g. (foo A)@FOO . bar = FOO
 * DONE wildcard variable: _
 * DONE support defining own backwards predicates:
   - defined as rule without '=': <test A B . + A B C . required state C
