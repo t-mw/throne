@@ -455,7 +455,87 @@ where
     let inputs = &r.inputs;
     let outputs = &r.outputs;
 
-    // per input, a list of states that match the input.
+    // per input, a list of states that could match the input
+    let input_state_matches =
+        if let Some(matches) = gather_potential_input_state_matches(inputs, state) {
+            matches
+        } else {
+            return None;
+        };
+
+    // precompute values required for deriving branch indices.
+    let mut input_rev_permutation_counts = vec![1; input_state_matches.0.len()];
+    let mut permutation_count = 1;
+    input_state_matches
+        .0
+        .iter()
+        .enumerate()
+        .rev()
+        .for_each(|(i, (_, matches))| {
+            permutation_count *= matches.len();
+
+            if i > 0 {
+                input_rev_permutation_counts[i - 1] = permutation_count;
+            }
+        });
+
+    let mut variables_matched: Vec<MatchLite> = vec![];
+
+    // we'll use state as a scratchpad for other token allocations
+    state.lock_scratch();
+
+    'outer: for p_i in 0..permutation_count {
+        variables_matched.clear();
+        state.reset_scratch();
+
+        if !test_inputs_with_permutation(
+            p_i,
+            inputs,
+            state,
+            &input_state_matches,
+            &input_rev_permutation_counts,
+            &mut variables_matched,
+            side_input,
+        ) {
+            continue 'outer;
+        }
+
+        let mut forward_concrete = vec![];
+        let mut outputs_concrete = vec![];
+
+        inputs
+            .iter()
+            .filter(|pred| is_concrete_pred(pred) || is_var_pred(pred))
+            .for_each(|v| {
+                forward_concrete.push(assign_state_vars(v, state, &variables_matched));
+            });
+
+        outputs.iter().for_each(|v| {
+            if is_side_pred(v) {
+                let pred = assign_state_vars(v, state, &variables_matched);
+
+                evaluate_side_pred(&pred, side_input);
+            } else {
+                outputs_concrete.push(assign_state_vars(v, state, &variables_matched));
+            }
+        });
+
+        state.unlock_scratch();
+
+        return Some(Rule::new(r.id, forward_concrete, outputs_concrete));
+    }
+
+    state.unlock_scratch();
+
+    None
+}
+
+struct InputStateMatches(Vec<(usize, Vec<(usize, bool)>)>);
+
+fn gather_potential_input_state_matches(
+    inputs: &Vec<Vec<Token>>,
+    state: &State,
+) -> Option<InputStateMatches> {
     let mut input_state_matches = vec![];
 
     for (i_i, input) in inputs.iter().enumerate() {
@@ -522,130 +602,7 @@ where
     // try to improve performance by checking inputs ordered from least to most matches
     input_state_matches.sort_unstable_by_key(|(_, matches)| matches.len());
 
-    // precompute values required for deriving branch indices.
-    let mut input_rev_permutation_counts = vec![1; input_state_matches.len()];
-    let mut permutation_count = 1;
-    input_state_matches
-        .iter()
-        .enumerate()
-        .rev()
-        .for_each(|(i, (_, matches))| {
-            permutation_count *= matches.len();
-
-            if i > 0 {
-                input_rev_permutation_counts[i - 1] = permutation_count;
-            }
-        });
-
-    let mut variables_matched: Vec<MatchLite> = vec![];
-
-    // we'll use state as a scratchpad for other token allocations
-    let len = state.len();
-    state.lock_scratch();
-
-    'outer: for p_i in 0..permutation_count {
-        variables_matched.clear();
-        state.reset_scratch();
-
-        let mut states_matched_bool = vec![false; len];
-
-        // iterate across the graph of permutations from root to leaf, where each
-        // level of the tree is an input, and each branch is a match against a state.
-        for (concrete_input_i, (i_i, matches)) in input_state_matches.iter().enumerate() {
-            let branch_idx = (p_i / input_rev_permutation_counts[concrete_input_i]) % matches.len();
-            let (s_i, has_var) = matches[branch_idx];
-
-            let input_phrase = &inputs[*i_i];
-
-            // a previous input in this permutation has already matched the state being checked
-            if input_phrase[0].is_consuming {
-                if states_matched_bool[s_i] {
-                    continue 'outer;
-                } else {
-                    states_matched_bool[s_i] = true;
-                }
-            }
-
-            if has_var {
-                // we know the structures are compatible from the earlier matching check
-                if !match_state_variables_assuming_compatible_structure(
-                    input_phrase,
-                    &state,
-                    s_i,
-                    &mut variables_matched,
-                ) {
-                    continue 'outer;
-                }
-            }
-        }
-
-        for input in inputs
-            .iter()
-            .filter(|input| is_twoway_backwards_pred(input))
-        {
-            if !match_backwards_variables(input, state, &mut variables_matched) {
-                continue 'outer;
-            }
-        }
-
-        for input in inputs.iter().filter(|input| is_side_pred(input)) {
-            if !match_side_variables(input, state, &mut variables_matched, side_input) {
-                continue 'outer;
-            }
-        }
-
-        for input in inputs
-            .iter()
-            .filter(|input| is_oneway_backwards_pred(input))
-        {
-            if !match_backwards_variables(input, state, &mut variables_matched) {
-                continue 'outer;
-            }
-        }
-
-        for input in inputs.iter().filter(|input| is_negated_pred(input)) {
-            // check negated predicates last, so that we know about all variables
-            // from the backwards and side predicates
-            if state
-                .iter()
-                .enumerate()
-                .filter(|&(s_i, _)| s_i < len && !states_matched_bool[s_i])
-                .any(|(s_i, _)| {
-                    match_state_variables_with_existing(input, state, s_i, &mut variables_matched)
-                })
-            {
-                continue 'outer;
-            }
-        }
-
-        let mut forward_concrete = vec![];
-        let mut outputs_concrete = vec![];
-
-        inputs
-            .iter()
-            .filter(|pred| is_concrete_pred(pred) || is_var_pred(pred))
-            .for_each(|v| {
-                forward_concrete.push(assign_state_vars(v, state, &variables_matched));
-            });
-
-        outputs.iter().for_each(|v| {
-            if is_side_pred(v) {
-                let pred = assign_state_vars(v, state, &variables_matched);
-
-                evaluate_side_pred(&pred, side_input);
-            } else {
-                outputs_concrete.push(assign_state_vars(v, state, &variables_matched));
-            }
-        });
-
-        state.unlock_scratch();
-
-        return Some(Rule::new(r.id, forward_concrete, outputs_concrete));
-    }
-
-    state.unlock_scratch();
-
-    None
+    Some(InputStateMatches(input_state_matches))
 }
 
 fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
@@ -657,6 +614,90 @@ fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
     } else {
         None
     }
+}
+
+fn test_inputs_with_permutation(
+    p_i: usize,
+    inputs: &Vec<Vec<Token>>,
+    state: &mut State,
+    input_state_matches: &InputStateMatches,
+    input_rev_permutation_counts: &[usize],
+    variables_matched: &mut Vec<MatchLite>,
+    side_input: &mut impl SideInput,
+) -> bool {
+    let len = state.len();
+    let mut states_matched_bool = vec![false; len];
+
+    // iterate across the graph of permutations from root to leaf, where each
+    // level of the tree is an input, and each branch is a match against a state.
+    for (concrete_input_i, (i_i, matches)) in input_state_matches.0.iter().enumerate() {
+        let branch_idx = (p_i / input_rev_permutation_counts[concrete_input_i]) % matches.len();
+        let (s_i, has_var) = matches[branch_idx];
+
+        let input_phrase = &inputs[*i_i];
+
+        // a previous input in this permutation has already matched the state being checked
+        if input_phrase[0].is_consuming {
+            if states_matched_bool[s_i] {
+                return false;
+            } else {
+                states_matched_bool[s_i] = true;
+            }
+        }
+
+        if has_var {
+            // we know the structures are compatible from the earlier matching check
+            if !match_state_variables_assuming_compatible_structure(
+                input_phrase,
+                &state,
+                s_i,
+                variables_matched,
+            ) {
+                return false;
+            }
+        }
+    }
+
+    for input in inputs
+        .iter()
+        .filter(|input| is_twoway_backwards_pred(input))
+    {
+        if !match_backwards_variables(input, state, variables_matched) {
+            return false;
+        }
+    }
+
+    for input in inputs.iter().filter(|input| is_side_pred(input)) {
+        if !match_side_variables(input, state, variables_matched, side_input) {
+            return false;
+        }
+    }
+
+    for input in inputs
+        .iter()
+        .filter(|input| is_oneway_backwards_pred(input))
+    {
+        if !match_backwards_variables(input, state, variables_matched) {
+            return false;
+        }
+    }
+
+    for input in inputs.iter().filter(|input| is_negated_pred(input)) {
+        // check negated predicates last, so that we know about all variables
+        // from the backwards and side predicates
+        if state
+            .iter()
+            .enumerate()
+            .filter(|&(s_i, _)| s_i < len && !states_matched_bool[s_i])
+            .any(|(s_i, _)| {
+                match_state_variables_with_existing(input, state, s_i, variables_matched)
+            })
+        {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn match_backwards_variables(
