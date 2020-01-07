@@ -445,6 +445,13 @@ pub fn match_variables_assuming_compatible_structure(
 pub trait SideInput: FnMut(&Phrase) -> Option<Vec<Token>> {}
 impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
 
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct FirstAtoms {
+    pub a0: Option<Atom>,
+    pub a1: Option<Atom>,
+    pub a2: Option<Atom>,
+}
+
 // Checks whether the rule's forward and backward predicates match the state.
 // Returns a new rule with all variables resolved, with backwards/side
 // predicates removed.
@@ -459,46 +466,66 @@ where
     let mut input_state_matches = vec![];
 
     for (i_i, input) in inputs.iter().enumerate() {
+        if state.len() == 0 {
+            continue;
+        }
+
         // TODO: exit early if we already know that side predicate won't match
         if is_concrete_pred(input) {
-            let rule_first_atoms = extract_first_atoms_rule_input(input);
+            let mut matches = vec![];
 
-            let start_idx = if let Some(first) = rule_first_atoms {
-                if let Ok(idx) = state
+            if let Some(first) = extract_first_atoms_rule_input(input) {
+                let start_idx = match state
                     .first_atoms
                     .binary_search_by(|probe| probe.1.cmp(&first))
                 {
-                    // binary search won't always find the first match,
-                    // so search backwards until we find it
-                    state
-                        .first_atoms
-                        .iter()
-                        .enumerate()
-                        .rev()
-                        .skip(state.first_atoms.len() - 1 - idx)
-                        .take_while(|(_, a)| a.1 == first)
-                        .last()
-                        .expect("start_idx")
-                        .0
-                } else {
-                    return None;
-                }
+                    Ok(idx) => {
+                        // binary search won't always find the first match,
+                        // so search backwards until we find it
+                        state
+                            .first_atoms
+                            .iter()
+                            .enumerate()
+                            .rev()
+                            .skip(state.first_atoms.len() - 1 - idx)
+                            .take_while(|(_, a)| a.1 == first)
+                            .last()
+                            .expect("start_idx")
+                            .0
+                    }
+                    // error contains index that rule first atoms could be inserted at while maintaining sort order
+                    Err(idx) => {
+                        if idx >= state.first_atoms.len() || state.first_atoms[idx].1.a0 != first.a0
+                        {
+                            return None;
+                        }
+                        idx
+                    }
+                };
+
+                state
+                    .first_atoms
+                    .iter()
+                    .skip(start_idx)
+                    .take_while(|a| {
+                        first.a0 == a.1.a0
+                            && (first.a1.is_none() || first.a1 == a.1.a1)
+                            && (first.a2.is_none() || first.a2 == a.1.a2)
+                    })
+                    .for_each(|(s_i, _)| {
+                        if let Some(has_var) = test_match_without_variables(input, &state[*s_i]) {
+                            matches.push((*s_i, has_var));
+                        }
+                    });
             } else {
-                0
-            };
-
-            let mut matches = vec![];
-
-            state
-                .first_atoms
-                .iter()
-                .skip(start_idx)
-                .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
-                .for_each(|(s_i, _)| {
-                    if let Some(has_var) = test_match_without_variables(input, &state[*s_i]) {
-                        matches.push((*s_i, has_var));
+                state.iter().enumerate().for_each(|(s_i, phrase_id)| {
+                    if let Some(has_var) =
+                        test_match_without_variables(input, state.get(*phrase_id))
+                    {
+                        matches.push((s_i, has_var));
                     }
                 });
+            };
 
             if matches.len() == 0 {
                 return None;
@@ -642,14 +669,27 @@ where
     None
 }
 
-fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
-    if is_concrete_pred(phrase) {
+fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<FirstAtoms> {
+    let to_atom = |idx| {
         phrase
-            .get(0)
+            .get(idx)
             .option_filter(|t| !is_var_token(t))
             .map(|t| t.string)
-    } else {
-        None
+    };
+
+    let a0 = to_atom(0);
+    let a1 = to_atom(1);
+    let a2 = to_atom(2);
+
+    match (a0, a1, a2) {
+        (Some(_), Some(_), Some(_)) => Some(FirstAtoms { a0, a1, a2 }),
+        (Some(_), Some(_), _) => Some(FirstAtoms { a0, a1, a2: None }),
+        (Some(_), _, _) => Some(FirstAtoms {
+            a0,
+            a1: None,
+            a2: None,
+        }),
+        _ => None,
     }
 }
 
