@@ -519,6 +519,9 @@ where
         }
     }
 
+    // try to improve performance by checking inputs ordered from least to most matches
+    input_state_matches.sort_unstable_by_key(|(_, matches)| matches.len());
+
     // precompute values required for deriving branch indices.
     let mut input_rev_permutation_counts = vec![1; input_state_matches.len()];
     let mut permutation_count = 1;
@@ -548,7 +551,6 @@ where
 
         // iterate across the graph of permutations from root to leaf, where each
         // level of the tree is an input, and each branch is a match against a state.
-        // TODO: improve performance by checking inputs ordered from least to most matches
         for (concrete_input_i, (i_i, matches)) in input_state_matches.iter().enumerate() {
             let branch_idx = (p_i / input_rev_permutation_counts[concrete_input_i]) % matches.len();
             let (s_i, has_var) = matches[branch_idx];
