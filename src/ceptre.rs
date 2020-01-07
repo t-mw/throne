@@ -1341,7 +1341,7 @@ mod tests {
                     ],
                 ),
                 vec![
-                    tokenize("block-set 0 5 1", &mut string_cache),
+                    tokenize("block-set 0 5 2", &mut string_cache),
                     tokenize("block-set 1 6 1", &mut string_cache),
                     tokenize("block-set 3 6 0", &mut string_cache),
                     tokenize("block-falling 7 6 2", &mut string_cache),
@@ -1401,7 +1401,7 @@ mod tests {
             assert_eq!(
                 actual,
                 expected,
-                "actual: {} expected: {}",
+                "\nactual: {}\nexpected: {}",
                 actual.to_string(&string_cache),
                 expected.to_string(&string_cache),
             );
