@@ -16,9 +16,9 @@
 * TODO ability to put rule output in 'stage' scopes e.g. in1 . in2 = out1 { subset = () } === in1 . in2 . subset = out1
 * TODO reduce serialization boilerplate with either serde or generated code (like with pest)
 * TODO allow output in custom backwards predicate, i.e. output is appended to rule
-* TODO test doing initial matching through ecs instead of first atoms (e.g. https://github.com/TomGillen)
+* TODO test doing initial matching through ecs instead of first atoms (e.g. https://github.com/TomGillen/legion)
   - requires a macro to generate rust structs for ceptre identifiers
-  - an item of state is then e.g. &[FooAtom::N1, Var::N2, BarAtom::N2, etc..]
+  - an item of state is then e.g. &[FooAtom::N1, Var::N2, BarAtom::N3, etc..]
   - possible matching rules are found using a component query
 * TODO support marking state phrases immutable in debug builds, logging warning when the state is consumed by a rule. or do compile-time check.
 * TODO support matching phrases while binding to them, to avoid retyping them in output e.g. (foo A)@FOO . bar = FOO
