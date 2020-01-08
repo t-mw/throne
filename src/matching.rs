@@ -204,7 +204,7 @@ fn base_match(tokens1: &Phrase, tokens2: &Phrase, matcher: &mut impl BaseMatcher
     true
 }
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct MatchLite {
     pub atom: Atom,
     pub state_i: usize,
@@ -464,29 +464,35 @@ where
         };
 
     // precompute values required for deriving branch indices.
-    let mut input_rev_permutation_counts = vec![1; input_state_matches.0.len()];
+    let mut input_rev_permutation_counts = vec![1; input_state_matches.potential_matches.len()];
     let mut permutation_count = 1;
     input_state_matches
-        .0
+        .potential_matches
         .iter()
         .enumerate()
         .rev()
-        .for_each(|(i, (_, matches))| {
-            permutation_count *= matches.len();
+        .for_each(|(i, InputStateMatch { states, .. })| {
+            permutation_count *= states.len();
 
             if i > 0 {
                 input_rev_permutation_counts[i - 1] = permutation_count;
             }
         });
 
-    let mut variables_matched: Vec<MatchLite> = vec![];
+    if permutation_count > 2000 {
+        println!(
+            "WARNING: rule with id {} is causing {} state permutations to be checked. Review the complexity of the rule.",
+            r.id, permutation_count
+        );
+    }
 
     // we'll use state as a scratchpad for other token allocations
     state.lock_scratch();
 
     'outer: for p_i in 0..permutation_count {
-        variables_matched.clear();
         state.reset_scratch();
+
+        let mut variables_matched = input_state_matches.definite_matched_variables.clone();
 
         if !test_inputs_with_permutation(
             p_i,
@@ -530,13 +536,60 @@ where
     None
 }
 
-struct InputStateMatches(Vec<(usize, Vec<(usize, bool)>)>);
+#[derive(Debug)]
+struct InputStateMatches {
+    potential_matches: Vec<InputStateMatch>,
+    definite_matched_variables: Vec<MatchLite>,
+    initial_states_matched_bool: Vec<bool>,
+}
+
+#[derive(Debug)]
+struct InputStateMatch {
+    i_i: usize,
+    has_var: bool,
+    states: Vec<usize>,
+}
+
+impl InputStateMatch {
+    fn test_final_match(
+        &self,
+        state_match_idx: usize,
+        inputs: &Vec<Vec<Token>>,
+        state: &State,
+        states_matched_bool: &mut [bool],
+        variables_matched: &mut Vec<MatchLite>,
+    ) -> bool {
+        let s_i = self.states[state_match_idx];
+        let input_phrase = &inputs[self.i_i];
+
+        // a previous input in the permutation has already matched the state being checked
+        if input_phrase[0].is_consuming {
+            if states_matched_bool[s_i] {
+                return false;
+            } else {
+                states_matched_bool[s_i] = true;
+            }
+        }
+
+        // we should know that the structures are compatible from earlier matching checks
+        !self.has_var
+            || match_state_variables_assuming_compatible_structure(
+                input_phrase,
+                state,
+                s_i,
+                variables_matched,
+            )
+    }
+}
 
 fn gather_potential_input_state_matches(
     inputs: &Vec<Vec<Token>>,
     state: &State,
 ) -> Option<InputStateMatches> {
-    let mut input_state_matches = vec![];
+    let mut potential_matches = vec![]; // inputs that could not be matched to a single state
+
+    let mut multiple_matches = vec![]; // inputs that may yet be matched to a single state
+    let mut single_matches = vec![]; // inputs that have been matched to a single state
 
     for (i_i, input) in inputs.iter().enumerate() {
         if state.len() == 0 {
@@ -571,7 +624,8 @@ fn gather_potential_input_state_matches(
                 0
             };
 
-            let mut matches = vec![];
+            let mut has_var = false;
+            let mut states = vec![];
 
             state
                 .first_atoms
@@ -579,30 +633,115 @@ fn gather_potential_input_state_matches(
                 .skip(start_idx)
                 .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
                 .for_each(|(s_i, _)| {
-                    if let Some(has_var) = test_match_without_variables(input, &state[*s_i]) {
-                        matches.push((*s_i, has_var));
+                    if let Some(match_has_var) = test_match_without_variables(input, &state[*s_i]) {
+                        // TODO: calculate has_var outside of loop since it only depends on input
+                        if match_has_var {
+                            has_var = true;
+                        }
+
+                        states.push(*s_i);
                     }
                 });
 
-            if matches.len() == 0 {
+            if states.len() == 0 {
                 return None;
             }
 
-            input_state_matches.push((i_i, matches));
+            if states.len() == 1 {
+                single_matches.push(InputStateMatch {
+                    i_i,
+                    has_var,
+                    states,
+                });
+            } else {
+                multiple_matches.push(InputStateMatch {
+                    i_i,
+                    has_var,
+                    states,
+                });
+            }
         } else if input.len() == 1 && is_var_pred(&input) {
-            let matches = state
-                .iter()
-                .enumerate()
-                .map(|(i, _)| (i, true))
-                .collect::<Vec<_>>();
-            input_state_matches.push((i_i, matches))
+            let states = state.iter().enumerate().map(|(i, _)| i).collect::<Vec<_>>();
+            potential_matches.push(InputStateMatch {
+                i_i,
+                has_var: true,
+                states,
+            });
         }
     }
 
-    // try to improve performance by checking inputs ordered from least to most matches
-    input_state_matches.sort_unstable_by_key(|(_, matches)| matches.len());
+    // immediately match phrases that could only match a single state, to
+    // reduce number of permutations that need to be checked later on.
+    let mut definite_matched_variables = vec![];
+    let mut initial_states_matched_bool = vec![false; state.len()];
 
-    Some(InputStateMatches(input_state_matches))
+    for input_state_match in &single_matches {
+        if !input_state_match.test_final_match(
+            0,
+            inputs,
+            state,
+            &mut initial_states_matched_bool,
+            &mut definite_matched_variables,
+        ) {
+            return None;
+        }
+    }
+
+    // having gathered the variables for all initial single matches, eliminate
+    // any other matches that have now become single matches.
+    if definite_matched_variables.len() > 0 {
+        for input_state_match in multiple_matches {
+            let mut state_single_match_idx = None;
+
+            if input_state_match.has_var {
+                let input_phrase = &inputs[input_state_match.i_i];
+                let existing_matches_len = definite_matched_variables.len();
+
+                for (state_match_idx, s_i) in input_state_match.states.iter().enumerate() {
+                    if match_state_variables_assuming_compatible_structure(
+                        input_phrase,
+                        state,
+                        *s_i,
+                        &mut definite_matched_variables,
+                    ) {
+                        definite_matched_variables.drain(existing_matches_len..);
+
+                        if state_single_match_idx.is_some() {
+                            state_single_match_idx = None;
+                            break;
+                        }
+                        state_single_match_idx = Some(state_match_idx);
+                    }
+                }
+            }
+
+            if let Some(state_single_match_idx) = state_single_match_idx {
+                if !input_state_match.test_final_match(
+                    state_single_match_idx,
+                    inputs,
+                    state,
+                    &mut initial_states_matched_bool,
+                    &mut definite_matched_variables,
+                ) {
+                    return None;
+                }
+            } else {
+                potential_matches.push(input_state_match);
+            }
+        }
+    } else {
+        potential_matches.append(&mut multiple_matches);
+    }
+
+    // try to improve performance later during enumeration of permutations, by
+    // causing inputs to be checked from least to most matches.
+    potential_matches.sort_unstable_by_key(|InputStateMatch { states, .. }| states.len());
+
+    Some(InputStateMatches {
+        potential_matches,
+        definite_matched_variables,
+        initial_states_matched_bool,
+    })
 }
 
 fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
@@ -626,35 +765,24 @@ fn test_inputs_with_permutation(
     side_input: &mut impl SideInput,
 ) -> bool {
     let len = state.len();
-    let mut states_matched_bool = vec![false; len];
+    let mut states_matched_bool = input_state_matches.initial_states_matched_bool.clone();
 
     // iterate across the graph of permutations from root to leaf, where each
     // level of the tree is an input, and each branch is a match against a state.
-    for (concrete_input_i, (i_i, matches)) in input_state_matches.0.iter().enumerate() {
-        let branch_idx = (p_i / input_rev_permutation_counts[concrete_input_i]) % matches.len();
-        let (s_i, has_var) = matches[branch_idx];
+    for (concrete_input_i, input_state_match) in
+        input_state_matches.potential_matches.iter().enumerate()
+    {
+        let branch_idx =
+            (p_i / input_rev_permutation_counts[concrete_input_i]) % input_state_match.states.len();
 
-        let input_phrase = &inputs[*i_i];
-
-        // a previous input in this permutation has already matched the state being checked
-        if input_phrase[0].is_consuming {
-            if states_matched_bool[s_i] {
-                return false;
-            } else {
-                states_matched_bool[s_i] = true;
-            }
-        }
-
-        if has_var {
-            // we know the structures are compatible from the earlier matching check
-            if !match_state_variables_assuming_compatible_structure(
-                input_phrase,
-                &state,
-                s_i,
-                variables_matched,
-            ) {
-                return false;
-            }
+        if !input_state_match.test_final_match(
+            branch_idx,
+            inputs,
+            state,
+            &mut states_matched_bool,
+            variables_matched,
+        ) {
+            return false;
         }
     }
 
