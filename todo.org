@@ -24,6 +24,7 @@
 * TODO support matching phrases while binding to them, to avoid retyping them in output e.g. (foo A)@FOO . bar = FOO
 * TODO look at prolog optimizations
 * TODO add syntax for matching on const lists i.e. (FOO | BAR) matched against (a b c): FOO = a, BAR = (b c)
+* TODO syntax for scheduling some output of a rule to be deleted at the end of the update
 * DONE wildcard variable: _
 * DONE support defining own backwards predicates:
   - defined as rule without '=': <test A B . + A B C . required state C
