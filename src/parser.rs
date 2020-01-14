@@ -179,11 +179,11 @@ pub fn parse(text: &str, rng: &mut SmallRng) -> ParseResult {
 
     let mut new_rules = vec![];
     for rule in &rules {
-        new_rules.append(&mut replace_backwards_preds(
-            &rule,
-            &backwards_preds,
-            &string_cache,
-        ));
+        if let Some(mut replaced_rules) =
+            replace_backwards_preds(&rule, &backwards_preds, &string_cache)
+        {
+            new_rules.append(&mut replaced_rules);
+        }
     }
 
     for (i, rule) in new_rules.iter_mut().enumerate() {
@@ -202,7 +202,7 @@ fn replace_backwards_preds(
     rule: &Rule,
     backwards_preds: &Vec<(VecPhrase, Vec<VecPhrase>)>,
     string_cache: &StringCache,
-) -> Vec<Rule> {
+) -> Option<Vec<Rule>> {
     let mut backwards_preds_per_input = vec![vec![]; rule.inputs.len()];
     let mut backwards_pred_pointers = vec![0; rule.inputs.len()];
 
@@ -219,6 +219,7 @@ fn replace_backwards_preds(
 
             if !matched {
                 println!("WARNING: backwards predicate in rule did not match '{}'. Check that the backwards predicate is defined.", rule.to_string(string_cache));
+                return None;
             }
         }
     }
@@ -232,7 +233,8 @@ fn replace_backwards_preds(
 
     let backwards_pred_input_range = match (first, last) {
         (Some(first), Some(last)) => (first, last),
-        _ => return vec![rule.clone()],
+        // no backwards predicates in rule
+        _ => return Some(vec![rule.clone()]),
     };
 
     let mut new_rules = vec![];
@@ -339,7 +341,7 @@ fn replace_backwards_preds(
         }
     }
 
-    new_rules
+    Some(new_rules)
 }
 
 // replace all variable tokens in a phrase with unique tokens,
