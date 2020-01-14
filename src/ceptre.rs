@@ -276,6 +276,128 @@ impl Context {
             })
             .collect()
     }
+
+    // --- find phrases with with exact length ---
+
+    pub fn find_phrases_exactly1<'a>(&'a self, a1: Option<&Atom>) -> Vec<&'a [Token]> {
+        self.core
+            .state
+            .iter()
+            .filter_map(|phrase_id| {
+                let p = self.core.state.get(*phrase_id);
+
+                if p.len() == 1 && (a1.is_none() || a1 == Some(&p[0].string)) {
+                    Some(p)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn find_phrases_exactly2<'a>(
+        &'a self,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+    ) -> Vec<&'a [Token]> {
+        self.core
+            .state
+            .iter()
+            .filter_map(|phrase_id| {
+                let p = self.core.state.get(*phrase_id);
+
+                if p.len() == 2
+                    && (a1.is_none() || a1 == Some(&p[0].string))
+                    && (a2.is_none() || a2 == Some(&p[1].string))
+                {
+                    Some(p)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn find_phrases_exactly3<'a>(
+        &'a self,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+        a3: Option<&Atom>,
+    ) -> Vec<&'a [Token]> {
+        self.core
+            .state
+            .iter()
+            .filter_map(|phrase_id| {
+                let p = self.core.state.get(*phrase_id);
+
+                if p.len() == 3
+                    && (a1.is_none() || a1 == Some(&p[0].string))
+                    && (a2.is_none() || a2 == Some(&p[1].string))
+                    && (a3.is_none() || a3 == Some(&p[2].string))
+                {
+                    Some(p)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn find_phrases_exactly4<'a>(
+        &'a self,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+        a3: Option<&Atom>,
+        a4: Option<&Atom>,
+    ) -> Vec<&'a [Token]> {
+        self.core
+            .state
+            .iter()
+            .filter_map(|phrase_id| {
+                let p = self.core.state.get(*phrase_id);
+
+                if p.len() == 4
+                    && (a1.is_none() || a1 == Some(&p[0].string))
+                    && (a2.is_none() || a2 == Some(&p[1].string))
+                    && (a3.is_none() || a3 == Some(&p[2].string))
+                    && (a4.is_none() || a4 == Some(&p[3].string))
+                {
+                    Some(p)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn find_phrases_exactly5<'a>(
+        &'a self,
+        a1: Option<&Atom>,
+        a2: Option<&Atom>,
+        a3: Option<&Atom>,
+        a4: Option<&Atom>,
+        a5: Option<&Atom>,
+    ) -> Vec<&'a [Token]> {
+        self.core
+            .state
+            .iter()
+            .filter_map(|phrase_id| {
+                let p = self.core.state.get(*phrase_id);
+
+                if p.len() == 5
+                    && (a1.is_none() || a1 == Some(&p[0].string))
+                    && (a2.is_none() || a2 == Some(&p[1].string))
+                    && (a3.is_none() || a3 == Some(&p[2].string))
+                    && (a4.is_none() || a4 == Some(&p[3].string))
+                    && (a5.is_none() || a5 == Some(&p[4].string))
+                {
+                    Some(p)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 impl fmt::Display for Context {
@@ -342,6 +464,7 @@ where
             let rule = &rules[(start_rule_idx + i) % rules.len()];
 
             if let Some(rule) = rule_matches_state(&rule, state, &mut side_input) {
+                dbg!(rule.id);
                 matching_rule = Some(rule);
                 break;
             }
