@@ -26,6 +26,11 @@
 * TODO add syntax for matching on const lists i.e. (FOO | BAR) matched against (a b c): FOO = a, BAR = (b c)
 * TODO syntax for scheduling some output of a rule to be deleted at the end of the update
 * TODO ink -> ceptre converter
+* TODO syntax for inserting the result of an input match directly into output
+  - e.g.   foo FOO = `foo capitalized is` (^capitalize FOO <OUT)
+         instead of
+           foo FOO . ^capitalize FOO OUT = `foo capitalized is` OUT
+         where OUT can also be a wildcard
 * DONE wildcard variable: _
 * DONE support defining own backwards predicates:
   - defined as rule without '=': <test A B . + A B C . required state C
