@@ -12,14 +12,14 @@ use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
 use std::{thread, time};
 
-const WIDTH: i32 = 100;
-const HEIGHT: i32 = 200;
+const WIDTH: usize = 100;
+const HEIGHT: usize = 200;
 
 fn main() {
     let mut window = Window::new(
         "Test - ESC to exit",
-        WIDTH as usize,
-        HEIGHT as usize,
+        WIDTH ,
+        HEIGHT,
         WindowOptions::default(),
     )
     .unwrap_or_else(|e| {
@@ -80,9 +80,9 @@ fn main() {
             }
         });
 
-        let mut buffer: Vec<u32> = vec![0; (WIDTH * HEIGHT) as usize];
+        let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 
-        let is_valid_pos = |x, y| x < WIDTH && y < HEIGHT;
+        let is_valid_pos = |x, y| x < WIDTH as i32 && y < HEIGHT as i32;
 
         for phrase_id in context.core.state.iter() {
             let p = context.core.state.get(*phrase_id);
@@ -105,7 +105,7 @@ fn main() {
                     for y in y0..y1 {
                         for x in x0..x1 {
                             if is_valid_pos(x, y) {
-                                let idx = x + WIDTH * (HEIGHT - 1 - y);
+                                let idx = x + WIDTH as i32 * (HEIGHT as i32 - 1 - y);
                                 buffer[idx as usize] = color;
                             }
                         }
@@ -116,7 +116,7 @@ fn main() {
         }
 
         // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
-        window.update_with_buffer(&buffer).unwrap();
+        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
 
         thread::sleep(time::Duration::from_millis(33));
     }

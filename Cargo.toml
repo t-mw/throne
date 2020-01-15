@@ -13,7 +13,7 @@ regex = "1.0.3"
 
 [dev-dependencies]
 criterion = { git = "https://github.com/t-mw/criterion.rs", rev = "bb1de83" }
-minifb = "0.11.2"
+minifb = "0.15.1"
 
 [profile.release]
 lto = true
