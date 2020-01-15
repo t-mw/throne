@@ -596,7 +596,7 @@ fn gather_potential_input_state_matches(
             continue;
         }
 
-        // TODO: exit early if we already know that side predicate won't match
+        // TODO: exit early if we already know that side predicate or negated predicates won't match
         if is_concrete_pred(input) {
             let rule_first_atoms = extract_first_atoms_rule_input(input);
 
