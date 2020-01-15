@@ -464,7 +464,6 @@ where
             let rule = &rules[(start_rule_idx + i) % rules.len()];
 
             if let Some(rule) = rule_matches_state(&rule, state, &mut side_input) {
-                dbg!(rule.id);
                 matching_rule = Some(rule);
                 break;
             }
