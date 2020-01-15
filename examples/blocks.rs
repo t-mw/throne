@@ -10,14 +10,6 @@ extern crate regex;
 
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
 
-mod ceptre;
-mod matching;
-mod parser;
-mod rule;
-mod state;
-mod string_cache;
-mod token;
-
 use std::{thread, time};
 
 const WIDTH: i32 = 100;
@@ -34,7 +26,7 @@ fn main() {
         panic!("{}", e);
     });
 
-    let mut context = ceptre::Context::from_text(include_str!("../blocks.ceptre"));
+    let mut context = ceptre::Context::from_text(include_str!("blocks.ceptre"));
 
     let kd = context.str_to_atom("kd");
     let ku = context.str_to_atom("ku");
@@ -49,7 +41,7 @@ fn main() {
         context.append_state("dt 3");
         // context.print();
 
-        let string_to_key = |s: &string_cache::Atom| match s {
+        let string_to_key = |s: &ceptre::Atom| match s {
             s if *s == left => Some(Key::Left),
             s if *s == right => Some(Key::Right),
             s if *s == up => Some(Key::Up),
@@ -57,7 +49,7 @@ fn main() {
             _ => None,
         };
 
-        context.update(|p: &token::Phrase| {
+        context.update(|p: &ceptre::Phrase| {
             if p.len() != 2 {
                 return None;
             }
