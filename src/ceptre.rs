@@ -114,6 +114,10 @@ impl Context {
         self.string_cache.atom_to_str(atom).unwrap()
     }
 
+    pub fn atom_to_number(&self, atom: Atom) -> Option<i32> {
+        StringCache::atom_to_number(atom)
+    }
+
     pub fn with_test_rng(mut self) -> Context {
         self.core.rng = test_rng();
 
