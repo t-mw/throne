@@ -18,7 +18,7 @@ const HEIGHT: usize = 200;
 fn main() {
     let mut window = Window::new(
         "Test - ESC to exit",
-        WIDTH ,
+        WIDTH,
         HEIGHT,
         WindowOptions::default(),
     )
@@ -26,7 +26,9 @@ fn main() {
         panic!("{}", e);
     });
 
-    let mut context = ceptre::Context::from_text(include_str!("blocks.ceptre"));
+    let mut context = ceptre::ContextBuilder::new()
+        .text(include_str!("blocks.ceptre"))
+        .build();
 
     let kd = context.str_to_atom("kd");
     let ku = context.str_to_atom("ku");

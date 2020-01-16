@@ -53,14 +53,58 @@ pub struct PhraseId {
     idx: usize,
 }
 
-impl Context {
-    pub fn from_text(text: &str) -> Context {
-        let mut rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
-        Context::from_text_rng(text, &mut rng)
+pub struct ContextBuilder<'a> {
+    text: &'a str,
+    string_cache: StringCache,
+    rng: Option<&'a mut SmallRng>,
+}
+
+impl<'a> ContextBuilder<'a> {
+    pub fn new() -> Self {
+        ContextBuilder {
+            text: "",
+            string_cache: StringCache::new(),
+            rng: None,
+        }
     }
 
-    pub fn from_text_rng(text: &str, rng: &mut SmallRng) -> Context {
-        let mut result = parser::parse(text, rng);
+    pub fn text(mut self, text: &'a str) -> Self {
+        self.text = text;
+        self
+    }
+
+    pub fn string_cache(mut self, string_cache: StringCache) -> Self {
+        self.string_cache = string_cache;
+        self
+    }
+
+    pub fn rng(mut self, rng: &'a mut SmallRng) -> Self {
+        self.rng = Some(rng);
+        self
+    }
+
+    pub fn build(self) -> Context {
+        let mut default_rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
+        Context::new(
+            self.text,
+            self.string_cache,
+            self.rng.unwrap_or(&mut default_rng),
+        )
+    }
+}
+
+impl Context {
+    pub fn from_text(text: &str) -> Self {
+        ContextBuilder::new().text(text).build()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_text_rng(text: &str, rng: &mut SmallRng) -> Self {
+        ContextBuilder::new().text(text).rng(rng).build()
+    }
+
+    fn new(text: &str, mut string_cache: StringCache, rng: &mut SmallRng) -> Context {
+        let mut result = parser::parse(text, &mut string_cache, rng);
 
         let mut state = State::new();
         for phrase in result.state.drain(..) {
@@ -89,7 +133,7 @@ impl Context {
         let rng = SmallRng::from_seed(seed);
 
         state.update_first_atoms();
-        let qui_atom = result.string_cache.str_to_atom("qui");
+        let qui_atom = string_cache.str_to_atom("qui");
 
         Context {
             core: Core {
@@ -98,7 +142,7 @@ impl Context {
                 rng,
                 qui_atom,
             },
-            string_cache: result.string_cache,
+            string_cache,
         }
     }
 

@@ -11,7 +11,6 @@ use crate::token::*;
 pub struct ParseResult {
     pub rules: Vec<Rule>,
     pub state: Vec<Vec<Token>>,
-    pub string_cache: StringCache,
 }
 
 mod generated {
@@ -20,7 +19,7 @@ mod generated {
     pub struct Parser;
 }
 
-pub fn parse(text: &str, rng: &mut SmallRng) -> ParseResult {
+pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng) -> ParseResult {
     use pest::iterators::Pair;
     use pest::Parser;
 
@@ -34,8 +33,6 @@ pub fn parse(text: &str, rng: &mut SmallRng) -> ParseResult {
     let mut state: Vec<Vec<Token>> = vec![];
     let mut rules: Vec<Rule> = vec![];
     let mut backwards_preds: Vec<(VecPhrase, Vec<VecPhrase>)> = vec![];
-
-    let mut string_cache = StringCache::new();
 
     let check_rule_variables = |pair: Pair<generated::Rule>| {
         let rule_str = pair.as_str();
@@ -193,7 +190,6 @@ pub fn parse(text: &str, rng: &mut SmallRng) -> ParseResult {
     ParseResult {
         rules: new_rules,
         state,
-        string_cache,
     }
 }
 

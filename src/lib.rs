@@ -15,7 +15,7 @@ mod state;
 mod string_cache;
 mod token;
 
-pub use crate::ceptre::{update, Context, Core, PhraseString};
+pub use crate::ceptre::{update, Context, ContextBuilder, Core, PhraseString};
 pub use crate::ffi::*;
 pub use crate::rule::Rule;
 pub use crate::state::State;
