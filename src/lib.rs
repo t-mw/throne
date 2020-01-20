@@ -20,4 +20,4 @@ pub use crate::ffi::*;
 pub use crate::rule::Rule;
 pub use crate::state::State;
 pub use crate::string_cache::{Atom, StringCache};
-pub use crate::token::{Phrase, PhraseGroup, Token};
+pub use crate::token::{build_phrase, tokenize, Phrase, PhraseGroup, Token, VecPhrase};
