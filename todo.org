@@ -33,6 +33,8 @@
          where OUT can also be a wildcard
   CLOSED: [2020-01-24 Fri 14:24]
 * TODO evaluate constant expressions to eliminate rules that will never match
+* TODO An easy way to test a rule with a chance of success based on a probability extracted from state
+  - This is currently difficult since the number of times that a rule may be evaluated in an update is not well defined
 * DONE selectively disable warnings
 * DONE wildcard variable: _
 * DONE support defining own backwards predicates:
