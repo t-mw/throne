@@ -592,10 +592,6 @@ fn gather_potential_input_state_matches(
     let mut single_matches = vec![]; // inputs that have been matched to a single state
 
     for (i_i, input) in inputs.iter().enumerate() {
-        if state.len() == 0 {
-            continue;
-        }
-
         // TODO: exit early if we already know that side predicate or negated predicates won't match
         if is_concrete_pred(input) {
             let rule_first_atoms = extract_first_atoms_rule_input(input);
