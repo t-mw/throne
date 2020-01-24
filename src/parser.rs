@@ -31,10 +31,15 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
         .unwrap();
 
     let mut state: Vec<Vec<Token>> = vec![];
-    let mut rules: Vec<Rule> = vec![];
+    let mut rules: Vec<(Rule, bool)> = vec![];
     let mut backwards_preds: Vec<(VecPhrase, Vec<VecPhrase>)> = vec![];
+    let mut enable_unused_warnings = true;
 
-    let check_rule_variables = |pair: Pair<generated::Rule>| {
+    let check_rule_variables = |pair: Pair<generated::Rule>, enable_unused_warnings: bool| {
+        if !enable_unused_warnings {
+            return;
+        }
+
         let rule_str = pair.as_str();
         let inner = pair.into_inner();
         let mut var_counts = HashMap::new();
@@ -53,8 +58,10 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
         }
     };
 
-    let pair_to_ceptre_rule = |pair: Pair<generated::Rule>, string_cache: &mut StringCache| {
-        check_rule_variables(pair.clone());
+    let pair_to_ceptre_rule = |pair: Pair<generated::Rule>,
+                               string_cache: &mut StringCache,
+                               enable_unused_warnings: bool| {
+        check_rule_variables(pair.clone(), enable_unused_warnings);
 
         let mut pairs = pair.into_inner();
         let inputs_pair = pairs.next().unwrap();
@@ -108,7 +115,8 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
                     .collect::<Vec<_>>();
 
                 for pair in stage {
-                    let (mut r, has_input_qui) = pair_to_ceptre_rule(pair, &mut string_cache);
+                    let (mut r, has_input_qui) =
+                        pair_to_ceptre_rule(pair, &mut string_cache, enable_unused_warnings);
 
                     let input_phrases = input_phrase_strings
                         .iter()
@@ -136,11 +144,11 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
                             .push(input_phrases[stage_phrase_idx.unwrap()].clone());
                     }
 
-                    rules.push(r);
+                    rules.push((r, enable_unused_warnings));
                 }
             }
             generated::Rule::backwards_def => {
-                check_rule_variables(line.clone());
+                check_rule_variables(line.clone(), enable_unused_warnings);
 
                 let mut backwards_def = line.into_inner();
 
@@ -162,12 +170,21 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
                 backwards_preds.push((first_phrase, other_phrases));
             }
             generated::Rule::rule => {
-                rules.push(pair_to_ceptre_rule(line, &mut string_cache).0);
+                rules.push((
+                    pair_to_ceptre_rule(line, &mut string_cache, enable_unused_warnings).0,
+                    enable_unused_warnings,
+                ));
             }
             generated::Rule::state => {
                 for phrase in line.into_inner() {
                     state.push(tokenize(phrase.as_str(), &mut string_cache));
                 }
+            }
+            generated::Rule::compiler_disable_unused_warnings => {
+                enable_unused_warnings = false;
+            }
+            generated::Rule::compiler_enable_unused_warnings => {
+                enable_unused_warnings = true;
             }
             generated::Rule::EOI => (),
             _ => unreachable!("{}", line),
@@ -175,10 +192,13 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
     }
 
     let mut new_rules = vec![];
-    for rule in &rules {
-        if let Some(mut replaced_rules) =
-            replace_backwards_preds(&rule, &backwards_preds, &string_cache)
-        {
+    for (rule, enable_unused_warnings_for_rule) in &rules {
+        if let Some(mut replaced_rules) = replace_backwards_preds(
+            &rule,
+            &backwards_preds,
+            &string_cache,
+            *enable_unused_warnings_for_rule,
+        ) {
             new_rules.append(&mut replaced_rules);
         }
     }
@@ -198,6 +218,7 @@ fn replace_backwards_preds(
     rule: &Rule,
     backwards_preds: &Vec<(VecPhrase, Vec<VecPhrase>)>,
     string_cache: &StringCache,
+    enable_unused_warnings: bool,
 ) -> Option<Vec<Rule>> {
     let mut backwards_preds_per_input = vec![vec![]; rule.inputs.len()];
     let mut backwards_pred_pointers = vec![0; rule.inputs.len()];
@@ -214,7 +235,9 @@ fn replace_backwards_preds(
             }
 
             if !matched {
-                println!("WARNING: backwards predicate in rule did not match '{}'. Check that the backwards predicate is defined.", rule.to_string(string_cache));
+                if enable_unused_warnings {
+                    println!("WARNING: backwards predicate in rule did not match '{}'. Check that the backwards predicate is defined.", rule.to_string(string_cache));
+                }
                 return None;
             }
         }

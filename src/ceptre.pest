@@ -19,6 +19,10 @@ negate_phrase = ${ "!" ~ phrase }
 nonconsuming_phrase = ${ "?" ~ phrase }
 backwards_phrase = ${ "<<" ~ phrase }
 
+compiler_block = _{ "[" ~ (compiler_enable_unused_warnings | compiler_disable_unused_warnings) ~ "]" }
+compiler_enable_unused_warnings = { "enable-unused-warnings" }
+compiler_disable_unused_warnings = { "disable-unused-warnings" }
+
 state_phrase = { stage_phrase | phrase }
 state = { state_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ state_phrase)* }
 
@@ -36,6 +40,6 @@ stage = { inputs ~ ":" ~ stage_block }
 
 file = {
   SOI ~
-  (NEWLINE* ~ (stage | rule | backwards_def | state))* ~
+  (NEWLINE* ~ (stage | rule | backwards_def | state | compiler_block))* ~
   NEWLINE* ~ EOI
 }

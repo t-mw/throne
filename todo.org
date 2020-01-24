@@ -31,8 +31,9 @@
          instead of
            foo FOO . ^capitalize FOO OUT = `foo capitalized is` OUT
          where OUT can also be a wildcard
-* TODO selectively disable warnings
+  CLOSED: [2020-01-24 Fri 14:24]
 * TODO evaluate constant expressions to eliminate rules that will never match
+* DONE selectively disable warnings
 * DONE wildcard variable: _
 * DONE support defining own backwards predicates:
   - defined as rule without '=': <test A B . + A B C . required state C
