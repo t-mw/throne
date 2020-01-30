@@ -344,8 +344,13 @@ fn replace_backwards_preds(
 
         // find next permutation of backwards predicates in rule
         for i in (backwards_pred_input_range.0..=backwards_pred_input_range.1).rev() {
-            let at_end = backwards_pred_pointers[i] == backwards_preds_per_input[i].len() - 1;
+            let backwards_preds_for_input = &backwards_preds_per_input[i];
 
+            if backwards_preds_for_input.len() == 0 {
+                continue;
+            }
+
+            let at_end = backwards_pred_pointers[i] == backwards_preds_for_input.len() - 1;
             if at_end && i == backwards_pred_input_range.0 {
                 // finished checking all permutations
                 break 'outer;

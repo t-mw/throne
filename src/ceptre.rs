@@ -718,9 +718,10 @@ mod tests {
         let mut context = Context::from_text_rng(
             "<<back1 C . ?state1 C D\n\
              <<back2 E F . ?state2 E F\n\
-             <<back1 A . <<back2 B A = ()",
+             <<back1 A . test . <<back2 B A = ()",
             &mut rng,
         );
+        // intentionally separate backwards predicates by simple 'test' atom to test parsing
 
         context.print();
 
@@ -733,6 +734,7 @@ mod tests {
                         "?state1 A D_BACK36822967802071690107",
                         &mut context.string_cache
                     ),
+                    tokenize("test", &mut context.string_cache),
                     tokenize("?state2 B A", &mut context.string_cache)
                 ],
                 vec![]
