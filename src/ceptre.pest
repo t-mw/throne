@@ -26,7 +26,7 @@ compiler_disable_unused_warnings = { "disable-unused-warnings" }
 state_phrase = { stage_phrase | phrase }
 state = { state_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ state_phrase)* }
 
-input_phrase = { qui | stage_phrase | copy_phrase | side_phrase | negate_phrase | backwards_phrase | phrase }
+input_phrase = { qui | stage_phrase | copy_phrase | side_phrase | negate_phrase | backwards_phrase | nonconsuming_phrase | phrase }
 inputs = { input_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ input_phrase)* }
 output_phrase = { qui | stage_phrase | side_phrase | phrase }
 outputs = { output_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ output_phrase)* }
