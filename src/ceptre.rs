@@ -146,6 +146,18 @@ impl Context {
         }
     }
 
+    pub fn extend_state_from_context(&mut self, other: &Context) {
+        for phrase_id in other.core.state.iter() {
+            let phrase = other.core.state.get(*phrase_id);
+            let phrase_string = phrase.to_string(&other.string_cache);
+
+            // TODO: avoid repeating tokenize by just mapping atoms in the phrase to new ids
+            self.append_state(&phrase_string);
+        }
+
+        self.core.state.update_first_atoms();
+    }
+
     pub fn str_to_atom(&mut self, text: &str) -> Atom {
         self.string_cache.str_to_atom(text)
     }
