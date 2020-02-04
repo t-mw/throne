@@ -1,4 +1,7 @@
 # throne
+
+![Crates.io](https://img.shields.io/crates/v/throne)
+
 A game scripting language for rapid prototyping and story logic:
 
 ```
