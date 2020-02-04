@@ -17,7 +17,7 @@
 * TODO reduce serialization boilerplate with either serde or generated code (like with pest)
 * TODO allow output in custom backwards predicate, i.e. output is appended to rule
 * TODO test doing initial matching through ecs instead of first atoms (e.g. https://github.com/TomGillen/legion)
-  - requires a macro to generate rust structs for ceptre identifiers
+  - requires a macro to generate rust structs for throne identifiers
   - an item of state is then e.g. &[FooAtom::N1, Var::N2, BarAtom::N3, etc..]
   - possible matching rules are found using a component query
 * TODO support marking state phrases immutable in debug builds, logging warning when the state is consumed by a rule. or do compile-time check.
@@ -25,7 +25,7 @@
 * TODO look at prolog optimizations
 * TODO add syntax for matching on const lists i.e. (FOO | BAR) matched against (a b c): FOO = a, BAR = (b c)
 * TODO syntax for scheduling some output of a rule to be deleted at the end of the update
-* TODO ink -> ceptre converter
+* TODO ink -> throne converter
 * TODO syntax for inserting the result of an input match directly into output
   - e.g.   foo FOO = `foo capitalized is` (^capitalize FOO <OUT)
          instead of

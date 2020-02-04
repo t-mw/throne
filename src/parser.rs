@@ -15,7 +15,7 @@ pub struct ParseResult {
 
 mod generated {
     #[derive(Parser)]
-    #[grammar = "ceptre.pest"]
+    #[grammar = "throne.pest"]
     pub struct Parser;
 }
 
@@ -58,7 +58,7 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
         }
     };
 
-    let pair_to_ceptre_rule = |pair: Pair<generated::Rule>,
+    let pair_to_throne_rule = |pair: Pair<generated::Rule>,
                                string_cache: &mut StringCache,
                                enable_unused_warnings: bool| {
         check_rule_variables(pair.clone(), enable_unused_warnings);
@@ -116,7 +116,7 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
 
                 for pair in stage {
                     let (mut r, has_input_qui) =
-                        pair_to_ceptre_rule(pair, &mut string_cache, enable_unused_warnings);
+                        pair_to_throne_rule(pair, &mut string_cache, enable_unused_warnings);
 
                     let input_phrases = input_phrase_strings
                         .iter()
@@ -171,7 +171,7 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
             }
             generated::Rule::rule => {
                 rules.push((
-                    pair_to_ceptre_rule(line, &mut string_cache, enable_unused_warnings).0,
+                    pair_to_throne_rule(line, &mut string_cache, enable_unused_warnings).0,
                     enable_unused_warnings,
                 ));
             }

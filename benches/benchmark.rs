@@ -1,4 +1,4 @@
-extern crate ceptre;
+extern crate throne;
 
 #[macro_use]
 extern crate criterion;
@@ -13,15 +13,15 @@ fn criterion_benchmark(c: &mut Criterion) {
             || {
                 // only parse once, otherwise benchmark is affected
                 lazy_static! {
-                    static ref CONTEXT: ceptre::Context =
-                        ceptre::Context::from_text(include_str!("wood.ceptre")).with_test_rng();
+                    static ref CONTEXT: throne::Context =
+                        throne::Context::from_text(include_str!("wood.throne")).with_test_rng();
                 }
 
                 CONTEXT.clone()
             },
             |mut context| {
                 context.append_state("#update");
-                ceptre::update(&mut context.core, |_: &ceptre::Phrase| None);
+                throne::update(&mut context.core, |_: &throne::Phrase| None);
             },
         )
     });
@@ -31,15 +31,15 @@ fn criterion_benchmark(c: &mut Criterion) {
             || {
                 // only parse once, otherwise benchmark is affected
                 lazy_static! {
-                    static ref CONTEXT: ceptre::Context =
-                        ceptre::Context::from_text(include_str!("spaceopera.ceptre"))
+                    static ref CONTEXT: throne::Context =
+                        throne::Context::from_text(include_str!("spaceopera.throne"))
                             .with_test_rng();
                 }
 
                 CONTEXT.clone()
             },
             |mut context| {
-                ceptre::update(&mut context.core, |_: &ceptre::Phrase| None);
+                throne::update(&mut context.core, |_: &throne::Phrase| None);
             },
         )
     });

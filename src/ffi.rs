@@ -3,8 +3,8 @@ use std::mem::transmute;
 use std::os::raw::{c_char, c_void};
 use std::slice;
 
-use crate::ceptre::Context;
 use crate::string_cache::Atom;
+use crate::throne::Context;
 use crate::token::Token;
 
 #[repr(C)]
@@ -13,24 +13,24 @@ pub struct CRule {
 }
 
 #[no_mangle]
-pub extern "C" fn ceptre_context_create_from_text(string_ptr: *const c_char) -> *mut Context {
+pub extern "C" fn throne_context_create_from_text(string_ptr: *const c_char) -> *mut Context {
     let cstr = unsafe { CStr::from_ptr(string_ptr) };
     unsafe { transmute(Box::new(Context::from_text(cstr.to_str().unwrap()))) }
 }
 
 #[no_mangle]
-pub extern "C" fn ceptre_context_destroy(context: *mut Context) {
+pub extern "C" fn throne_context_destroy(context: *mut Context) {
     let _drop: Box<Context> = unsafe { transmute(context) };
 }
 
 #[no_mangle]
-pub extern "C" fn ceptre_update(context: *mut Context) {
+pub extern "C" fn throne_update(context: *mut Context) {
     let context = unsafe { &mut *context };
     context.update(|_: &[Token]| None);
 }
 
 #[no_mangle]
-pub extern "C" fn ceptre_context_string_to_atom(
+pub extern "C" fn throne_context_string_to_atom(
     context: *mut Context,
     string_ptr: *const c_char,
 ) -> Atom {
@@ -40,7 +40,7 @@ pub extern "C" fn ceptre_context_string_to_atom(
 }
 
 #[no_mangle]
-pub extern "C" fn ceptre_context_find_matching_rules(
+pub extern "C" fn throne_context_find_matching_rules(
     context: *mut Context,
     side_input: extern "C" fn(p: *const Atom, p_len: usize, data: *mut c_void) -> bool,
     side_input_data: *mut c_void,
@@ -73,7 +73,7 @@ pub extern "C" fn ceptre_context_find_matching_rules(
 }
 
 #[no_mangle]
-pub extern "C" fn ceptre_context_find_phrase5(
+pub extern "C" fn throne_context_find_phrase5(
     context: *mut Context,
     atom_ptr1: *const Atom,
     atom_ptr2: *const Atom,

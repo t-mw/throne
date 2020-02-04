@@ -26,8 +26,8 @@ fn main() {
         panic!("{}", e);
     });
 
-    let mut context = ceptre::ContextBuilder::new()
-        .text(include_str!("blocks.ceptre"))
+    let mut context = throne::ContextBuilder::new()
+        .text(include_str!("blocks.throne"))
         .build();
 
     let kd = context.str_to_atom("kd");
@@ -43,7 +43,7 @@ fn main() {
         context.append_state("dt 3");
         // context.print();
 
-        let string_to_key = |s: &ceptre::Atom| match s {
+        let string_to_key = |s: &throne::Atom| match s {
             s if *s == left => Some(Key::Left),
             s if *s == right => Some(Key::Right),
             s if *s == up => Some(Key::Up),
@@ -51,7 +51,7 @@ fn main() {
             _ => None,
         };
 
-        context.update(|p: &ceptre::Phrase| {
+        context.update(|p: &throne::Phrase| {
             if p.len() != 2 {
                 return None;
             }
