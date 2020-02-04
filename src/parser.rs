@@ -383,11 +383,11 @@ fn replace_variables(
             continue;
         }
 
-        if let Some(replacement) = existing_map.get(&token.string) {
-            token.string = *replacement;
+        if let Some(replacement) = existing_map.get(&token.atom) {
+            token.atom = *replacement;
         } else {
             loop {
-                let s = string_cache.atom_to_str(token.string).unwrap();
+                let s = string_cache.atom_to_str(token.atom).unwrap();
                 let replacement_s = format!("{}_BACK{}{}", s, rng.gen::<u32>(), rng.gen::<u32>());
                 let replacement = string_cache.str_to_atom(&replacement_s);
 
@@ -395,8 +395,8 @@ fn replace_variables(
                     continue;
                 }
 
-                existing_map.insert(token.string, replacement);
-                token.string = replacement;
+                existing_map.insert(token.atom, replacement);
+                token.atom = replacement;
                 break;
             }
         }

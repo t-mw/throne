@@ -54,7 +54,7 @@ pub extern "C" fn throne_context_find_matching_rules(
 
     let rules = context.find_matching_rules(|p: &[Token]| {
         side_input_p.clear();
-        side_input_p.extend(p.iter().map(|t| t.string));
+        side_input_p.extend(p.iter().map(|t| t.atom));
 
         if side_input(side_input_p.as_ptr(), side_input_p.len(), side_input_data) {
             Some(vec![])
@@ -98,7 +98,7 @@ pub extern "C" fn throne_context_find_phrase5(
         let len = phrase.len().min(result_len);
 
         for i in 0..len {
-            result[i] = phrase[i].string;
+            result[i] = phrase[i].atom;
         }
 
         len

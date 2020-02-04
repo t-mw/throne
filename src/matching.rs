@@ -78,7 +78,7 @@ impl BaseMatcher for TwoWayMatcher<'_> {
         let variable_already_matched = if let Some(ref existing_match) = self
             .existing_matches_and_result
             .iter()
-            .find(|m| m.atom == token.string)
+            .find(|m| m.atom == token.atom)
         {
             if !phrase_equal(
                 &existing_match.phrase[..],
@@ -132,7 +132,7 @@ fn base_match(tokens1: &Phrase, tokens2: &Phrase, matcher: &mut impl BaseMatcher
                 let is_var2 = is_var_token(token2) && matcher.is_twoway_matcher();
 
                 if !is_var1 && !is_var2 {
-                    if token1.string != token2.string || depth1 != depth2 {
+                    if token1.atom != token2.atom || depth1 != depth2 {
                         return false;
                     }
 
@@ -255,7 +255,7 @@ impl Match {
         }
 
         Match {
-            atom: token.string,
+            atom: token.atom,
             depths,
             phrase: phrase,
         }
@@ -329,7 +329,7 @@ pub fn match_state_variables_assuming_compatible_structure(
             let variable_already_matched = if let Some(ref existing_match) =
                 existing_matches_and_result
                     .iter()
-                    .find(|m| m.atom == token.string)
+                    .find(|m| m.atom == token.atom)
             {
                 if !phrase_equal(
                     &existing_match.as_slice(state),
@@ -349,7 +349,7 @@ pub fn match_state_variables_assuming_compatible_structure(
 
             if !variable_already_matched {
                 let m = MatchLite {
-                    atom: token.string,
+                    atom: token.atom,
                     state_i,
                     depths: (token.open_depth, token.close_depth),
                     range: (start_i, end_i),
@@ -409,7 +409,7 @@ pub fn match_variables_assuming_compatible_structure(
             let variable_already_matched = if let Some(ref existing_match) =
                 existing_matches_and_result
                     .iter()
-                    .find(|m| m.atom == token.string)
+                    .find(|m| m.atom == token.atom)
             {
                 if !phrase_equal(
                     &existing_match.phrase[..],
@@ -745,7 +745,7 @@ fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
         phrase
             .get(0)
             .option_filter(|t| !is_var_token(t))
-            .map(|t| t.string)
+            .map(|t| t.atom)
     } else {
         None
     }
@@ -871,7 +871,7 @@ pub fn assign_state_vars(tokens: &Phrase, state: &State, matches: &[MatchLite]) 
 
     for token in tokens {
         if is_var_token(token) {
-            if let Some(m) = matches.iter().find(|m| m.atom == token.string) {
+            if let Some(m) = matches.iter().find(|m| m.atom == token.atom) {
                 result.append(&mut normalize_match_phrase(token, m.to_phrase(state)));
                 continue;
             }
@@ -888,7 +888,7 @@ pub fn assign_vars(tokens: &Phrase, matches: &[Match]) -> Vec<Token> {
 
     for token in tokens {
         if is_var_token(token) {
-            if let Some(m) = matches.iter().find(|m| m.atom == token.string) {
+            if let Some(m) = matches.iter().find(|m| m.atom == token.atom) {
                 result.append(&mut normalize_match_phrase(token, m.phrase.clone()));
                 continue;
             }

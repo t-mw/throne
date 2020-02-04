@@ -56,22 +56,22 @@ fn main() {
                 return None;
             }
 
-            match &p[0].string {
-                a if *a == kd => string_to_key(&p[1].string).and_then(|k| {
+            match &p[0].atom {
+                a if *a == kd => string_to_key(&p[1].atom).and_then(|k| {
                     if window.is_key_down(k) {
                         Some(p.to_vec())
                     } else {
                         None
                     }
                 }),
-                a if *a == ku => string_to_key(&p[1].string).and_then(|k| {
+                a if *a == ku => string_to_key(&p[1].atom).and_then(|k| {
                     if !window.is_key_down(k) {
                         Some(p.to_vec())
                     } else {
                         None
                     }
                 }),
-                a if *a == kp => string_to_key(&p[1].string).and_then(|k| {
+                a if *a == kp => string_to_key(&p[1].atom).and_then(|k| {
                     if window.is_key_pressed(k, KeyRepeat::Yes) {
                         Some(p.to_vec())
                     } else {

@@ -251,11 +251,11 @@ impl Context {
             let p = self.core.state.get(*phrase_id);
 
             match (
-                p.get(0).map(|t| &t.string),
-                p.get(1).map(|t| &t.string),
-                p.get(2).map(|t| &t.string),
-                p.get(3).map(|t| &t.string),
-                p.get(4).map(|t| &t.string),
+                p.get(0).map(|t| &t.atom),
+                p.get(1).map(|t| &t.atom),
+                p.get(2).map(|t| &t.atom),
+                p.get(3).map(|t| &t.atom),
+                p.get(4).map(|t| &t.atom),
             ) {
                 (s1, s2, s3, s4, s5)
                     if (a1.is_none() || a1 == s1)
@@ -315,11 +315,11 @@ impl Context {
                 let p = self.core.state.get(*phrase_id);
 
                 if match (
-                    p.get(0).map(|t| &t.string),
-                    p.get(1).map(|t| &t.string),
-                    p.get(2).map(|t| &t.string),
-                    p.get(3).map(|t| &t.string),
-                    p.get(4).map(|t| &t.string),
+                    p.get(0).map(|t| &t.atom),
+                    p.get(1).map(|t| &t.atom),
+                    p.get(2).map(|t| &t.atom),
+                    p.get(3).map(|t| &t.atom),
+                    p.get(4).map(|t| &t.atom),
                 ) {
                     (s1, s2, s3, s4, s5) => {
                         (a1.is_none() || a1 == s1)
@@ -346,7 +346,7 @@ impl Context {
             .filter_map(|phrase_id| {
                 let p = self.core.state.get(*phrase_id);
 
-                if p.len() == 1 && (a1.is_none() || a1 == Some(&p[0].string)) {
+                if p.len() == 1 && (a1.is_none() || a1 == Some(&p[0].atom)) {
                     Some(p)
                 } else {
                     None
@@ -367,8 +367,8 @@ impl Context {
                 let p = self.core.state.get(*phrase_id);
 
                 if p.len() == 2
-                    && (a1.is_none() || a1 == Some(&p[0].string))
-                    && (a2.is_none() || a2 == Some(&p[1].string))
+                    && (a1.is_none() || a1 == Some(&p[0].atom))
+                    && (a2.is_none() || a2 == Some(&p[1].atom))
                 {
                     Some(p)
                 } else {
@@ -391,9 +391,9 @@ impl Context {
                 let p = self.core.state.get(*phrase_id);
 
                 if p.len() == 3
-                    && (a1.is_none() || a1 == Some(&p[0].string))
-                    && (a2.is_none() || a2 == Some(&p[1].string))
-                    && (a3.is_none() || a3 == Some(&p[2].string))
+                    && (a1.is_none() || a1 == Some(&p[0].atom))
+                    && (a2.is_none() || a2 == Some(&p[1].atom))
+                    && (a3.is_none() || a3 == Some(&p[2].atom))
                 {
                     Some(p)
                 } else {
@@ -417,10 +417,10 @@ impl Context {
                 let p = self.core.state.get(*phrase_id);
 
                 if p.len() == 4
-                    && (a1.is_none() || a1 == Some(&p[0].string))
-                    && (a2.is_none() || a2 == Some(&p[1].string))
-                    && (a3.is_none() || a3 == Some(&p[2].string))
-                    && (a4.is_none() || a4 == Some(&p[3].string))
+                    && (a1.is_none() || a1 == Some(&p[0].atom))
+                    && (a2.is_none() || a2 == Some(&p[1].atom))
+                    && (a3.is_none() || a3 == Some(&p[2].atom))
+                    && (a4.is_none() || a4 == Some(&p[3].atom))
                 {
                     Some(p)
                 } else {
@@ -445,11 +445,11 @@ impl Context {
                 let p = self.core.state.get(*phrase_id);
 
                 if p.len() == 5
-                    && (a1.is_none() || a1 == Some(&p[0].string))
-                    && (a2.is_none() || a2 == Some(&p[1].string))
-                    && (a3.is_none() || a3 == Some(&p[2].string))
-                    && (a4.is_none() || a4 == Some(&p[3].string))
-                    && (a5.is_none() || a5 == Some(&p[4].string))
+                    && (a1.is_none() || a1 == Some(&p[0].atom))
+                    && (a2.is_none() || a2 == Some(&p[1].atom))
+                    && (a3.is_none() || a3 == Some(&p[2].atom))
+                    && (a4.is_none() || a4 == Some(&p[3].atom))
+                    && (a5.is_none() || a5 == Some(&p[4].atom))
                 {
                     Some(p)
                 } else {
@@ -540,7 +540,7 @@ where
                     state
                         .iter()
                         .enumerate()
-                        .filter(|&(_, p)| state.get(*p)[0].string == qui_atom)
+                        .filter(|&(_, p)| state.get(*p)[0].atom == qui_atom)
                         .map(|(i, _)| i)
                         .collect::<Vec<_>>()
                         == vec![state.len() - 1],
@@ -1659,7 +1659,7 @@ mod tests {
 
         let result = rule_matches_state(&rule, &mut state, &mut |p: &Phrase| {
             assert_eq!(
-                p.get(1).and_then(|t| StringCache::atom_to_number(t.string)),
+                p.get(1).and_then(|t| StringCache::atom_to_number(t.atom)),
                 Some(5)
             );
             Some(vec![])

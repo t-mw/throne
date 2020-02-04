@@ -24,7 +24,7 @@ pub enum BackwardsPred {
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Token {
-    pub string: Atom,
+    pub atom: Atom,
     pub is_negated: bool,
     pub is_consuming: bool,
     pub flag: TokenFlag,
@@ -109,7 +109,7 @@ impl Token {
         };
 
         Token {
-            string: atom,
+            atom,
             flag,
             is_negated,
             is_consuming,
@@ -120,7 +120,7 @@ impl Token {
 
     pub fn new_atom(atom: Atom, open_depth: u8, close_depth: u8) -> Token {
         Token {
-            string: atom,
+            atom,
             flag: TokenFlag::None,
             is_negated: false,
             is_consuming: true,
@@ -131,7 +131,7 @@ impl Token {
 
     pub fn new_number(n: i32, open_depth: u8, close_depth: u8) -> Token {
         Token {
-            string: StringCache::number_to_atom(n),
+            atom: StringCache::number_to_atom(n),
             flag: TokenFlag::None,
             is_negated: false,
             is_consuming: true,
@@ -141,11 +141,11 @@ impl Token {
     }
 
     pub fn as_str<'a>(&self, string_cache: &'a StringCache) -> Option<&'a str> {
-        string_cache.atom_to_str(self.string)
+        string_cache.atom_to_str(self.atom)
     }
 
     pub fn as_number(&self) -> Option<i32> {
-        StringCache::atom_to_number(self.string)
+        StringCache::atom_to_number(self.atom)
     }
 
     pub fn to_string(&self, string_cache: &StringCache) -> String {
@@ -326,7 +326,7 @@ pub fn token_equal(
     let a_depth_diffs = a_depth_diffs.unwrap_or((0, 0));
     let b_depth_diffs = b_depth_diffs.unwrap_or((0, 0));
 
-    a.string == b.string
+    a.atom == b.atom
         && a.is_negated == b.is_negated
         && (ignore_depth
             || (a.open_depth as i32 - a_depth_diffs.0 as i32

@@ -162,7 +162,7 @@ fn extract_first_atoms_state(state: &State) -> Vec<(usize, Atom)> {
     let mut atoms: Vec<(usize, Atom)> = state
         .iter()
         .enumerate()
-        .map(|(s_i, phrase_id)| (s_i, state.get(*phrase_id)[0].string))
+        .map(|(s_i, phrase_id)| (s_i, state.get(*phrase_id)[0].atom))
         .collect();
 
     atoms.sort_unstable_by(|a, b| a.1.cmp(&b.1));
