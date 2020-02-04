@@ -23,7 +23,7 @@ Evaluating a throne script involves executing any rule that matches the current 
 
 ### Examples
 - [blocks](examples/blocks.throne): a simple tile matching game
-- Used in an [upcoming commercial game](https://twitter.com/cmd_tea/)
+- Used in an [upcoming game](https://twitter.com/cmd_tea/)
 
 ### Design
 Strongly influenced by https://www.cs.cmu.edu/~cmartens/ceptre.pdf.
