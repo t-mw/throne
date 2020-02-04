@@ -1,6 +1,9 @@
 # throne
 
-![Crates.io](https://img.shields.io/crates/v/throne)
+[![Crates.io][crates_img]][crates_link]
+
+[crates_img]: https://img.shields.io/crates/v/throne.svg
+[crates_link]: https://crates.io/crates/throne
 
 A game scripting language for rapid prototyping and story logic:
 
