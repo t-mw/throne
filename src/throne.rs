@@ -149,10 +149,24 @@ impl Context {
     pub fn extend_state_from_context(&mut self, other: &Context) {
         for phrase_id in other.core.state.iter() {
             let phrase = other.core.state.get(*phrase_id);
-            let phrase_string = phrase.to_string(&other.string_cache);
+            let new_phrase = phrase
+                .iter()
+                .map(|t| {
+                    if StringCache::atom_to_number(t.atom).is_some() {
+                        t.clone()
+                    } else {
+                        let string = other
+                            .string_cache
+                            .atom_to_str(t.atom)
+                            .expect(&format!("missing token: {:?}", t));
 
-            // TODO: avoid repeating tokenize by just mapping atoms in the phrase to new ids
-            self.append_state(&phrase_string);
+                        let mut new_token = t.clone();
+                        new_token.atom = self.string_cache.str_to_atom(string);
+                        new_token
+                    }
+                })
+                .collect();
+            self.core.state.push(new_phrase);
         }
 
         self.core.state.update_first_atoms();
@@ -2004,6 +2018,23 @@ mod tests {
                 },
             ]
         )
+    }
+
+    #[test]
+    fn test_extend_state_from_context() {
+        let mut context1 = Context::from_text("foo 1\nbar 1");
+        let context2 = Context::from_text("foo 2\nbar 2");
+        context1.extend_state_from_context(&context2);
+
+        assert_eq!(
+            context1.core.state.get_all(),
+            [
+                tokenize("foo 1", &mut context1.string_cache),
+                tokenize("bar 1", &mut context1.string_cache),
+                tokenize("foo 2", &mut context1.string_cache),
+                tokenize("bar 2", &mut context1.string_cache),
+            ]
+        );
     }
 
     #[test]
