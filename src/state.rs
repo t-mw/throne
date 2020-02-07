@@ -1,7 +1,8 @@
 use rand::rngs::SmallRng;
 use rand::Rng;
 
-use crate::matching::{phrase_equal, FirstAtoms};
+use crate::matching::phrase_equal;
+use crate::string_cache::Atom;
 use crate::token::*;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -14,7 +15,7 @@ pub struct State {
     phrases: Vec<PhraseId>,
     phrase_ranges: Vec<(usize, usize)>,
     tokens: Vec<Token>,
-    pub first_atoms: Vec<(usize, FirstAtoms)>,
+    pub first_atoms: Vec<(usize, Atom)>,
     scratch_idx: Option<(usize, usize)>,
 }
 
@@ -157,21 +158,11 @@ impl std::fmt::Display for State {
     }
 }
 
-fn extract_first_atoms_state(state: &State) -> Vec<(usize, FirstAtoms)> {
-    let mut atoms: Vec<(usize, FirstAtoms)> = state
+fn extract_first_atoms_state(state: &State) -> Vec<(usize, Atom)> {
+    let mut atoms: Vec<(usize, Atom)> = state
         .iter()
         .enumerate()
-        .map(|(s_i, phrase_id)| {
-            let s = state.get(*phrase_id);
-            (
-                s_i,
-                FirstAtoms {
-                    a0: s.get(0).map(|t| t.atom),
-                    a1: s.get(1).map(|t| t.atom),
-                    a2: s.get(2).map(|t| t.atom),
-                },
-            )
-        })
+        .map(|(s_i, phrase_id)| (s_i, state.get(*phrase_id)[0].atom))
         .collect();
 
     atoms.sort_unstable_by(|a, b| a.1.cmp(&b.1));
