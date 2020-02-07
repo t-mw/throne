@@ -7,7 +7,7 @@ use crate::token::*;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct PhraseId {
-    idx: usize,
+    phrase_range_idx: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -30,23 +30,28 @@ impl State {
         }
     }
 
-    pub fn remove(&mut self, idx: usize) {
+    pub(crate) fn remove_idx(&mut self, idx: usize) {
         assert!(self.scratch_idx.is_none());
 
         let remove_id = self.phrases.swap_remove(idx);
-        let remove_range = self.phrase_ranges[remove_id.idx];
+        let remove_range = self.phrase_ranges[remove_id.phrase_range_idx];
         let remove_len = remove_range.1 - remove_range.0;
 
         // after swap_remove, this is the id that will take the old one's place
-        let replace_id = PhraseId {
-            idx: self.phrase_ranges.len() - 1,
+        let swapped_id = PhraseId {
+            phrase_range_idx: self.phrase_ranges.len() - 1,
         };
-        self.phrase_ranges.swap_remove(remove_id.idx);
 
-        // update the references to the swapped id
+        // we need to update phrases to point to the new phrase range index
+        let replace_id = PhraseId {
+            phrase_range_idx: remove_id.phrase_range_idx,
+        };
+
+        self.phrase_ranges.swap_remove(remove_id.phrase_range_idx);
+
         for id in self.phrases.iter_mut() {
-            if *id == replace_id {
-                *id = remove_id;
+            if *id == swapped_id {
+                *id = replace_id;
             }
         }
 
@@ -71,7 +76,7 @@ impl State {
             .position(|v| phrase_equal(self.get(*v), phrase, (0, 0), (0, 0)))
             .expect("remove_idx");
 
-        self.remove(remove_idx);
+        self.remove_idx(remove_idx);
     }
 
     pub fn shuffle(&mut self, rng: &mut SmallRng) {
@@ -84,10 +89,10 @@ impl State {
         self.tokens.append(&mut phrase);
         let end = self.tokens.len();
 
-        let idx = self.phrase_ranges.len();
+        let phrase_range_idx = self.phrase_ranges.len();
         self.phrase_ranges.push((begin, end));
 
-        let id = PhraseId { idx };
+        let id = PhraseId { phrase_range_idx };
         self.phrases.push(id);
 
         id
@@ -102,7 +107,7 @@ impl State {
     }
 
     pub fn get(&self, id: PhraseId) -> &Phrase {
-        let (begin, end) = self.phrase_ranges[id.idx];
+        let (begin, end) = self.phrase_ranges[id.phrase_range_idx];
         &self.tokens[begin..end]
     }
 
@@ -110,7 +115,7 @@ impl State {
         self.phrases
             .iter()
             .map(|id| {
-                let (begin, end) = self.phrase_ranges[id.idx];
+                let (begin, end) = self.phrase_ranges[id.phrase_range_idx];
                 self.tokens[begin..end].to_vec()
             })
             .collect::<Vec<_>>()

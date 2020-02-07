@@ -562,7 +562,7 @@ where
                 );
 
                 let idx = state.len() - 1;
-                state.remove(idx);
+                state.remove_idx(idx);
 
                 return;
             }
