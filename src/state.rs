@@ -30,6 +30,12 @@ impl State {
         }
     }
 
+    pub fn remove(&mut self, id: PhraseId) {
+        if let Some(idx) = self.phrases.iter().position(|test_id| id == *test_id) {
+            self.remove_idx(idx);
+        }
+    }
+
     pub(crate) fn remove_idx(&mut self, idx: usize) {
         assert!(self.scratch_idx.is_none());
 
