@@ -148,7 +148,7 @@ impl Context {
 
     pub fn extend_state_from_context(&mut self, other: &Context) {
         for phrase_id in other.core.state.iter() {
-            let phrase = other.core.state.get(*phrase_id);
+            let phrase = other.core.state.get(phrase_id);
             let new_phrase = phrase
                 .iter()
                 .map(|t| {
@@ -262,7 +262,7 @@ impl Context {
         a5: Option<&Atom>,
     ) -> Option<&'a [Token]> {
         for phrase_id in self.core.state.iter() {
-            let p = self.core.state.get(*phrase_id);
+            let p = self.core.state.get(phrase_id);
 
             match (
                 p.get(0).map(|t| &t.atom),
@@ -326,7 +326,7 @@ impl Context {
             .state
             .iter()
             .filter_map(|phrase_id| {
-                let p = self.core.state.get(*phrase_id);
+                let p = self.core.state.get(phrase_id);
 
                 if match (
                     p.get(0).map(|t| &t.atom),
@@ -358,7 +358,7 @@ impl Context {
             .state
             .iter()
             .filter_map(|phrase_id| {
-                let p = self.core.state.get(*phrase_id);
+                let p = self.core.state.get(phrase_id);
 
                 if p.len() == 1 && (a1.is_none() || a1 == Some(&p[0].atom)) {
                     Some(p)
@@ -378,7 +378,7 @@ impl Context {
             .state
             .iter()
             .filter_map(|phrase_id| {
-                let p = self.core.state.get(*phrase_id);
+                let p = self.core.state.get(phrase_id);
 
                 if p.len() == 2
                     && (a1.is_none() || a1 == Some(&p[0].atom))
@@ -402,7 +402,7 @@ impl Context {
             .state
             .iter()
             .filter_map(|phrase_id| {
-                let p = self.core.state.get(*phrase_id);
+                let p = self.core.state.get(phrase_id);
 
                 if p.len() == 3
                     && (a1.is_none() || a1 == Some(&p[0].atom))
@@ -428,7 +428,7 @@ impl Context {
             .state
             .iter()
             .filter_map(|phrase_id| {
-                let p = self.core.state.get(*phrase_id);
+                let p = self.core.state.get(phrase_id);
 
                 if p.len() == 4
                     && (a1.is_none() || a1 == Some(&p[0].atom))
@@ -456,7 +456,7 @@ impl Context {
             .state
             .iter()
             .filter_map(|phrase_id| {
-                let p = self.core.state.get(*phrase_id);
+                let p = self.core.state.get(phrase_id);
 
                 if p.len() == 5
                     && (a1.is_none() || a1 == Some(&p[0].atom))
@@ -554,7 +554,7 @@ where
                     state
                         .iter()
                         .enumerate()
-                        .filter(|&(_, p)| state.get(*p)[0].atom == qui_atom)
+                        .filter(|&(_, p)| state.get(p)[0].atom == qui_atom)
                         .map(|(i, _)| i)
                         .collect::<Vec<_>>()
                         == vec![state.len() - 1],
@@ -589,7 +589,7 @@ impl PhraseString for Phrase {
 pub fn build_state(state: &State, string_cache: &StringCache) -> String {
     state
         .iter()
-        .map(|phrase_id| build_phrase(state.get(*phrase_id), string_cache))
+        .map(|phrase_id| build_phrase(state.get(phrase_id), string_cache))
         .collect::<Vec<_>>()
         .join("\n")
 }

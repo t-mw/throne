@@ -87,7 +87,7 @@ fn main() {
         let is_valid_pos = |x, y| x < WIDTH as i32 && y < HEIGHT as i32;
 
         for phrase_id in context.core.state.iter() {
-            let p = context.core.state.get(*phrase_id);
+            let p = context.core.state.get(phrase_id);
 
             match (
                 p.get(0).and_then(|t| t.as_str(&context.string_cache)),
