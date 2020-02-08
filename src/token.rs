@@ -354,13 +354,6 @@ pub fn is_oneway_backwards_pred(tokens: &Phrase) -> bool {
     }
 }
 
-pub fn is_backwards_pred(tokens: &Phrase) -> bool {
-    match tokens[0].flag {
-        TokenFlag::BackwardsPred(_) => true,
-        _ => false,
-    }
-}
-
 pub fn is_side_pred(tokens: &Phrase) -> bool {
     tokens[0].flag == TokenFlag::Side
 }

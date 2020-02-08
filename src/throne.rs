@@ -2,7 +2,6 @@ use rand;
 use rand::rngs::SmallRng;
 use rand::{thread_rng, Rng, SeedableRng};
 
-use std::collections::HashSet;
 use std::fmt;
 use std::vec::Vec;
 
@@ -491,25 +490,19 @@ impl fmt::Display for Context {
     }
 }
 
-fn execute_rule(rule: &Rule, state: &mut State) -> HashSet<Atom> {
+fn execute_rule(rule: &Rule, state: &mut State) {
     let inputs = &rule.inputs;
     let outputs = &rule.outputs;
 
-    let mut first_atoms_changed = HashSet::new();
-
     inputs.iter().for_each(|input| {
         if input[0].is_consuming {
-            first_atoms_changed.insert(input[0].atom);
             state.remove_phrase(input);
         }
     });
 
     outputs.iter().for_each(|output| {
-        first_atoms_changed.insert(output[0].atom);
         state.push(output.clone());
     });
-
-    first_atoms_changed
 }
 
 pub fn update<F>(core: &mut Core, mut side_input: F)
@@ -527,8 +520,6 @@ where
     // shuffle rules so that each has an equal chance of selection.
     rng.shuffle(rules);
 
-    let mut rule_match_cache = vec![false; rules.len()];
-
     // change starting rule on each iteration to introduce randomness.
     let mut start_rule_idx = 0;
 
@@ -544,18 +535,11 @@ where
         state.update_first_atoms();
 
         for i in 0..rules.len() {
-            let rule_idx = (start_rule_idx + i) % rules.len();
-            if rule_match_cache[rule_idx] && !quiescence {
-                continue;
-            }
-
-            let rule = &rules[rule_idx];
+            let rule = &rules[(start_rule_idx + i) % rules.len()];
 
             if let Some(rule) = rule_matches_state(&rule, state, &mut side_input) {
                 matching_rule = Some(rule);
                 break;
-            } else {
-                rule_match_cache[rule_idx] = true;
             }
         }
 
@@ -585,45 +569,10 @@ where
         }
 
         if let Some(ref matching_rule) = matching_rule {
-            let first_atoms_changed = execute_rule(matching_rule, state);
-
-            if first_atoms_changed.len() > 0 {
-                for (rule_idx, matches_exhausted) in rule_match_cache
-                    .iter_mut()
-                    .enumerate()
-                    .filter(|(_, matches_exhausted)| **matches_exhausted)
-                {
-                    let rule = &rules[rule_idx];
-                    for changed_first_atom in &first_atoms_changed {
-                        if rule
-                            .inputs
-                            .iter()
-                            .any(|p| phrase_may_match_changed_first_atom(p, *changed_first_atom))
-                            || rule.outputs.iter().any(|p| {
-                                phrase_may_match_changed_first_atom(p, *changed_first_atom)
-                            })
-                        {
-                            *matches_exhausted = false;
-                            break;
-                        }
-                    }
-                }
-            }
+            execute_rule(matching_rule, state);
         } else {
             quiescence = true;
         }
-    }
-}
-
-fn phrase_may_match_changed_first_atom(phrase: &Phrase, atom: Atom) -> bool {
-    if is_side_pred(phrase) {
-        true
-    } else if phrase.get(0).filter(|t| is_var_token(t)).is_some() {
-        true
-    } else if is_backwards_pred(phrase) {
-        false
-    } else {
-        phrase[0].atom == atom
     }
 }
 
