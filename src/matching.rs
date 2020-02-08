@@ -3,22 +3,6 @@ use crate::state::State;
 use crate::string_cache::Atom;
 use crate::token::*;
 
-pub trait OptionFilter<T> {
-    fn option_filter<P: FnOnce(&T) -> bool>(self, predicate: P) -> Self;
-}
-
-// copy of nightly-only method Option::filter
-impl<T> OptionFilter<T> for Option<T> {
-    fn option_filter<P: FnOnce(&T) -> bool>(self, predicate: P) -> Self {
-        if let Some(x) = self {
-            if predicate(&x) {
-                return Some(x);
-            }
-        }
-        None
-    }
-}
-
 pub fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<bool> {
     let mut matcher = NoVariablesMatcher { has_var: false };
 
@@ -742,10 +726,7 @@ fn gather_potential_input_state_matches(
 
 fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
     if is_concrete_pred(phrase) {
-        phrase
-            .get(0)
-            .option_filter(|t| !is_var_token(t))
-            .map(|t| t.atom)
+        phrase.get(0).filter(|t| !is_var_token(t)).map(|t| t.atom)
     } else {
         None
     }
