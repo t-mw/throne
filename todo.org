@@ -23,6 +23,7 @@
 *** TODO support marking state phrases immutable in debug builds, logging warning when the state is consumed by a rule. or do compile-time check.
 *** TODO support matching phrases while binding to them, to avoid retyping them in output e.g. (foo A)@FOO . bar = FOO
 *** TODO look at prolog optimizations
+    - could we compile each rule down to a specialized routine with a stack for variable matches to replace test_inputs_with_permutation
 *** TODO add syntax for matching on const lists i.e. (FOO | BAR) matched against (a b c): FOO = a, BAR = (b c)
 *** TODO syntax for scheduling some output of a rule to be deleted at the end of the update
 *** TODO ink -> throne converter
