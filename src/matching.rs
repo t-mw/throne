@@ -432,16 +432,26 @@ impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
 // Checks whether the rule's forward and backward predicates match the state.
 // Returns a new rule with all variables resolved, with backwards/side
 // predicates removed.
-pub fn rule_matches_state<F>(r: &Rule, state: &mut State, side_input: &mut F) -> Option<Rule>
+pub fn rule_matches_state<F>(
+    r: &Rule,
+    state: &mut State,
+    side_input: &mut F,
+    scratchpad: &mut scratchpad::Scratchpad<
+        std::boxed::Box<[std::mem::MaybeUninit<scratchpad::CacheAligned>]>,
+        std::boxed::Box<[std::mem::MaybeUninit<scratchpad::CacheAligned>]>,
+    >,
+) -> Option<Rule>
 where
     F: SideInput,
 {
+    let marker = scratchpad.mark_front().unwrap();
+
     let inputs = &r.inputs;
     let outputs = &r.outputs;
 
     // per input, a list of states that could match the input
     let input_state_matches =
-        if let Some(matches) = gather_potential_input_state_matches(inputs, state) {
+        if let Some(matches) = gather_potential_input_state_matches(inputs, state, &marker) {
             matches
         } else {
             return None;
@@ -521,10 +531,10 @@ where
 }
 
 #[derive(Debug)]
-struct InputStateMatches {
+struct InputStateMatches<'a> {
     potential_matches: Vec<InputStateMatch>,
     definite_matched_variables: Vec<MatchLite>,
-    initial_states_matched_bool: Vec<bool>,
+    initial_states_matched_bool: scratchpad::Allocation<'a, [bool]>,
 }
 
 #[derive(Debug)]
@@ -566,10 +576,14 @@ impl InputStateMatch {
     }
 }
 
-fn gather_potential_input_state_matches(
+fn gather_potential_input_state_matches<'a>(
     inputs: &Vec<Vec<Token>>,
     state: &State,
-) -> Option<InputStateMatches> {
+    marker: &'a scratchpad::MarkerFront<
+        std::boxed::Box<[std::mem::MaybeUninit<scratchpad::CacheAligned>]>,
+        std::boxed::Box<[std::mem::MaybeUninit<scratchpad::CacheAligned>]>,
+    >,
+) -> Option<InputStateMatches<'a>> {
     let mut potential_matches = vec![]; // inputs that could not be matched to a single state
 
     let mut multiple_matches = vec![]; // inputs that may yet be matched to a single state
@@ -653,7 +667,9 @@ fn gather_potential_input_state_matches(
     // immediately match phrases that could only match a single state, to
     // reduce number of permutations that need to be checked later on.
     let mut definite_matched_variables = vec![];
-    let mut initial_states_matched_bool = vec![false; state.len()];
+    let mut initial_states_matched_bool = marker
+        .allocate_array(state.len(), false)
+        .expect("allocation failed");
 
     for input_state_match in &single_matches {
         if !input_state_match.test_final_match(
@@ -742,7 +758,7 @@ fn test_inputs_with_permutation(
     side_input: &mut impl SideInput,
 ) -> bool {
     let len = state.len();
-    let mut states_matched_bool = input_state_matches.initial_states_matched_bool.clone();
+    let mut states_matched_bool = input_state_matches.initial_states_matched_bool.to_vec();
 
     // iterate across the graph of permutations from root to leaf, where each
     // level of the tree is an input, and each branch is a match against a state.

@@ -1,8 +1,13 @@
 use rand;
 use rand::rngs::SmallRng;
 use rand::{thread_rng, Rng, SeedableRng};
+use scratchpad::{
+    uninitialized_boxed_slice_for_bytes, uninitialized_boxed_slice_for_markers, CacheAligned,
+    Scratchpad,
+};
 
 use std::fmt;
+use std::mem::MaybeUninit;
 use std::vec::Vec;
 
 use crate::matching::*;
@@ -44,7 +49,24 @@ impl Core {
     where
         F: SideInput,
     {
-        rule_matches_state(rule, &mut self.state.clone(), &mut side_input).is_some()
+        const POOL_SIZE: usize = 1usize * 1024 * 1024; // 1 MB
+        const MARKERS_MAX: usize = 16;
+
+        let pool =
+            unsafe { uninitialized_boxed_slice_for_bytes::<MaybeUninit<CacheAligned>>(POOL_SIZE) };
+        let tracking = unsafe {
+            uninitialized_boxed_slice_for_markers::<MaybeUninit<CacheAligned>>(MARKERS_MAX)
+        };
+
+        let mut scratchpad = Scratchpad::new(pool, tracking);
+
+        rule_matches_state(
+            rule,
+            &mut self.state.clone(),
+            &mut side_input,
+            &mut scratchpad,
+        )
+        .is_some()
     }
 }
 
@@ -204,10 +226,21 @@ impl Context {
     {
         let state = &mut self.core.state.clone();
 
+        const POOL_SIZE: usize = 1usize * 1024 * 1024; // 1 MB
+        const MARKERS_MAX: usize = 16;
+
+        let pool =
+            unsafe { uninitialized_boxed_slice_for_bytes::<MaybeUninit<CacheAligned>>(POOL_SIZE) };
+        let tracking = unsafe {
+            uninitialized_boxed_slice_for_markers::<MaybeUninit<CacheAligned>>(MARKERS_MAX)
+        };
+
+        let mut scratchpad = Scratchpad::new(pool, tracking);
+
         self.core
             .rules
             .iter()
-            .filter_map(|rule| rule_matches_state(&rule, state, &mut side_input))
+            .filter_map(|rule| rule_matches_state(&rule, state, &mut side_input, &mut scratchpad))
             .collect()
     }
 
@@ -513,6 +546,16 @@ where
     let rules = &mut core.rules;
     let rng = &mut core.rng;
 
+    const POOL_SIZE: usize = 1usize * 1024 * 1024; // 1 MB
+    const MARKERS_MAX: usize = 16;
+
+    let pool =
+        unsafe { uninitialized_boxed_slice_for_bytes::<MaybeUninit<CacheAligned>>(POOL_SIZE) };
+    let tracking =
+        unsafe { uninitialized_boxed_slice_for_markers::<MaybeUninit<CacheAligned>>(MARKERS_MAX) };
+
+    let mut scratchpad = Scratchpad::new(pool, tracking);
+
     // shuffle state so that a given rule with multiple potential
     // matches does not always match the same permutation of state.
     state.shuffle(rng);
@@ -537,7 +580,7 @@ where
         for i in 0..rules.len() {
             let rule = &rules[(start_rule_idx + i) % rules.len()];
 
-            if let Some(rule) = rule_matches_state(&rule, state, &mut side_input) {
+            if let Some(rule) = rule_matches_state(&rule, state, &mut side_input, &mut scratchpad) {
                 matching_rule = Some(rule);
                 break;
             }
