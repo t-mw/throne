@@ -31,7 +31,7 @@
   - e.g.   foo FOO = `foo capitalized is` (^capitalize FOO <OUT)
          instead of
            foo FOO . ^capitalize FOO OUT = `foo capitalized is` OUT
-         where OUT can also be a wildcard
+         where OUT can also be a wildcard (or omitted?)
 *** TODO evaluate constant expressions to eliminate rules that will never match
 *** TODO An easy way to test a rule with a chance of success based on a probability extracted from state
   - This is currently difficult since the number of times that a rule may be evaluated in an update is not well defined
