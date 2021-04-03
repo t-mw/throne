@@ -39,6 +39,7 @@
   - e.g. `find_phrases<const N: usize>(pattern: [Option<&Atom>; N], match_pattern_length: bool) -> Vec<&[Token]> { ... }`
   - replace find_phrase* variants too
 *** TODO measure performance with https://github.com/bodil/smartstring
+*** TODO Add chess example
 *** DONE selectively disable warnings
   CLOSED: [2020-01-24 Fri 14:24]
 *** DONE wildcard variable: _
