@@ -97,7 +97,6 @@ fn js_value_from_atom(atom: Atom, string_cache: &StringCache) -> JsValue {
 
 #[cfg(test)]
 mod tests {
-    extern crate wasm_bindgen_test;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     use super::*;
