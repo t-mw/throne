@@ -11,12 +11,21 @@ license = "MIT"
 edition = "2018"
 exclude = ["todo.org"]
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 lazy_static = "1.0.0"
 pest = "2.0"
 pest_derive = "2.0"
 rand = { version = "0.8", features = ["small_rng"] }
 regex = "1.0.3"
+
+[target.wasm32-unknown-unknown.dependencies]
+console_error_panic_hook = "0.1"
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]
 criterion = { git = "https://github.com/t-mw/criterion.rs", rev = "bb1de83" }

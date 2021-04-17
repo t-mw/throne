@@ -27,6 +27,11 @@ Rules are of the format `INPUT = OUTPUT`, where `INPUT` and `OUTPUT` are lists t
 
 Evaluating a throne script involves executing any rule that matches the current state until the set of matching rules is exhausted. Rules are executed in a random order and may be executed more than once.
 
+### Build for wasm
+
+1. Run `cargo install wasm-pack` to install [wasm-pack](https://github.com/rustwasm/wasm-pack).
+1. Run `npm install ; npm start` in this directory.
+
 ### Examples
 - [blocks](examples/blocks.throne): a simple tile matching game
 - Used in [Urban Gift](https://twitter.com/UrbanGiftGame/)

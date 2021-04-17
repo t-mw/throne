@@ -5,7 +5,7 @@ use std::slice;
 
 use crate::string_cache::Atom;
 use crate::throne::Context;
-use crate::token::Token;
+use crate::token::Phrase;
 
 #[repr(C)]
 pub struct CRule {
@@ -26,7 +26,7 @@ pub extern "C" fn throne_context_destroy(context: *mut Context) {
 #[no_mangle]
 pub extern "C" fn throne_update(context: *mut Context) {
     let context = unsafe { &mut *context };
-    context.update(|_: &[Token]| None);
+    context.update(|_: &Phrase| None);
 }
 
 #[no_mangle]
@@ -52,7 +52,7 @@ pub extern "C" fn throne_context_find_matching_rules(
 
     let mut side_input_p = vec![];
 
-    let rules = context.find_matching_rules(|p: &[Token]| {
+    let rules = context.find_matching_rules(|p: &Phrase| {
         side_input_p.clear();
         side_input_p.extend(p.iter().map(|t| t.atom));
 
