@@ -1,6 +1,4 @@
-use rand;
-use rand::rngs::SmallRng;
-use rand::{thread_rng, Rng, SeedableRng};
+use rand::{self, rngs::SmallRng, seq::SliceRandom, thread_rng, SeedableRng};
 
 use std::fmt;
 use std::vec::Vec;
@@ -111,27 +109,6 @@ impl Context {
             state.push(phrase);
         }
 
-        let seed = [
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-            rand::random::<u8>(),
-        ];
-
-        let rng = SmallRng::from_seed(seed);
-
         state.update_first_atoms();
         let qui_atom = string_cache.str_to_atom("qui");
 
@@ -139,7 +116,7 @@ impl Context {
             core: Core {
                 state,
                 rules: result.rules,
-                rng,
+                rng: rng.clone(),
                 qui_atom,
             },
             string_cache,
@@ -180,8 +157,8 @@ impl Context {
         self.string_cache.str_to_existing_atom(text)
     }
 
-    pub fn atom_to_str(&self, atom: Atom) -> &str {
-        self.string_cache.atom_to_str(atom).unwrap()
+    pub fn atom_to_str(&self, atom: Atom) -> Option<&str> {
+        self.string_cache.atom_to_str(atom)
     }
 
     pub fn atom_to_number(&self, atom: Atom) -> Option<i32> {
@@ -518,7 +495,7 @@ where
     state.shuffle(rng);
 
     // shuffle rules so that each has an equal chance of selection.
-    rng.shuffle(rules);
+    rules.shuffle(rng);
 
     // change starting rule on each iteration to introduce randomness.
     let mut start_rule_idx = 0;
@@ -595,11 +572,7 @@ pub fn build_state(state: &State, string_cache: &StringCache) -> String {
 }
 
 fn test_rng() -> SmallRng {
-    let seed = [
-        123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123,
-    ];
-
-    SmallRng::from_seed(seed)
+    SmallRng::seed_from_u64(123)
 }
 
 #[cfg(test)]
@@ -763,7 +736,7 @@ mod tests {
                 0,
                 vec![
                     tokenize(
-                        "?state1 A D_BACK36822967802071690107",
+                        "?state1 A D_BACK18164667602342569625",
                         &mut context.string_cache
                     ),
                     tokenize("test", &mut context.string_cache),
@@ -792,7 +765,7 @@ mod tests {
                 0,
                 vec![
                     tokenize(
-                        "state1 A D_BACK36822967802071690107",
+                        "state1 A D_BACK18164667602342569625",
                         &mut context.string_cache
                     ),
                     tokenize("state2 B A", &mut context.string_cache)

@@ -15,7 +15,7 @@ exclude = ["todo.org"]
 lazy_static = "1.0.0"
 pest = "2.0"
 pest_derive = "2.0"
-rand = "0.5"
+rand = { version = "0.8", features = ["small_rng"] }
 regex = "1.0.3"
 
 [dev-dependencies]

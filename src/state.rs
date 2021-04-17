@@ -1,5 +1,4 @@
-use rand::rngs::SmallRng;
-use rand::Rng;
+use rand::{rngs::SmallRng, seq::SliceRandom};
 
 use crate::matching::phrase_equal;
 use crate::string_cache::Atom;
@@ -98,7 +97,7 @@ impl State {
 
     pub fn shuffle(&mut self, rng: &mut SmallRng) {
         assert!(self.scratch_idx.is_none());
-        rng.shuffle(&mut self.phrases);
+        self.phrases.shuffle(rng);
 
         self.rev += 1;
     }
