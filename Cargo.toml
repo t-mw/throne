@@ -21,15 +21,18 @@ pest_derive = "2.1"
 rand = { version = "0.8", features = ["small_rng"] }
 regex = "1.4"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = "0.3"
+minifb = "0.19"
+
 [target.wasm32-unknown-unknown.dependencies]
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
 wasm-bindgen = "0.2"
 getrandom = { version = "0.2", features = ["js"] }
 
-[dev-dependencies]
-criterion = "0.3"
-minifb = "0.19"
+[target.wasm32-unknown-unknown.dev-dependencies]
+wasm-bindgen-test = "0.3"
 
 [[bench]]
 name = "benchmark"

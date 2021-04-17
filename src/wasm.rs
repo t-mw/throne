@@ -1,8 +1,8 @@
 use wasm_bindgen::prelude::*;
 
-use crate::string_cache::StringCache;
+use crate::string_cache::{Atom, StringCache};
 use crate::throne::{update, Context as ThroneContext};
-use crate::token::Phrase;
+use crate::token::{Phrase, PhraseGroup};
 
 #[wasm_bindgen]
 pub fn init() {
@@ -69,18 +69,48 @@ impl Context {
 }
 
 fn js_value_from_phrase(phrase: &Phrase, string_cache: &StringCache) -> JsValue {
-    JsValue::from(
-        phrase
-            .iter()
-            .map(|token| {
-                if let Some(string) = string_cache.atom_to_str(token.atom) {
-                    JsValue::from(string)
-                } else if let Some(n) = StringCache::atom_to_number(token.atom) {
-                    JsValue::from(n)
-                } else {
-                    JsValue::null()
-                }
-            })
-            .collect::<js_sys::Array>(),
-    )
+    let mut result = vec![];
+    let mut group_n = 0;
+
+    // NB: optimizable, because get_group finds all earlier groups on each call
+    while let Some(group) = phrase.get_group(group_n) {
+        if group.len() == 1 {
+            result.push(js_value_from_atom(group[0].atom, string_cache));
+        } else {
+            result.push(js_value_from_phrase(group, string_cache));
+        }
+        group_n += 1;
+    }
+
+    JsValue::from(result.iter().collect::<js_sys::Array>())
+}
+
+fn js_value_from_atom(atom: Atom, string_cache: &StringCache) -> JsValue {
+    if let Some(string) = string_cache.atom_to_str(atom) {
+        JsValue::from(string)
+    } else if let Some(n) = StringCache::atom_to_number(atom) {
+        JsValue::from(n)
+    } else {
+        JsValue::null()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate wasm_bindgen_test;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use super::*;
+    use crate::token::tokenize;
+
+    #[wasm_bindgen_test]
+    fn test_js_value_from_phrase_nested() {
+        let mut string_cache = StringCache::new();
+        let phrase = tokenize("t1 (t21 (t221 t222 t223) t23) t3", &mut string_cache);
+        let js_phrase = js_value_from_phrase(&phrase, &string_cache);
+        assert_eq!(
+            format!("{:?}", js_phrase),
+            r#"JsValue(["t1", ["t21", ["t221", "t222", "t223"], "t23"], "t3"])"#
+        );
+    }
 }
