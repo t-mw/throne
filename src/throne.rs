@@ -632,6 +632,12 @@ mod tests {
     }
 
     #[test]
+    fn context_from_text_empty_test() {
+        let context = Context::from_text("");
+        assert!(context.core.state.get_all().is_empty());
+    }
+
+    #[test]
     fn context_from_text_state_test() {
         let mut context = Context::from_text(
             "at 0 0 wood . at 0 0 wood . #update \n\
