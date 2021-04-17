@@ -1,11 +1,9 @@
-#[macro_use]
 extern crate lazy_static;
 
 extern crate minifb;
 extern crate pest;
-extern crate rand;
-#[macro_use]
 extern crate pest_derive;
+extern crate rand;
 extern crate regex;
 
 use minifb::{Key, KeyRepeat, Window, WindowOptions};
