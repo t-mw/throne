@@ -6,5 +6,6 @@ Cargo.lock
 
 package-lock.json
 yarn.lock
+dist/
 pkg/
 node_modules/
