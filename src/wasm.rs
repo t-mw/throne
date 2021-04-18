@@ -72,12 +72,13 @@ fn js_value_from_phrase(phrase: &Phrase, string_cache: &StringCache) -> JsValue 
     let mut result = vec![];
     let mut group_n = 0;
 
-    // NB: optimizable, because get_group finds all earlier groups on each call
+    // NB: optimizable, because get_group finds all earlier groups on each call.
+    // could also remove call to normalize() in the process.
     while let Some(group) = phrase.get_group(group_n) {
         if group.len() == 1 {
             result.push(js_value_from_atom(group[0].atom, string_cache));
         } else {
-            result.push(js_value_from_phrase(group, string_cache));
+            result.push(js_value_from_phrase(&group.normalize(), string_cache));
         }
         group_n += 1;
     }
@@ -110,6 +111,18 @@ mod tests {
         assert_eq!(
             format!("{:?}", js_phrase),
             r#"JsValue(["t1", ["t21", ["t221", "t222", "t223"], "t23"], "t3"])"#
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn test_js_value_from_phrase_nested2() {
+        let mut string_cache = StringCache::new();
+        let phrase = tokenize("t1 (t21 (t221 t222 t223))", &mut string_cache);
+        log(&format!("{:#?}", phrase));
+        let js_phrase = js_value_from_phrase(&phrase, &string_cache);
+        assert_eq!(
+            format!("{:?}", js_phrase),
+            r#"JsValue(["t1", ["t21", ["t221", "t222", "t223"]]])"#
         );
     }
 }
