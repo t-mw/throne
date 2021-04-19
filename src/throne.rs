@@ -611,6 +611,16 @@ mod tests {
     }
 
     #[test]
+    fn context_from_text_unicode_test() {
+        // ñ, green heart, scottish flag
+        let mut context = Context::from_text("ñ💚🏴󠁧󠁢󠁳󠁣󠁴󠁿");
+        assert_eq!(
+            context.core.state.get_all(),
+            [tokenize("ñ💚🏴󠁧󠁢󠁳󠁣󠁴󠁿", &mut context.string_cache)]
+        );
+    }
+
+    #[test]
     fn context_from_text_state_test() {
         let mut context = Context::from_text(
             "at 0 0 wood . at 0 0 wood . #update \n\

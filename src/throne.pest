@@ -1,6 +1,6 @@
 WHITESPACE = _{ " " }
 COMMENT = _{ ("//" ~ (!NEWLINE ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
-atom = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ ~ "'"* }
+atom = @{ (LETTER | MARK | NUMBER | OTHER_SYMBOL | FORMAT | "_" | "-")+ ~ "'"* }
 atom_var = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "_")* ~ "'"* }
 string = { "`" ~ (!"`" ~ ANY)* ~ "`" }
 wildcard = @{ "_" ~ atom_var? }
