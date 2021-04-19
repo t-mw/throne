@@ -911,6 +911,34 @@ pub fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Vec<Token>> {
                 _ => None,
             }
         }
+        TokenFlag::BackwardsPred(BackwardsPred::Minus) => {
+            let n1 = tokens[1].as_number();
+            let n2 = tokens[2].as_number();
+            let n3 = tokens[3].as_number();
+
+            match (n1, n2, n3) {
+                (Some(v1), Some(v2), None) => Some(vec![
+                    tokens[0].clone(),
+                    tokens[1].clone(),
+                    tokens[2].clone(),
+                    Token::new_number(v1 - v2, 0, 1),
+                ]),
+                (Some(v1), None, Some(v3)) => Some(vec![
+                    tokens[0].clone(),
+                    tokens[1].clone(),
+                    Token::new_number(-v3 + v1, 0, 0),
+                    tokens[3].clone(),
+                ]),
+                (None, Some(v2), Some(v3)) => Some(vec![
+                    tokens[0].clone(),
+                    Token::new_number(v3 + v2, 0, 0),
+                    tokens[2].clone(),
+                    tokens[3].clone(),
+                ]),
+                (Some(v1), Some(v2), Some(v3)) if v1 - v2 == v3 => Some(tokens.to_owned()),
+                _ => None,
+            }
+        }
         TokenFlag::BackwardsPred(BackwardsPred::Lt) => {
             let n1 = tokens[1].as_number();
             let n2 = tokens[2].as_number();

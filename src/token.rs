@@ -13,6 +13,7 @@ pub enum TokenFlag {
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum BackwardsPred {
     Plus,
+    Minus,
     Lt,
     Gt,
     Lte,
@@ -93,6 +94,7 @@ impl Token {
             ('<', _) => Some(BackwardsPred::Lt),
             ('>', _) => Some(BackwardsPred::Gt),
             ('+', _) => Some(BackwardsPred::Plus),
+            ('-', _) => Some(BackwardsPred::Minus),
             ('=', '=') => Some(BackwardsPred::Equal),
 
             _ => None,
@@ -341,14 +343,16 @@ pub fn is_var_token(token: &Token) -> bool {
 
 pub fn is_twoway_backwards_pred(tokens: &Phrase) -> bool {
     match tokens[0].flag {
-        TokenFlag::BackwardsPred(BackwardsPred::Plus) => true,
+        TokenFlag::BackwardsPred(BackwardsPred::Plus)
+        | TokenFlag::BackwardsPred(BackwardsPred::Minus) => true,
         _ => false,
     }
 }
 
 pub fn is_oneway_backwards_pred(tokens: &Phrase) -> bool {
     match tokens[0].flag {
-        TokenFlag::BackwardsPred(BackwardsPred::Plus) => false,
+        TokenFlag::BackwardsPred(BackwardsPred::Plus)
+        | TokenFlag::BackwardsPred(BackwardsPred::Minus) => false,
         TokenFlag::BackwardsPred(_) => true,
         _ => false,
     }

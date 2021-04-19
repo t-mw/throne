@@ -7,7 +7,7 @@ wildcard = @{ "_" ~ atom? }
 qui = { "qui" }
 
 // list <= and >= first, to give precendence over < and >
-prefix = { !(wildcard | string | atom_var | atom) ~ ("+" | "%" | "<=" | ">=" | "<" | ">" | "#" | "==") }
+prefix = { !(wildcard | string | atom_var | atom) ~ ("+" | "-" | "%" | "<=" | ">=" | "<" | ">" | "#" | "==") }
 
 phrase_compound = { prefix? ~ ((wildcard | string | atom_var | atom)+ | "(" ~ phrase_compound+ ~ ")") }
 phrase = !{ phrase_compound+ }
