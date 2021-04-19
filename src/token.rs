@@ -87,7 +87,7 @@ impl Token {
 
         let backwards_pred = match (first_char.unwrap_or(' '), second_char.unwrap_or(' ')) {
             ('<', '<') => Some(BackwardsPred::Custom),
-            ('%', '%') => Some(BackwardsPred::ModNeg),
+            ('%', _) => Some(BackwardsPred::ModNeg),
             ('<', '=') => Some(BackwardsPred::Lte),
             ('>', '=') => Some(BackwardsPred::Gte),
             ('<', _) => Some(BackwardsPred::Lt),
