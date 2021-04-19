@@ -10,6 +10,7 @@
   - option to scope permanence by a variable
 *** TODO make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
 *** TODO replace #foo -> stage foo, because # does not have special effects like other symbols
+    - Why does removing # on conway's game of life change behavior?
 *** TODO replace !== backwards predicate with ability to use '!' anywhere in a phrase
 *** TODO ability to arbitrarily nest 'stage' scopes
 *** TODO nested labels
@@ -39,7 +40,11 @@
   - e.g. `find_phrases<const N: usize>(pattern: [Option<&Atom>; N], match_pattern_length: bool) -> Vec<&[Token]> { ... }`
   - replace find_phrase* variants too
 *** TODO measure performance with https://github.com/bodil/smartstring
-*** TODO Add chess example
+*** TODO Add examples
+    - Conway's game of life
+    - Chess
+    - Tic tac toe
+*** TODO Detect infinite loops
 *** DONE selectively disable warnings
   CLOSED: [2020-01-24 Fri 14:24]
 *** DONE wildcard variable: _
