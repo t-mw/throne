@@ -2,7 +2,7 @@ use regex::Regex;
 
 use crate::string_cache::*;
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TokenFlag {
     None,
     Variable,
@@ -10,7 +10,7 @@ pub enum TokenFlag {
     BackwardsPred(BackwardsPred),
 }
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum BackwardsPred {
     Plus,
     Lt,
@@ -22,7 +22,7 @@ pub enum BackwardsPred {
     Custom,
 }
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Token {
     pub atom: Atom,
     pub is_negated: bool,

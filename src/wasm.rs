@@ -1,5 +1,8 @@
 use wasm_bindgen::prelude::*;
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use crate::string_cache::{Atom, StringCache};
 use crate::throne::{update, Context as ThroneContext};
 use crate::token::{Phrase, PhraseGroup};
@@ -61,6 +64,22 @@ impl Context {
             .map(|phrase| js_value_from_phrase(phrase, string_cache))
             .collect::<js_sys::Array>();
         JsValue::from(js_phrases)
+    }
+
+    pub fn get_state_hashes(&self) -> JsValue {
+        let js_hashes = self
+            .throne_context
+            .core
+            .state
+            .get_all()
+            .iter()
+            .map(|phrase| {
+                let mut hasher = DefaultHasher::new();
+                phrase.hash(&mut hasher);
+                JsValue::from(hasher.finish().to_string())
+            })
+            .collect::<js_sys::Array>();
+        JsValue::from(js_hashes)
     }
 
     pub fn print(&self) {
