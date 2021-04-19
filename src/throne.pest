@@ -3,7 +3,7 @@ COMMENT = _{ ("//" ~ (!NEWLINE ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
 atom = @{ (LETTER | MARK | NUMBER | OTHER_SYMBOL | FORMAT | "_" | "-")+ ~ "'"* }
 atom_var = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "_")* ~ "'"* }
 string = { "`" ~ (!"`" ~ ANY)* ~ "`" }
-wildcard = @{ "_" ~ atom_var? }
+wildcard = @{ "_" ~ atom? }
 qui = { "qui" }
 
 // list <= and >= first, to give precendence over < and >
