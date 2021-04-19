@@ -31,6 +31,10 @@ impl Context {
         }
     }
 
+    pub fn append_state(&mut self, text: &str) {
+        self.throne_context.append_state(text);
+    }
+
     pub fn update(&mut self, side_input: Option<js_sys::Function>) {
         if let Some(side_input) = side_input {
             let core = &mut self.throne_context.core;
