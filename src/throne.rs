@@ -1588,6 +1588,30 @@ mod tests {
                     ],
                 ),
             ),
+            // rule with variable as first atom in inputs
+            (
+                rule_new(
+                    vec![
+                        tokenize("PARENT is parent of CHILD", &mut string_cache),
+                        tokenize("AUNT is sister of PARENT", &mut string_cache),
+                        tokenize("AUNT is parent of COUSIN", &mut string_cache),
+                    ],
+                    vec![tokenize("COUSIN is cousin of CHILD", &mut string_cache)],
+                ),
+                vec![
+                    tokenize("Mary is parent of Sarah", &mut string_cache),
+                    tokenize("David is parent of Tom", &mut string_cache),
+                    tokenize("Mary is sister of David", &mut string_cache),
+                ],
+                rule_new(
+                    vec![
+                        tokenize("David is parent of Tom", &mut string_cache),
+                        tokenize("Mary is sister of David", &mut string_cache),
+                        tokenize("Mary is parent of Sarah", &mut string_cache),
+                    ],
+                    vec![tokenize("Sarah is cousin of Tom", &mut string_cache)],
+                ),
+            ),
         ];
 
         for (rule, state, expected) in test_cases.drain(..) {

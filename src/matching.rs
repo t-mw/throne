@@ -570,9 +570,8 @@ fn gather_potential_input_state_matches(
     inputs: &Vec<Vec<Token>>,
     state: &State,
 ) -> Option<InputStateMatches> {
-    let mut potential_matches = vec![]; // inputs that could not be matched to a single state
-
-    let mut multiple_matches = vec![]; // inputs that may yet be matched to a single state
+    let mut potential_matches = vec![]; // inputs that could not be inexpensively matched to a single state
+    let mut multiple_matches = vec![]; // inputs that may yet be inexpensively matched to a single state
     let mut single_matches = vec![]; // inputs that have been matched to a single state
 
     for (i_i, input) in inputs.iter().enumerate() {
@@ -640,13 +639,42 @@ fn gather_potential_input_state_matches(
                     states,
                 });
             }
-        } else if input.len() == 1 && is_var_pred(&input) {
+        } else if input.len() == 1 && is_var_pred(input) {
+            // treat input with a single variable as a special case that can match any state
             let states = state.iter().enumerate().map(|(i, _)| i).collect::<Vec<_>>();
             potential_matches.push(InputStateMatch {
                 i_i,
                 has_var: true,
                 states,
             });
+        } else if is_var_pred(input) {
+            let mut states = vec![];
+            state.iter().enumerate().for_each(|(s_i, phrase_id)| {
+                if let Some(match_has_var) =
+                    test_match_without_variables(input, state.get(phrase_id))
+                {
+                    debug_assert!(match_has_var);
+                    states.push(s_i);
+                }
+            });
+
+            if states.len() == 0 {
+                return None;
+            }
+
+            if states.len() == 1 {
+                single_matches.push(InputStateMatch {
+                    i_i,
+                    has_var: true,
+                    states,
+                });
+            } else {
+                multiple_matches.push(InputStateMatch {
+                    i_i,
+                    has_var: true,
+                    states,
+                });
+            };
         }
     }
 
