@@ -15,6 +15,7 @@ exclude = ["todo.org"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+itertools = "0.10"
 lazy_static = "1.4"
 pest = "2.1"
 pest_derive = "2.1"

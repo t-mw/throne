@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use rand::{self, rngs::SmallRng, seq::SliceRandom, thread_rng, SeedableRng};
 
 use std::fmt;
@@ -33,6 +34,7 @@ pub struct Context {
 pub struct Core {
     pub state: State,
     pub rules: Vec<Rule>,
+    pub executed_rule_ids: Vec<i32>,
     rng: SmallRng,
     qui_atom: Atom,
 }
@@ -116,6 +118,7 @@ impl Context {
             core: Core {
                 state,
                 rules: result.rules,
+                executed_rule_ids: vec![],
                 rng: rng.clone(),
                 qui_atom,
             },
@@ -463,7 +466,13 @@ impl fmt::Display for Context {
             .collect::<Vec<_>>();
         rules.sort();
 
-        write!(f, "state:\n{}\nrules:\n{}", state, rules.join("\n"))
+        write!(
+            f,
+            "state:\n{}\nrules:\n{}\npreviously executed rule ids:\n{}",
+            state,
+            rules.join("\n"),
+            self.core.executed_rule_ids.iter().join(", ")
+        )
     }
 }
 
@@ -488,7 +497,10 @@ where
 {
     let state = &mut core.state;
     let rules = &mut core.rules;
+    let executed_rule_ids = &mut core.executed_rule_ids;
     let rng = &mut core.rng;
+
+    executed_rule_ids.clear();
 
     // shuffle state so that a given rule with multiple potential
     // matches does not always match the same permutation of state.
@@ -546,6 +558,7 @@ where
         }
 
         if let Some(ref matching_rule) = matching_rule {
+            executed_rule_ids.push(matching_rule.id);
             execute_rule(matching_rule, state);
         } else {
             quiescence = true;
