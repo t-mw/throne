@@ -2,7 +2,7 @@ WHITESPACE = _{ " " }
 COMMENT = _{ ("//" ~ (!NEWLINE ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
 atom = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ ~ "'"* }
 atom_var = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "_")* ~ "'"* }
-string = { "`" ~ (!"`" ~ ANY)* ~ "`" }
+string = { "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 wildcard = @{ "_" ~ atom? }
 qui = { "qui" }
 

@@ -163,7 +163,7 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
 
     // remove instances of brackets surrounding single atoms
     lazy_static! {
-        static ref RE1: Regex = Regex::new(r"\(\s*(\S+|`[^`]+`)\s*\)").unwrap();
+        static ref RE1: Regex = Regex::new(r#"\(\s*(\S+|"[^"]+")\s*\)"#).unwrap();
     }
 
     loop {
@@ -179,7 +179,7 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
 
     // create iterator for strings surrounded by backticks
     lazy_static! {
-        static ref RE2: Regex = Regex::new(r"`(.*?)`").unwrap();
+        static ref RE2: Regex = Regex::new(r#""(.*?)""#).unwrap();
     }
 
     let string1 = string.clone();
@@ -187,7 +187,7 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
         .captures_iter(&string1)
         .map(|c| c.get(1).expect("string_capture").as_str());
 
-    string = RE2.replace_all(&string, "`").to_string();
+    string = RE2.replace_all(&string, "\"").to_string();
 
     // split into tokens
     lazy_static! {
@@ -223,7 +223,7 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
             }
         }
 
-        if *token == "`" {
+        if *token == "\"" {
             result.push(Token::new(
                 strings.next().expect("string"),
                 open_depth,
@@ -402,7 +402,7 @@ pub fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
 
         if let Some(s) = t.as_str(string_cache) {
             if s.chars().any(|c| c.is_whitespace()) {
-                string += &format!("`{}`", s);
+                string += &format!("\"{}\"", s);
             } else {
                 string += s;
             }

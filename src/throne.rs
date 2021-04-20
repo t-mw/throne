@@ -626,10 +626,10 @@ mod tests {
     #[test]
     fn context_from_text_unicode_test() {
         // ñ, black square, green heart, scottish flag
-        let mut context = Context::from_text("`ñ◼️💚🏴󠁧󠁢󠁳󠁣󠁴󠁿`");
+        let mut context = Context::from_text("\"ñ◼️💚🏴󠁧󠁢󠁳󠁣󠁴󠁿\"");
         assert_eq!(
             context.core.state.get_all(),
-            [tokenize("`ñ◼️💚🏴󠁧󠁢󠁳󠁣󠁴󠁿`", &mut context.string_cache)]
+            [tokenize("\"ñ◼️💚🏴󠁧󠁢󠁳󠁣󠁴󠁿\"", &mut context.string_cache)]
         );
     }
 
@@ -716,7 +716,7 @@ mod tests {
              broken line 3 \n\
              . broken line 4\n\
              text\n\
-             = `broken\ntext`",
+             = \"broken\ntext\"",
         );
 
         assert_eq!(
@@ -734,7 +734,7 @@ mod tests {
                 Rule::new(
                     1,
                     vec![tokenize("text", &mut context.string_cache)],
-                    vec![tokenize("`broken\ntext`", &mut context.string_cache)],
+                    vec![tokenize("\"broken\ntext\"", &mut context.string_cache)],
                 )
             ]
         );
@@ -2126,12 +2126,12 @@ mod tests {
         let mut string_cache = StringCache::new();
 
         assert_eq!(
-            tokenize("`string here`", &mut string_cache),
+            tokenize("\"string here\"", &mut string_cache),
             [Token::new("string here", 0, 0, &mut string_cache),]
         );
 
         assert_eq!(
-            tokenize("`one string` `two strings`", &mut string_cache),
+            tokenize("\"one string\" \"two strings\"", &mut string_cache),
             [
                 Token::new("one string", 1, 0, &mut string_cache),
                 Token::new("two strings", 0, 1, &mut string_cache),
@@ -2140,7 +2140,7 @@ mod tests {
 
         assert_eq!(
             tokenize(
-                "t1 t2 (((`string here` )) `final string`)",
+                "t1 t2 (((\"string here\" )) \"final string\")",
                 &mut string_cache
             ),
             [
@@ -2282,7 +2282,7 @@ mod tests {
 
         // test complicated match that caused integer overflow in the past
         let input_tokens = tokenize("ui-action ID RESULT HINT", &mut string_cache);
-        let pred_tokens = tokenize("ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan `to your team`)", &mut string_cache);
+        let pred_tokens = tokenize("ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan \"to your team\")", &mut string_cache);
 
         let result = test_match_without_variables(&input_tokens, &pred_tokens);
         assert!(result.is_some());
@@ -2294,7 +2294,7 @@ mod tests {
 
         // test complicated match that caused integer overflow in the past
         let input_tokens = tokenize("RESULT", &mut string_cache);
-        let pred_tokens = tokenize("ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan `to your team`)", &mut string_cache);
+        let pred_tokens = tokenize("ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan \"to your team\")", &mut string_cache);
 
         let result = test_match_without_variables(&input_tokens, &pred_tokens);
         assert!(result.is_some());
