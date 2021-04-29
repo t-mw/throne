@@ -9,7 +9,8 @@
 *** TODO syntax to match rule only once per update / permanently. or even make matching once per update the default.
   - option to scope permanence by a variable
 *** TODO make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
-*** TODO replace #foo -> stage foo, because # does not have special effects like other symbols
+*** DONE replace #foo -> stage foo, because # does not have special effects like other symbols
+    CLOSED: [2021-04-29 Thu 15:24]
     - Why does removing # on conway's game of life change behavior?
 *** TODO replace !== backwards predicate with ability to use '!' anywhere in a phrase
 *** TODO ability to arbitrarily nest 'stage' scopes

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use pest::iterators::Pair;
+use pest::Parser;
 use rand::rngs::SmallRng;
 use rand::Rng;
 
@@ -20,9 +22,6 @@ mod generated {
 }
 
 pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng) -> ParseResult {
-    use pest::iterators::Pair;
-    use pest::Parser;
-
     let text = text.replace("()", "qui");
 
     let file = generated::Parser::parse(generated::Rule::file, &text)
@@ -35,115 +34,19 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
     let mut backwards_preds: Vec<(VecPhrase, Vec<VecPhrase>)> = vec![];
     let mut enable_unused_warnings = true;
 
-    let check_rule_variables = |pair: Pair<generated::Rule>, enable_unused_warnings: bool| {
-        if !enable_unused_warnings {
-            return;
-        }
-
-        let rule_str = pair.as_str();
-        let inner = pair.into_inner();
-        let mut var_counts = HashMap::new();
-
-        for p in inner.flatten() {
-            if let generated::Rule::atom_var = p.as_rule() {
-                let count = var_counts.entry(p.as_str()).or_insert(0);
-                *count += 1;
-            }
-        }
-
-        for (var_name, count) in &var_counts {
-            if *count == 1 {
-                println!("WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.", var_name, rule_str);
-            }
-        }
-    };
-
-    let pair_to_throne_rule = |pair: Pair<generated::Rule>,
-                               string_cache: &mut StringCache,
-                               enable_unused_warnings: bool| {
-        check_rule_variables(pair.clone(), enable_unused_warnings);
-
-        let mut pairs = pair.into_inner();
-        let inputs_pair = pairs.next().unwrap();
-        let outputs_pair = pairs.next().unwrap();
-
-        let mut inputs = vec![];
-        let mut outputs = vec![];
-        let mut has_input_qui = false;
-
-        for p in inputs_pair.into_inner() {
-            let input_phrase = p.into_inner().next().unwrap();
-
-            match input_phrase.as_rule() {
-                generated::Rule::copy_phrase => {
-                    let copy_phrase = tokenize(
-                        input_phrase.into_inner().next().unwrap().as_str(),
-                        string_cache,
-                    );
-
-                    inputs.push(copy_phrase.clone());
-                    outputs.push(copy_phrase);
-                }
-                rule_type => {
-                    has_input_qui = has_input_qui || rule_type == generated::Rule::qui;
-                    inputs.push(tokenize(input_phrase.as_str(), string_cache));
-                }
-            }
-        }
-
-        for p in outputs_pair.into_inner() {
-            let output_phrase = p.into_inner().next().unwrap();
-
-            match output_phrase.as_rule() {
-                generated::Rule::qui => (),
-                _ => outputs.push(tokenize(output_phrase.as_str(), string_cache)),
-            }
-        }
-
-        (Rule::new(0, inputs, outputs), has_input_qui)
-    };
-
     for line in file.into_inner() {
         match line.as_rule() {
-            generated::Rule::stage => {
-                let mut stage = line.into_inner();
+            generated::Rule::prefixed => {
+                let mut prefixed = line.into_inner();
 
-                let prefix_inputs_pair = stage.next().unwrap();
-                let input_phrase_strings = prefix_inputs_pair
-                    .into_inner()
-                    .map(|p| p.as_str())
-                    .collect::<Vec<_>>();
-
-                for pair in stage {
-                    let (mut r, has_input_qui) =
-                        pair_to_throne_rule(pair, &mut string_cache, enable_unused_warnings);
-
-                    let input_phrases = input_phrase_strings
-                        .iter()
-                        .map(|p| tokenize(p, &mut string_cache))
-                        .collect::<Vec<_>>();
-                    let stage_phrase_idx = input_phrase_strings
-                        .iter()
-                        .position(|s| s.chars().next() == Some('#'));
-
-                    // insert stage at beginning, so that 'first atoms' optimization is effective
-                    for (i, p) in input_phrases.iter().enumerate() {
-                        if stage_phrase_idx == Some(i) {
-                            continue;
-                        }
-
-                        r.inputs.push(p.clone())
-                    }
-
-                    if let Some(i) = stage_phrase_idx {
-                        r.inputs.insert(0, input_phrases[i].clone());
-                    }
-
-                    if !has_input_qui && stage_phrase_idx.is_some() {
-                        r.outputs
-                            .push(input_phrases[stage_phrase_idx.unwrap()].clone());
-                    }
-
+                let prefix_inputs_pair = prefixed.next().unwrap();
+                for pair in prefixed {
+                    let r = pair_to_throne_rule(
+                        pair,
+                        Some(prefix_inputs_pair.clone()),
+                        &mut string_cache,
+                        enable_unused_warnings,
+                    );
                     rules.push((r, enable_unused_warnings));
                 }
             }
@@ -171,7 +74,7 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
             }
             generated::Rule::rule => {
                 rules.push((
-                    pair_to_throne_rule(line, &mut string_cache, enable_unused_warnings).0,
+                    pair_to_throne_rule(line, None, &mut string_cache, enable_unused_warnings),
                     enable_unused_warnings,
                 ));
             }
@@ -211,6 +114,88 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
         rules: new_rules,
         state,
     }
+}
+
+fn pair_to_throne_rule(
+    rule_pair: Pair<generated::Rule>,
+    prefix_inputs_pair: Option<Pair<generated::Rule>>,
+    string_cache: &mut StringCache,
+    enable_unused_warnings: bool,
+) -> Rule {
+    check_rule_variables(rule_pair.clone(), enable_unused_warnings);
+
+    let mut pairs = rule_pair.into_inner();
+    let inputs_pair = pairs.next().unwrap();
+    let outputs_pair = pairs.next().unwrap();
+
+    let mut inputs = vec![];
+    let mut outputs = vec![];
+
+    let input_pairs = inputs_pair.into_inner();
+    let has_input_qui = input_pairs.clone().any(|p| {
+        let input_phrase = p.into_inner().next().unwrap();
+        input_phrase.as_rule() == generated::Rule::qui
+    });
+
+    let mut handle_input_phrase = |input_phrase: Pair<generated::Rule>, is_prefix_input: bool| {
+        match input_phrase.as_rule() {
+            generated::Rule::copy_phrase => {
+                let copy_phrase = tokenize(
+                    input_phrase.into_inner().next().unwrap().as_str(),
+                    string_cache,
+                );
+
+                inputs.push(copy_phrase.clone());
+                outputs.push(copy_phrase);
+            }
+            // stage phrases have the special behavior of acting as copy phrases when used as
+            // prefixes, except when the prefixed rule includes a qui.
+            generated::Rule::stage_phrase => {
+                let stage_phrase = tokenize(input_phrase.as_str(), string_cache);
+                if !has_input_qui && is_prefix_input {
+                    outputs.push(stage_phrase.clone());
+                }
+                inputs.push(stage_phrase);
+            }
+            _ => {
+                inputs.push(tokenize(input_phrase.as_str(), string_cache));
+            }
+        }
+    };
+
+    if let Some(prefix_inputs_pair) = prefix_inputs_pair {
+        // insert stages at beginning of rule input, so that 'first atoms' optimization is effective
+        let prefix_input_pairs = prefix_inputs_pair.into_inner();
+        for p in prefix_input_pairs.clone() {
+            let input_phrase = p.into_inner().next().unwrap();
+            if input_phrase.as_rule() == generated::Rule::stage_phrase {
+                handle_input_phrase(input_phrase, true);
+            }
+        }
+
+        for p in prefix_input_pairs {
+            let input_phrase = p.into_inner().next().unwrap();
+            if input_phrase.as_rule() != generated::Rule::stage_phrase {
+                handle_input_phrase(input_phrase, true);
+            }
+        }
+    }
+
+    for p in input_pairs {
+        let input_phrase = p.into_inner().next().unwrap();
+        handle_input_phrase(input_phrase, false);
+    }
+
+    for p in outputs_pair.into_inner() {
+        let output_phrase = p.into_inner().next().unwrap();
+
+        match output_phrase.as_rule() {
+            generated::Rule::qui => (),
+            _ => outputs.push(tokenize(output_phrase.as_str(), string_cache)),
+        }
+    }
+
+    Rule::new(0, inputs, outputs)
 }
 
 // for each backwards predicate, replace it with the corresponding phrase
@@ -403,4 +388,27 @@ fn replace_variables(
     }
 
     existing_map
+}
+
+fn check_rule_variables(pair: Pair<generated::Rule>, enable_unused_warnings: bool) {
+    if !enable_unused_warnings {
+        return;
+    }
+
+    let rule_str = pair.as_str();
+    let inner = pair.into_inner();
+    let mut var_counts = HashMap::new();
+
+    for p in inner.flatten() {
+        if let generated::Rule::atom_var = p.as_rule() {
+            let count = var_counts.entry(p.as_str()).or_insert(0);
+            *count += 1;
+        }
+    }
+
+    for (var_name, count) in &var_counts {
+        if *count == 1 {
+            println!("WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.", var_name, rule_str);
+        }
+    }
 }

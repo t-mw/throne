@@ -660,6 +660,8 @@ mod tests {
              }",
         );
 
+        context.print();
+
         assert_eq!(
             context.core.rules,
             [
@@ -675,13 +677,13 @@ mod tests {
                     1,
                     vec![
                         tokenize("#test", &mut context.string_cache),
-                        tokenize("at 3 4 wood", &mut context.string_cache),
                         tokenize("asdf", &mut context.string_cache),
+                        tokenize("at 3 4 wood", &mut context.string_cache),
                     ],
                     vec![
+                        tokenize("#test", &mut context.string_cache),
                         tokenize("at 5 6 wood", &mut context.string_cache),
                         tokenize("at 7 8 wood", &mut context.string_cache),
-                        tokenize("#test", &mut context.string_cache),
                     ],
                 ),
             ]
@@ -1001,6 +1003,8 @@ mod tests {
              }",
         );
 
+        context.print();
+
         assert_eq!(
             context.core.rules,
             [
@@ -1011,8 +1015,8 @@ mod tests {
                         tokenize("in1", &mut context.string_cache)
                     ],
                     vec![
+                        tokenize("#test", &mut context.string_cache),
                         tokenize("out1", &mut context.string_cache),
-                        tokenize("#test", &mut context.string_cache)
                     ],
                 ),
                 Rule::new(
@@ -1022,8 +1026,8 @@ mod tests {
                         tokenize("in2", &mut context.string_cache)
                     ],
                     vec![
+                        tokenize("#test", &mut context.string_cache),
                         tokenize("out2", &mut context.string_cache),
-                        tokenize("#test", &mut context.string_cache)
                     ],
                 )
             ]
@@ -1090,7 +1094,9 @@ mod tests {
         )
         .with_test_rng();
 
+        context.print();
         context.update(|_: &Phrase| None);
+        context.print();
 
         assert_eq!(
             context.core.state.get_all(),

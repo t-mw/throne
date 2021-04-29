@@ -35,11 +35,11 @@ rule = { inputs ~ NEWLINE? ~ "=" ~ NEWLINE? ~ outputs }
 backwards_def_phrase = { stage_phrase | side_phrase | negate_phrase | nonconsuming_phrase | phrase }
 backwards_def = { backwards_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ backwards_def_phrase)* }
 
-stage_block = _{ "{" ~ NEWLINE* ~ rule ~ (NEWLINE+ ~ rule)* ~ NEWLINE* ~ "}" }
-stage = { inputs ~ ":" ~ stage_block }
+prefix_block = _{ "{" ~ NEWLINE* ~ rule ~ (NEWLINE+ ~ rule)* ~ NEWLINE* ~ "}" }
+prefixed = { inputs ~ ":" ~ prefix_block }
 
 file = {
   SOI ~
-  (NEWLINE* ~ (stage | rule | backwards_def | state | compiler_block))* ~
+  (NEWLINE* ~ (prefixed | rule | backwards_def | state | compiler_block))* ~
   NEWLINE* ~ EOI
 }
