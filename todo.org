@@ -1,5 +1,6 @@
 *** TODO support custom backwards predicate (<<) under stage label
-*** TODO support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
+*** DONE support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
+    CLOSED: [2021-04-30 Fri 11:16]
 *** TODO decide on consistent syntax for arguments e.g. keywords?
 *** TODO allow hex colors / named colors to be passed directly to sprite
 *** TODO add hex overload to 'color' predicate
@@ -42,9 +43,9 @@
   - replace find_phrase* variants too
 *** TODO measure performance with https://github.com/bodil/smartstring
 *** TODO Add examples
-    - Conway's game of life
-    - Chess
-    - Tic tac toe
+    - [X] Conway's game of life
+    - [ ] Chess
+    - [ ] Tic tac toe
 *** TODO Detect infinite loops
 *** DONE selectively disable warnings
   CLOSED: [2020-01-24 Fri 14:24]
