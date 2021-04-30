@@ -3,6 +3,7 @@ use wasm_bindgen::prelude::*;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+use crate::parser;
 use crate::string_cache::{Atom, StringCache};
 use crate::throne::{update, Context as ThroneContext};
 use crate::token::{Phrase, PhraseGroup};
@@ -21,6 +22,26 @@ extern "C" {
 #[wasm_bindgen]
 pub struct Context {
     throne_context: ThroneContext,
+}
+
+impl From<parser::Error> for JsValue {
+    fn from(e: parser::Error) -> Self {
+        #[wasm_bindgen]
+        struct LineColSpanDescriptor {
+            pub value: LineColSpan,
+        }
+
+        let js_error = js_sys::Error::new(&format!("{}", e));
+        js_sys::Object::define_property(
+            &js_error,
+            &JsValue::from("throne_span"),
+            js_sys::Object::try_from(&JsValue::from(LineColSpanDescriptor {
+                value: e.pest.line_col.into(),
+            }))
+            .unwrap(),
+        );
+        js_error.into()
+    }
 }
 
 #[wasm_bindgen]
@@ -54,26 +75,10 @@ impl From<pest::error::LineColLocation> for LineColSpan {
 }
 
 #[wasm_bindgen]
-struct LineColSpanDescriptor {
-    pub value: LineColSpan,
-}
-
-#[wasm_bindgen]
 impl Context {
     pub fn from_text(text: &str) -> Result<Context, JsValue> {
         Ok(Context {
-            throne_context: ThroneContext::from_text(text).map_err(|e| {
-                let js_error = js_sys::Error::new(&format!("{}", e));
-                js_sys::Object::define_property(
-                    &js_error,
-                    &JsValue::from("throne_span"),
-                    js_sys::Object::try_from(&JsValue::from(LineColSpanDescriptor {
-                        value: e.pest.line_col.into(),
-                    }))
-                    .unwrap(),
-                );
-                js_error
-            })?,
+            throne_context: ThroneContext::from_text(text)?,
         })
     }
 
