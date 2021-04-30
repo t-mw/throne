@@ -472,10 +472,17 @@ impl fmt::Display for Context {
 
         write!(
             f,
-            "state:\n{}\nrules:\n{}\npreviously executed rule ids:\n{}",
+            "state:\n{}\nrules:\n{}\n{}",
             state,
             rules.join("\n"),
-            self.core.executed_rule_ids.iter().join(", ")
+            if self.core.executed_rule_ids.is_empty() {
+                "no rules were executed in the previous update".to_string()
+            } else {
+                format!(
+                    "rule ids executed in the previous update:\n{}",
+                    self.core.executed_rule_ids.iter().join(", ")
+                )
+            }
         )
     }
 }
