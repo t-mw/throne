@@ -38,7 +38,8 @@ mod example {
 
         let mut context = throne::ContextBuilder::new()
             .text(include_str!("blocks.throne"))
-            .build();
+            .build()
+            .unwrap_or_else(|e| panic!("{}", e));
 
         let kd = context.str_to_atom("kd");
         let ku = context.str_to_atom("ku");

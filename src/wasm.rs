@@ -24,11 +24,57 @@ pub struct Context {
 }
 
 #[wasm_bindgen]
-impl Context {
-    pub fn from_text(text: &str) -> Self {
-        Context {
-            throne_context: ThroneContext::from_text(text),
+#[derive(Copy, Clone)]
+pub struct LineColSpan {
+    pub line_start: usize,
+    pub line_end: usize,
+    pub col_start: usize,
+    pub col_end: usize,
+}
+
+impl From<pest::error::LineColLocation> for LineColSpan {
+    fn from(line_col: pest::error::LineColLocation) -> Self {
+        match line_col {
+            pest::error::LineColLocation::Pos((line, col)) => LineColSpan {
+                line_start: line,
+                line_end: line,
+                col_start: col,
+                col_end: col,
+            },
+            pest::error::LineColLocation::Span((line_start, col_start), (line_end, col_end)) => {
+                LineColSpan {
+                    line_start,
+                    line_end,
+                    col_start,
+                    col_end,
+                }
+            }
         }
+    }
+}
+
+#[wasm_bindgen]
+struct LineColSpanDescriptor {
+    pub value: LineColSpan,
+}
+
+#[wasm_bindgen]
+impl Context {
+    pub fn from_text(text: &str) -> Result<Context, JsValue> {
+        Ok(Context {
+            throne_context: ThroneContext::from_text(text).map_err(|e| {
+                let js_error = js_sys::Error::new(&format!("{}", e));
+                js_sys::Object::define_property(
+                    &js_error,
+                    &JsValue::from("throne_span"),
+                    js_sys::Object::try_from(&JsValue::from(LineColSpanDescriptor {
+                        value: e.pest.line_col.into(),
+                    }))
+                    .unwrap(),
+                );
+                js_error
+            })?,
+        })
     }
 
     pub fn append_state(&mut self, text: &str) {

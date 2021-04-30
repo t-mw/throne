@@ -83,7 +83,7 @@ impl<'a> ContextBuilder<'a> {
         self
     }
 
-    pub fn build(self) -> Context {
+    pub fn build(self) -> Result<Context, parser::Error> {
         let mut default_rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
         Context::new(
             self.text,
@@ -94,7 +94,7 @@ impl<'a> ContextBuilder<'a> {
 }
 
 impl Context {
-    pub fn from_text(text: &str) -> Self {
+    pub fn from_text(text: &str) -> Result<Self, parser::Error> {
         ContextBuilder::new().text(text).build()
     }
 
@@ -103,8 +103,12 @@ impl Context {
         ContextBuilder::new().text(text).rng(rng).build()
     }
 
-    fn new(text: &str, mut string_cache: StringCache, rng: &mut SmallRng) -> Context {
-        let mut result = parser::parse(text, &mut string_cache, rng);
+    fn new(
+        text: &str,
+        mut string_cache: StringCache,
+        rng: &mut SmallRng,
+    ) -> Result<Context, parser::Error> {
+        let mut result = parser::parse(text, &mut string_cache, rng)?;
 
         let mut state = State::new();
         for phrase in result.state.drain(..) {
@@ -114,7 +118,7 @@ impl Context {
         state.update_first_atoms();
         let qui_atom = string_cache.str_to_atom("qui");
 
-        Context {
+        Ok(Context {
             core: Core {
                 state,
                 rules: result.rules,
@@ -123,7 +127,7 @@ impl Context {
                 qui_atom,
             },
             string_cache,
-        }
+        })
     }
 
     pub fn extend_state_from_context(&mut self, other: &Context) {

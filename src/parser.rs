@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use pest::iterators::Pair;
 use pest::Parser;
@@ -15,17 +16,39 @@ pub struct ParseResult {
     pub state: Vec<Vec<Token>>,
 }
 
+#[derive(Debug)]
+pub struct Error {
+    pub pest: pest::error::Error<generated::Rule>,
+}
+
+impl From<pest::error::Error<generated::Rule>> for Error {
+    fn from(pest: pest::error::Error<generated::Rule>) -> Self {
+        Error { pest }
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.pest)
+    }
+}
+
 mod generated {
     #[derive(Parser)]
     #[grammar = "throne.pest"]
     pub struct Parser;
 }
 
-pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng) -> ParseResult {
+pub fn parse(
+    text: &str,
+    mut string_cache: &mut StringCache,
+    rng: &mut SmallRng,
+) -> Result<ParseResult, Error> {
     let text = text.replace("()", "qui");
 
-    let file = generated::Parser::parse(generated::Rule::file, &text)
-        .unwrap_or_else(|e| panic!("{}", e))
+    let file = generated::Parser::parse(generated::Rule::file, &text)?
         .next()
         .unwrap();
 
@@ -110,10 +133,10 @@ pub fn parse(text: &str, mut string_cache: &mut StringCache, rng: &mut SmallRng)
         rule.id = i as i32;
     }
 
-    ParseResult {
+    Ok(ParseResult {
         rules: new_rules,
         state,
-    }
+    })
 }
 
 fn pair_to_throne_rule(
