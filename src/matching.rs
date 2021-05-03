@@ -17,7 +17,7 @@ impl std::error::Error for ExcessivePermutationError {}
 impl fmt::Display for ExcessivePermutationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
-            "rule {} caused > {} state permutations to be checked. Review the complexity of the rule.",
+            "Rule {} caused > {} state permutations to be checked. Review the complexity of the rule.",
             self.rule_id, EXCESSIVE_PERMUTATION_LIMIT
         )
     }

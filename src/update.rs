@@ -64,7 +64,7 @@ impl fmt::Display for RuleRepeatError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "script execution was abandoned since rule {} appears to be repeating infinitely.",
+            "Script execution was abandoned since rule {} appears to be repeating infinitely.",
             self.rule_id
         )
     }
