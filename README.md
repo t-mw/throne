@@ -9,15 +9,15 @@ A game scripting language for rapid prototyping and story logic:
 
 ```
 // Declare the initial state as 'phrases', with one phrase per line.
-Tom is child of David
 Mary is sister of David
 Sarah is child of Mary
+Tom is child of David
 
 // Define rules with the format: INPUT = OUTPUT.
 CHILD is child of PARENT . AUNT is sister of PARENT . COUSIN is child of AUNT = COUSIN is cousin of CHILD
 
 // The final state will be:
-//    Mary is cousin of Tom
+//    Sarah is cousin of Tom
 ```
 
 Rules are of the format `INPUT = OUTPUT`, where `INPUT` and `OUTPUT` are lists that use period (`.`) as a separator between items:
