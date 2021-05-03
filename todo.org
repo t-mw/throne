@@ -46,7 +46,8 @@
     - [X] Conway's game of life
     - [ ] Chess
     - [ ] Tic tac toe
-*** TODO Detect infinite loops
+*** DONE Detect infinite loops
+    CLOSED: [2021-05-03 Mon 13:17]
 *** DONE selectively disable warnings
   CLOSED: [2020-01-24 Fri 14:24]
 *** DONE wildcard variable: _

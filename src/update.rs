@@ -1,16 +1,70 @@
+use std::fmt;
+
 use rand::seq::SliceRandom;
 
 use crate::core::Core;
-use crate::matching::*;
+use crate::matching;
 use crate::rule::Rule;
 use crate::state::State;
 use crate::token::*;
+
+const RULE_REPEAT_LIMIT: usize = 2000;
+
+#[derive(Debug)]
+pub enum UpdateError {
+    RuleRepeatError(RuleRepeatError),
+    ExcessivePermutationError(matching::ExcessivePermutationError),
+}
+
+impl std::error::Error for UpdateError {}
+
+impl fmt::Display for UpdateError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::RuleRepeatError(e) => {
+                write!(f, "{}", e)
+            }
+            Self::ExcessivePermutationError(e) => {
+                write!(f, "{}", e)
+            }
+        }
+    }
+}
+
+impl From<RuleRepeatError> for UpdateError {
+    fn from(e: RuleRepeatError) -> Self {
+        UpdateError::RuleRepeatError(e)
+    }
+}
+
+impl From<matching::ExcessivePermutationError> for UpdateError {
+    fn from(e: matching::ExcessivePermutationError) -> Self {
+        UpdateError::ExcessivePermutationError(e)
+    }
+}
+
+#[derive(Debug)]
+pub struct RuleRepeatError {
+    pub rule_id: i32,
+}
+
+impl std::error::Error for RuleRepeatError {}
+
+impl fmt::Display for RuleRepeatError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "script execution was abandoned since rule {} appears to be repeating infinitely.",
+            self.rule_id
+        )
+    }
+}
 
 // https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
 pub trait SideInput: FnMut(&Phrase) -> Option<Vec<Token>> {}
 impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
 
-pub fn update<F>(core: &mut Core, mut side_input: F)
+pub fn update<F>(core: &mut Core, mut side_input: F) -> Result<(), UpdateError>
 where
     F: SideInput,
 {
@@ -19,6 +73,7 @@ where
     let executed_rule_ids = &mut core.executed_rule_ids;
     let rng = &mut core.rng;
 
+    core.rule_repeat_count = 0;
     executed_rule_ids.clear();
 
     // shuffle state so that a given rule with multiple potential
@@ -45,7 +100,7 @@ where
         for i in 0..rules.len() {
             let rule = &rules[(start_rule_idx + i) % rules.len()];
 
-            if let Some(rule) = rule_matches_state(&rule, state, &mut side_input) {
+            if let Some(rule) = matching::rule_matches_state(&rule, state, &mut side_input)? {
                 matching_rule = Some(rule);
                 break;
             }
@@ -72,11 +127,24 @@ where
                 let idx = state.len() - 1;
                 state.remove_idx(idx);
 
-                return;
+                return Ok(());
             }
         }
 
         if let Some(ref matching_rule) = matching_rule {
+            if let Some(previously_executed_rule_id) = executed_rule_ids.last() {
+                if matching_rule.id == *previously_executed_rule_id {
+                    core.rule_repeat_count += 1;
+                    if core.rule_repeat_count > RULE_REPEAT_LIMIT {
+                        Err(RuleRepeatError {
+                            rule_id: matching_rule.id,
+                        })?;
+                    }
+                } else {
+                    core.rule_repeat_count = 0;
+                }
+            }
+
             executed_rule_ids.push(matching_rule.id);
             execute_rule(matching_rule, state);
         } else {

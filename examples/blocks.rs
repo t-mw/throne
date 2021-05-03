@@ -62,36 +62,38 @@ mod example {
                 _ => None,
             };
 
-            context.update(|p: &throne::Phrase| {
-                if p.len() != 2 {
-                    return None;
-                }
+            context
+                .update(|p: &throne::Phrase| {
+                    if p.len() != 2 {
+                        return None;
+                    }
 
-                match &p[0].atom {
-                    a if *a == kd => string_to_key(&p[1].atom).and_then(|k| {
-                        if window.is_key_down(k) {
-                            Some(p.to_vec())
-                        } else {
-                            None
-                        }
-                    }),
-                    a if *a == ku => string_to_key(&p[1].atom).and_then(|k| {
-                        if !window.is_key_down(k) {
-                            Some(p.to_vec())
-                        } else {
-                            None
-                        }
-                    }),
-                    a if *a == kp => string_to_key(&p[1].atom).and_then(|k| {
-                        if window.is_key_pressed(k, KeyRepeat::Yes) {
-                            Some(p.to_vec())
-                        } else {
-                            None
-                        }
-                    }),
-                    _ => None,
-                }
-            });
+                    match &p[0].atom {
+                        a if *a == kd => string_to_key(&p[1].atom).and_then(|k| {
+                            if window.is_key_down(k) {
+                                Some(p.to_vec())
+                            } else {
+                                None
+                            }
+                        }),
+                        a if *a == ku => string_to_key(&p[1].atom).and_then(|k| {
+                            if !window.is_key_down(k) {
+                                Some(p.to_vec())
+                            } else {
+                                None
+                            }
+                        }),
+                        a if *a == kp => string_to_key(&p[1].atom).and_then(|k| {
+                            if window.is_key_pressed(k, KeyRepeat::Yes) {
+                                Some(p.to_vec())
+                            } else {
+                                None
+                            }
+                        }),
+                        _ => None,
+                    }
+                })
+                .unwrap();
 
             let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 

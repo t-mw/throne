@@ -26,7 +26,7 @@ pub extern "C" fn throne_context_destroy(context: *mut Context) {
 #[no_mangle]
 pub extern "C" fn throne_update(context: *mut Context) {
     let context = unsafe { &mut *context };
-    context.update(|_: &Phrase| None);
+    context.update(|_: &Phrase| None).unwrap();
 }
 
 #[no_mangle]
@@ -52,16 +52,18 @@ pub extern "C" fn throne_context_find_matching_rules(
 
     let mut side_input_p = vec![];
 
-    let rules = context.find_matching_rules(|p: &Phrase| {
-        side_input_p.clear();
-        side_input_p.extend(p.iter().map(|t| t.atom));
+    let rules = context
+        .find_matching_rules(|p: &Phrase| {
+            side_input_p.clear();
+            side_input_p.extend(p.iter().map(|t| t.atom));
 
-        if side_input(side_input_p.as_ptr(), side_input_p.len(), side_input_data) {
-            Some(vec![])
-        } else {
-            None
-        }
-    });
+            if side_input(side_input_p.as_ptr(), side_input_p.len(), side_input_data) {
+                Some(vec![])
+            } else {
+                None
+            }
+        })
+        .unwrap();
 
     let len = rules.len().min(result_len);
 

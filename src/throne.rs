@@ -11,7 +11,7 @@ use crate::rule::Rule;
 use crate::state::State;
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
-use crate::update::{self, update};
+use crate::update::{self, update, UpdateError};
 
 #[allow(unused_macros)]
 macro_rules! dump {
@@ -103,6 +103,7 @@ impl Context {
                 state,
                 rules: result.rules,
                 executed_rule_ids: vec![],
+                rule_repeat_count: 0,
                 rng: rng.clone(),
                 qui_atom,
             },
@@ -162,24 +163,30 @@ impl Context {
         self.core.state.push(tokenize(text, &mut self.string_cache));
     }
 
-    pub fn find_matching_rules<F>(&self, mut side_input: F) -> Vec<Rule>
+    pub fn find_matching_rules<F>(
+        &self,
+        mut side_input: F,
+    ) -> Result<Vec<Rule>, ExcessivePermutationError>
     where
         F: SideInput,
     {
         let state = &mut self.core.state.clone();
 
-        self.core
-            .rules
-            .iter()
-            .filter_map(|rule| rule_matches_state(&rule, state, &mut side_input))
-            .collect()
+        let mut rules = vec![];
+        for rule in &self.core.rules {
+            if let Some(matching_rule) = rule_matches_state(&rule, state, &mut side_input)? {
+                rules.push(matching_rule);
+            }
+        }
+
+        Ok(rules)
     }
 
-    pub fn update<F>(&mut self, side_input: F)
+    pub fn update<F>(&mut self, side_input: F) -> Result<(), UpdateError>
     where
         F: SideInput,
     {
-        update(&mut self.core, side_input);
+        update(&mut self.core, side_input)
     }
 
     pub fn execute_rule(&mut self, rule: &Rule) {
@@ -717,8 +724,7 @@ mod tests {
         )
         .unwrap();
 
-        context.update(|_: &Phrase| None);
-
+        context.update(|_: &Phrase| None).unwrap();
         context.print();
 
         assert_eq!(
@@ -742,8 +748,7 @@ mod tests {
         .unwrap();
 
         context.print();
-        context.update(|_: &Phrase| None);
-
+        context.update(|_: &Phrase| None).unwrap();
         context.print();
 
         assert_eq!(
@@ -975,7 +980,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            context.find_matching_rules(&mut |_: &Phrase| None),
+            context.find_matching_rules(&mut |_: &Phrase| None).unwrap(),
             [
                 Rule::new(
                     0,
@@ -1011,7 +1016,7 @@ mod tests {
         .with_test_rng();
 
         context.print();
-        context.update(|_: &Phrase| None);
+        context.update(|_: &Phrase| None).unwrap();
         context.print();
 
         assert_eq!(
@@ -1234,7 +1239,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
 
             if expected {
                 assert!(result.is_some());
@@ -1358,7 +1363,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
 
             if expected {
                 assert!(result.is_some());
@@ -1412,7 +1417,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
 
             if expected {
                 assert!(result.is_some());
@@ -1539,7 +1544,7 @@ mod tests {
         for (rule, state, expected) in test_cases.drain(..) {
             let mut state = State::from_phrases(&state);
 
-            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
+            let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
 
             assert!(result.is_some());
 
@@ -1564,7 +1569,7 @@ mod tests {
         );
         let mut state = State::new();
 
-        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None);
+        let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
 
         assert!(result.is_none());
     }
@@ -1581,7 +1586,8 @@ mod tests {
 
         let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^nah no", &mut string_cache))
-        });
+        })
+        .unwrap();
 
         assert!(result.is_none());
     }
@@ -1601,7 +1607,8 @@ mod tests {
 
         let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^test 3", &mut string_cache))
-        });
+        })
+        .unwrap();
 
         assert!(result.is_none());
     }
@@ -1625,7 +1632,8 @@ mod tests {
                 Some(5)
             );
             Some(vec![])
-        });
+        })
+        .unwrap();
 
         assert!(result.is_some());
         assert_eq!(
@@ -1649,7 +1657,8 @@ mod tests {
 
         let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^test 2", &mut string_cache))
-        });
+        })
+        .unwrap();
 
         assert!(result.is_some());
         assert_eq!(
@@ -1673,7 +1682,8 @@ mod tests {
 
         let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| {
             Some(tokenize("^test 4", &mut string_cache))
-        });
+        })
+        .unwrap();
 
         assert!(result.is_some());
         assert_eq!(
@@ -2220,5 +2230,21 @@ mod tests {
 
         let result = test_match_without_variables(&input_tokens, &pred_tokens);
         assert!(result.is_some());
+    }
+
+    #[test]
+    fn update_rule_repeat_limit_test() {
+        let mut context = Context::from_text(
+            "foo
+             foo = foo",
+        )
+        .unwrap();
+
+        assert!(matches!(
+            context.update(|_: &Phrase| None),
+            Err(update::UpdateError::RuleRepeatError(
+                update::RuleRepeatError { rule_id: 0 }
+            ))
+        ));
     }
 }

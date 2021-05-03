@@ -1,7 +1,27 @@
+use std::fmt;
+
 use crate::rule::Rule;
 use crate::state::State;
 use crate::string_cache::Atom;
 use crate::token::*;
+
+const EXCESSIVE_PERMUTATION_LIMIT: usize = 2000;
+
+#[derive(Debug)]
+pub struct ExcessivePermutationError {
+    pub rule_id: i32,
+}
+
+impl std::error::Error for ExcessivePermutationError {}
+
+impl fmt::Display for ExcessivePermutationError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f,
+            "rule {} caused > {} state permutations to be checked. Review the complexity of the rule.",
+            self.rule_id, EXCESSIVE_PERMUTATION_LIMIT
+        )
+    }
+}
 
 pub fn test_match_without_variables(input_tokens: &Phrase, pred_tokens: &Phrase) -> Option<bool> {
     let mut matcher = NoVariablesMatcher { has_var: false };
@@ -432,7 +452,11 @@ impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
 // Checks whether the rule's forward and backward predicates match the state.
 // Returns a new rule with all variables resolved, with backwards/side
 // predicates removed.
-pub fn rule_matches_state<F>(r: &Rule, state: &mut State, side_input: &mut F) -> Option<Rule>
+pub fn rule_matches_state<F>(
+    r: &Rule,
+    state: &mut State,
+    side_input: &mut F,
+) -> Result<Option<Rule>, ExcessivePermutationError>
 where
     F: SideInput,
 {
@@ -444,7 +468,7 @@ where
         if let Some(matches) = gather_potential_input_state_matches(inputs, state) {
             matches
         } else {
-            return None;
+            return Ok(None);
         };
 
     // precompute values required for deriving branch indices.
@@ -463,11 +487,8 @@ where
             }
         });
 
-    if permutation_count > 2000 {
-        println!(
-            "WARNING: rule with id {} is causing {} state permutations to be checked. Review the complexity of the rule.",
-            r.id, permutation_count
-        );
+    if permutation_count > EXCESSIVE_PERMUTATION_LIMIT {
+        return Err(ExcessivePermutationError { rule_id: r.id });
     }
 
     // we'll use state as a scratchpad for other token allocations
@@ -512,12 +533,12 @@ where
 
         state.unlock_scratch();
 
-        return Some(Rule::new(r.id, forward_concrete, outputs_concrete));
+        return Ok(Some(Rule::new(r.id, forward_concrete, outputs_concrete)));
     }
 
     state.unlock_scratch();
 
-    None
+    Ok(None)
 }
 
 #[derive(Debug)]
