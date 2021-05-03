@@ -25,6 +25,7 @@ regex = "1.4"
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.3"
 minifb = "0.19"
+pretty_assertions = "0.7"
 
 [target.wasm32-unknown-unknown.dependencies]
 console_error_panic_hook = "0.1"

@@ -499,6 +499,7 @@ fn test_rng() -> SmallRng {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::{assert_eq, assert_ne};
 
     fn rule_new(inputs: Vec<Vec<Token>>, outputs: Vec<Vec<Token>>) -> Rule {
         Rule::new(0, inputs, outputs)
