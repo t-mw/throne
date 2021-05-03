@@ -11,16 +11,15 @@ pub struct PhraseId {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
-struct InnerPhraseId {
-    phrase_range_idx: usize,
+struct PhraseTokenRange {
+    begin: usize,
+    end: usize,
 }
 
 #[derive(Clone, Debug)]
 pub struct State {
-    // indexes into phrase range collection
-    phrases: Vec<InnerPhraseId>,
     // indexes into token collection
-    phrase_ranges: Vec<(usize, usize)>,
+    phrase_ranges: Vec<PhraseTokenRange>,
     // collection of all tokens found in the state phrases
     tokens: Vec<Token>,
 
@@ -34,7 +33,6 @@ pub struct State {
 impl State {
     pub fn new() -> State {
         State {
-            phrases: vec![],
             phrase_ranges: vec![],
             tokens: vec![],
             first_atoms: vec![],
@@ -51,34 +49,14 @@ impl State {
     pub(crate) fn remove_idx(&mut self, idx: usize) {
         assert!(self.scratch_idx.is_none());
 
-        let remove_id = self.phrases.swap_remove(idx);
-        let remove_range = self.phrase_ranges[remove_id.phrase_range_idx];
-        let remove_len = remove_range.1 - remove_range.0;
+        let remove_range = self.phrase_ranges.swap_remove(idx);
+        let remove_len = remove_range.end - remove_range.begin;
 
-        // after swap_remove, this is the id that will take the old one's place
-        let swapped_id = InnerPhraseId {
-            phrase_range_idx: self.phrase_ranges.len() - 1,
-        };
-
-        // we need to update phrases to point to the new phrase range index
-        let replace_id = InnerPhraseId {
-            phrase_range_idx: remove_id.phrase_range_idx,
-        };
-
-        self.phrase_ranges.swap_remove(remove_id.phrase_range_idx);
-
-        for id in self.phrases.iter_mut() {
-            if *id == swapped_id {
-                *id = replace_id;
-            }
-        }
-
-        self.tokens.drain(remove_range.0..remove_range.1);
-
+        self.tokens.drain(remove_range.begin..remove_range.end);
         for range in self.phrase_ranges.iter_mut() {
-            if range.0 >= remove_range.1 {
-                range.0 -= remove_len;
-                range.1 -= remove_len;
+            if range.begin >= remove_range.end {
+                range.begin -= remove_len;
+                range.end -= remove_len;
             }
         }
 
@@ -91,9 +69,9 @@ impl State {
 
     pub fn remove_phrase(&mut self, phrase: &Phrase) {
         let remove_idx = self
-            .phrases
+            .phrase_ranges
             .iter()
-            .position(|v| phrase_equal(self.get_inner(*v), phrase, (0, 0), (0, 0)))
+            .position(|range| phrase_equal(self.get_inner(*range), phrase, (0, 0), (0, 0)))
             .expect("remove_idx");
 
         self.remove_idx(remove_idx);
@@ -101,7 +79,7 @@ impl State {
 
     pub fn shuffle(&mut self, rng: &mut SmallRng) {
         assert!(self.scratch_idx.is_none());
-        self.phrases.shuffle(rng);
+        self.phrase_ranges.shuffle(rng);
 
         self.rev += 1;
     }
@@ -111,16 +89,11 @@ impl State {
         self.tokens.append(&mut phrase);
         let end = self.tokens.len();
 
-        let phrase_range_idx = self.phrase_ranges.len();
-        self.phrase_ranges.push((begin, end));
-
-        let inner_id = InnerPhraseId { phrase_range_idx };
-        self.phrases.push(inner_id);
-
+        self.phrase_ranges.push(PhraseTokenRange { begin, end });
         self.rev += 1;
 
         let id = PhraseId {
-            idx: self.phrases.len() - 1,
+            idx: self.phrase_ranges.len() - 1,
             rev: self.rev,
         };
 
@@ -128,33 +101,30 @@ impl State {
     }
 
     pub fn len(&self) -> usize {
-        self.phrases.len()
+        self.phrase_ranges.len()
     }
 
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = PhraseId> + 'a {
         let rev = self.rev;
-        self.phrases
+        self.phrase_ranges
             .iter()
             .enumerate()
             .map(move |(idx, _)| PhraseId { idx, rev })
     }
 
     pub fn get(&self, id: PhraseId) -> &Phrase {
-        self.get_inner(self.phrases[id.idx])
+        assert!(id.rev == self.rev);
+        self.get_inner(self.phrase_ranges[id.idx])
     }
 
-    fn get_inner(&self, inner_id: InnerPhraseId) -> &Phrase {
-        let (begin, end) = self.phrase_ranges[inner_id.phrase_range_idx];
-        &self.tokens[begin..end]
+    fn get_inner(&self, range: PhraseTokenRange) -> &Phrase {
+        &self.tokens[range.begin..range.end]
     }
 
     pub fn get_all(&self) -> Vec<Vec<Token>> {
-        self.phrases
+        self.phrase_ranges
             .iter()
-            .map(|id| {
-                let (begin, end) = self.phrase_ranges[id.phrase_range_idx];
-                self.tokens[begin..end].to_vec()
-            })
+            .map(|range| self.get_inner(*range).to_vec())
             .collect::<Vec<_>>()
     }
 
@@ -168,8 +138,7 @@ impl State {
     }
 
     pub fn lock_scratch(&mut self) {
-        assert!(self.phrases.len() == self.phrase_ranges.len());
-        self.scratch_idx = Some((self.phrases.len(), self.tokens.len()));
+        self.scratch_idx = Some((self.phrase_ranges.len(), self.tokens.len()));
     }
 
     pub fn unlock_scratch(&mut self) {
@@ -178,9 +147,8 @@ impl State {
     }
 
     pub fn reset_scratch(&mut self) {
-        let (phrase_len, token_len) = self.scratch_idx.expect("scratch_idx");
-        self.phrases.drain(phrase_len..);
-        self.phrase_ranges.drain(phrase_len..);
+        let (phrase_ranges_len, token_len) = self.scratch_idx.expect("scratch_idx");
+        self.phrase_ranges.drain(phrase_ranges_len..);
         self.tokens.drain(token_len..);
     }
 }
@@ -189,7 +157,7 @@ impl std::ops::Index<usize> for State {
     type Output = [Token];
 
     fn index(&self, i: usize) -> &Phrase {
-        self.get_inner(self.phrases[i])
+        self.get_inner(self.phrase_ranges[i])
     }
 }
 
