@@ -79,7 +79,7 @@ impl Context {
     }
 
     #[cfg(test)]
-    pub(crate) fn from_text_rng(text: &str, rng: &mut SmallRng) -> Self {
+    pub(crate) fn from_text_rng(text: &str, rng: &mut SmallRng) -> Result<Self, parser::Error> {
         ContextBuilder::new().text(text).rng(rng).build()
     }
 
@@ -520,14 +520,14 @@ mod tests {
 
     #[test]
     fn context_from_text_empty_test() {
-        let context = Context::from_text("");
+        let context = Context::from_text("").unwrap();
         assert!(context.core.state.get_all().is_empty());
     }
 
     #[test]
     fn context_from_text_unicode_test() {
         // ñ, black square, green heart, scottish flag
-        let mut context = Context::from_text("\"ñ◼️💚🏴󠁧󠁢󠁳󠁣󠁴󠁿\"");
+        let mut context = Context::from_text("\"ñ◼️💚🏴󠁧󠁢󠁳󠁣󠁴󠁿\"").unwrap();
         assert_eq!(
             context.core.state.get_all(),
             [tokenize("\"ñ◼️💚🏴󠁧󠁢󠁳󠁣󠁴󠁿\"", &mut context.string_cache)]
@@ -539,7 +539,8 @@ mod tests {
         let mut context = Context::from_text(
             "at 0 0 wood . at 0 0 wood . #update \n\
              at 1 2 wood",
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             context.core.state.get_all(),
@@ -559,7 +560,8 @@ mod tests {
              asdf . #test: { \n\
              at 3 4 wood = at 5 6 wood . at 7 8 wood \n\
              }",
-        );
+        )
+        .unwrap();
 
         context.print();
 
@@ -593,7 +595,7 @@ mod tests {
 
     #[test]
     fn context_from_text_copy_test() {
-        let mut context = Context::from_text("at 0 0 wood . $at 1 2 wood = at 1 0 wood");
+        let mut context = Context::from_text("at 0 0 wood . $at 1 2 wood = at 1 0 wood").unwrap();
 
         assert_eq!(
             context.core.rules,
@@ -620,7 +622,8 @@ mod tests {
              . broken line 4\n\
              text\n\
              = \"broken\ntext\"",
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             context.core.rules,
@@ -651,7 +654,8 @@ mod tests {
              <<back2 E F . ?state2 E F\n\
              <<back1 A . test . <<back2 B A = ()",
             &mut rng,
-        );
+        )
+        .unwrap();
         // intentionally separate backwards predicates by simple 'test' atom to test parsing
 
         context.print();
@@ -681,7 +685,8 @@ mod tests {
              <<back2 E F . state2 E F\n\
              <<back1 A . <<back2 B A = ()",
             &mut rng,
-        );
+        )
+        .unwrap();
 
         context.print();
 
@@ -709,7 +714,8 @@ mod tests {
              <<back C D . ?state1 C D\n\
              once . <<back A B = foo A B",
             &mut rng,
-        );
+        )
+        .unwrap();
 
         context.update(|_: &Phrase| None);
 
@@ -732,7 +738,8 @@ mod tests {
              <<back C D . ?state1 C D\n\
              state1 foo bar . <<back A B = foo A B",
             &mut rng,
-        );
+        )
+        .unwrap();
 
         context.print();
         context.update(|_: &Phrase| None);
@@ -752,7 +759,8 @@ mod tests {
             "<<back C bar . ?state C\n\
              <<back A B . test A . foo B = ()",
             &mut rng,
-        );
+        )
+        .unwrap();
 
         context.print();
 
@@ -777,7 +785,8 @@ mod tests {
             "<<back C D . ?state C . ?state D\n\
              <<back A bar . test A = ()",
             &mut rng,
-        );
+        )
+        .unwrap();
 
         context.print();
 
@@ -803,7 +812,8 @@ mod tests {
              <<back2 . ?state21\n\
              <<back2 . ?state22\n\
              <<back1 . <<back2 = ()",
-        );
+        )
+        .unwrap();
 
         context.print();
 
@@ -851,7 +861,8 @@ mod tests {
         let mut context = Context::from_text(
             "test1 . _ = any _\n\
              $test2 _ = _ any",
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             context.core.rules,
@@ -883,7 +894,8 @@ mod tests {
              state 1\n\
              /* comment\n\
              2 */",
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             context.core.state.get_all(),
@@ -902,7 +914,8 @@ mod tests {
              // comment 2\n\
              in2 = out2\n\
              }",
-        );
+        )
+        .unwrap();
 
         context.print();
 
@@ -937,7 +950,7 @@ mod tests {
 
     #[test]
     fn context_append_state_test() {
-        let mut context = Context::from_text("test 1 2");
+        let mut context = Context::from_text("test 1 2").unwrap();
 
         context.append_state("test 3 4");
 
@@ -958,7 +971,8 @@ mod tests {
              test 1 2 . test 5 6 = match\n\
              test 1 2 . nomatch = nomatch\n\
              test 3 4 . test 5 6 = match",
-        );
+        )
+        .unwrap();
 
         assert_eq!(
             context.find_matching_rules(&mut |_: &Phrase| None),
@@ -993,6 +1007,7 @@ mod tests {
              }\n\
              #spread . $at X Y fire . + X 1 X' . + Y' 1 Y = at X' Y fire . at X Y' fire",
         )
+        .unwrap()
         .with_test_rng();
 
         context.print();
@@ -1955,8 +1970,8 @@ mod tests {
 
     #[test]
     fn test_extend_state_from_context() {
-        let mut context1 = Context::from_text("foo 1\nbar 1");
-        let context2 = Context::from_text("foo 2\nbar 2");
+        let mut context1 = Context::from_text("foo 1\nbar 1").unwrap();
+        let context2 = Context::from_text("foo 2\nbar 2").unwrap();
         context1.extend_state_from_context(&context2);
 
         assert_eq!(

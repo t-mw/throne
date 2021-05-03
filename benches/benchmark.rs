@@ -14,14 +14,16 @@ fn criterion_benchmark(c: &mut Criterion) {
                 // only parse once, otherwise benchmark is affected
                 lazy_static! {
                     static ref CONTEXT: throne::Context =
-                        throne::Context::from_text(include_str!("wood.throne")).with_test_rng();
+                        throne::Context::from_text(include_str!("wood.throne"))
+                            .unwrap()
+                            .with_test_rng();
                 }
 
                 CONTEXT.clone()
             },
             |mut context| {
                 context.append_state("#update");
-                throne::update(&mut context.core, |_: &throne::Phrase| None);
+                throne::update(&mut context.core, |_: &throne::Phrase| None).unwrap();
             },
         )
     });
@@ -33,13 +35,14 @@ fn criterion_benchmark(c: &mut Criterion) {
                 lazy_static! {
                     static ref CONTEXT: throne::Context =
                         throne::Context::from_text(include_str!("spaceopera.throne"))
+                            .unwrap()
                             .with_test_rng();
                 }
 
                 CONTEXT.clone()
             },
             |mut context| {
-                throne::update(&mut context.core, |_: &throne::Phrase| None);
+                throne::update(&mut context.core, |_: &throne::Phrase| None).unwrap();
             },
         )
     });
@@ -51,6 +54,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 lazy_static! {
                     static ref CONTEXT: throne::Context =
                         throne::Context::from_text(include_str!("increment.throne"))
+                            .unwrap()
                             .with_test_rng();
                 }
 
@@ -58,7 +62,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             },
             |mut context| {
                 context.append_state("#increment");
-                throne::update(&mut context.core, |_: &throne::Phrase| None);
+                throne::update(&mut context.core, |_: &throne::Phrase| None).unwrap();
             },
         )
     });
