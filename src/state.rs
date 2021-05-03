@@ -77,6 +77,28 @@ impl State {
         self.remove_idx(remove_idx);
     }
 
+    pub fn remove_phrases<const N: usize>(
+        &mut self,
+        pattern: [Option<Atom>; N],
+        match_pattern_length: bool,
+    ) {
+        let tokens = &self.tokens;
+        self.phrase_ranges.retain(|range| {
+            let phrase = &tokens[range.begin..range.end];
+            if phrase.len() < N || (match_pattern_length && phrase.len() != N) {
+                return true;
+            }
+            for (i, atom) in pattern.iter().enumerate() {
+                if let Some(atom) = atom {
+                    if phrase[i].atom != *atom {
+                        return true;
+                    }
+                }
+            }
+            false
+        });
+    }
+
     pub fn shuffle(&mut self, rng: &mut SmallRng) {
         assert!(self.scratch_idx.is_none());
         self.phrase_ranges.shuffle(rng);

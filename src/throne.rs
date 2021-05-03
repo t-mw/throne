@@ -163,6 +163,16 @@ impl Context {
         self.core.state.push(tokenize(text, &mut self.string_cache));
     }
 
+    pub fn remove_state<const N: usize>(
+        &mut self,
+        pattern: [Option<Atom>; N],
+        match_pattern_length: bool,
+    ) {
+        self.core
+            .state
+            .remove_phrases(pattern, match_pattern_length);
+    }
+
     pub fn find_matching_rules<F>(
         &self,
         mut side_input: F,
@@ -2386,5 +2396,38 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[test]
+    fn remove_phrase_test() {
+        let mut context =
+            Context::from_text("foo . a b bar . a foo c . c foo b . bar b c . a foo b c").unwrap();
+        let foo_atom = context.str_to_atom("foo");
+        context.remove_state([None, Some(foo_atom)], false);
+        assert_eq!(
+            context.core.state.get_all(),
+            [
+                tokenize("foo", &mut context.string_cache),
+                tokenize("a b bar", &mut context.string_cache),
+                tokenize("bar b c", &mut context.string_cache),
+            ]
+        );
+    }
+
+    #[test]
+    fn remove_phrase_exact_length_test() {
+        let mut context =
+            Context::from_text("foo . a b bar . a foo c . c foo b . bar b c . a foo b c").unwrap();
+        let foo_atom = context.str_to_atom("foo");
+        context.remove_state([None, Some(foo_atom), None], true);
+        assert_eq!(
+            context.core.state.get_all(),
+            [
+                tokenize("foo", &mut context.string_cache),
+                tokenize("a b bar", &mut context.string_cache),
+                tokenize("bar b c", &mut context.string_cache),
+                tokenize("a foo b c", &mut context.string_cache),
+            ]
+        );
     }
 }
