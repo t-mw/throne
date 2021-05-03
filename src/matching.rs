@@ -817,13 +817,13 @@ fn test_inputs_with_permutation(
         }
     }
 
+    // try assigning variables from 2-way backwards predicates so that they can be used in side
+    // predicates, ignoring failures because we will check again later.
     for input in inputs
         .iter()
         .filter(|input| is_twoway_backwards_pred(input))
     {
-        if !match_backwards_variables(input, state, variables_matched) {
-            return false;
-        }
+        match_backwards_variables(input, state, variables_matched);
     }
 
     for input in inputs.iter().filter(|input| is_side_pred(input)) {
@@ -832,9 +832,10 @@ fn test_inputs_with_permutation(
         }
     }
 
+    // check all backwards predicates in order, aborting if matching fails.
     for input in inputs
         .iter()
-        .filter(|input| is_oneway_backwards_pred(input))
+        .filter(|input| is_twoway_backwards_pred(input) || is_oneway_backwards_pred(input))
     {
         if !match_backwards_variables(input, state, variables_matched) {
             return false;
@@ -843,7 +844,7 @@ fn test_inputs_with_permutation(
 
     for input in inputs.iter().filter(|input| is_negated_pred(input)) {
         // check negated predicates last, so that we know about all variables
-        // from the backwards and side predicates
+        // from the backwards and side predicates.
         if state
             .iter()
             .enumerate()

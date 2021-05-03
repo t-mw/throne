@@ -1651,6 +1651,24 @@ mod tests {
                     ],
                 ),
             ),
+            // rule with one-way modulo backwards predicate surrounded by two-way predicates
+            (
+                rule_new(
+                    vec![
+                        tokenize("draw X", &mut string_cache),
+                        tokenize("- X 7 X'", &mut string_cache),
+                        tokenize("+ X' 1 X''", &mut string_cache),
+                        tokenize("% X'' 10 X'''", &mut string_cache),
+                        tokenize("+ X''' 7 X''''", &mut string_cache),
+                    ],
+                    vec![tokenize("draw X''''", &mut string_cache)],
+                ),
+                vec![tokenize("draw 19", &mut string_cache)],
+                rule_new(
+                    vec![tokenize("draw 19", &mut string_cache)],
+                    vec![tokenize("draw 10", &mut string_cache)],
+                ),
+            ),
             // rule with variable as first atom in inputs
             (
                 rule_new(
