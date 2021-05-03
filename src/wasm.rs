@@ -119,6 +119,11 @@ impl Context {
         self.throne_context.append_state(text);
     }
 
+    pub fn remove_state_by_first_atom(&mut self, text: &str) {
+        let atom = self.throne_context.str_to_atom(text);
+        self.throne_context.remove_state([Some(atom)], false);
+    }
+
     pub fn update(&mut self, side_input: Option<js_sys::Function>) -> Result<(), JsValue> {
         if let Some(side_input) = side_input {
             let core = &mut self.throne_context.core;
