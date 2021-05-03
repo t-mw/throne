@@ -71,7 +71,7 @@ impl State {
         let remove_idx = self
             .phrase_ranges
             .iter()
-            .position(|range| phrase_equal(self.get_inner(*range), phrase, (0, 0), (0, 0)))
+            .position(|range| phrase_equal(self.tokens.get_range(*range), phrase, (0, 0), (0, 0)))
             .expect("remove_idx");
 
         self.remove_idx(remove_idx);
@@ -136,17 +136,13 @@ impl State {
 
     pub fn get(&self, id: PhraseId) -> &Phrase {
         assert!(id.rev == self.rev);
-        self.get_inner(self.phrase_ranges[id.idx])
-    }
-
-    fn get_inner(&self, range: PhraseTokenRange) -> &Phrase {
-        &self.tokens[range.begin..range.end]
+        self.tokens.get_range(self.phrase_ranges[id.idx])
     }
 
     pub fn get_all(&self) -> Vec<Vec<Token>> {
         self.phrase_ranges
             .iter()
-            .map(|range| self.get_inner(*range).to_vec())
+            .map(|range| self.tokens.get_range(*range).to_vec())
             .collect::<Vec<_>>()
     }
 
@@ -175,11 +171,21 @@ impl State {
     }
 }
 
+trait TokenCollection {
+    fn get_range(&self, range: PhraseTokenRange) -> &Phrase;
+}
+
+impl TokenCollection for Vec<Token> {
+    fn get_range(&self, range: PhraseTokenRange) -> &Phrase {
+        &self[range.begin..range.end]
+    }
+}
+
 impl std::ops::Index<usize> for State {
     type Output = [Token];
 
     fn index(&self, i: usize) -> &Phrase {
-        self.get_inner(self.phrase_ranges[i])
+        self.tokens.get_range(self.phrase_ranges[i])
     }
 }
 
