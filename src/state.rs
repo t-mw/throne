@@ -17,9 +17,13 @@ struct InnerPhraseId {
 
 #[derive(Clone, Debug)]
 pub struct State {
+    // indexes into phrase range collection
     phrases: Vec<InnerPhraseId>,
+    // indexes into token collection
     phrase_ranges: Vec<(usize, usize)>,
+    // collection of all tokens found in the state phrases
     tokens: Vec<Token>,
+
     pub first_atoms: Vec<(usize, Atom)>,
     scratch_idx: Option<(usize, usize)>,
 
