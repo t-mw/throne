@@ -77,7 +77,7 @@ impl State {
         self.remove_idx(remove_idx);
     }
 
-    pub fn remove_phrases<const N: usize>(
+    pub fn remove_pattern<const N: usize>(
         &mut self,
         pattern: [Option<Atom>; N],
         match_pattern_length: bool,

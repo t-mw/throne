@@ -170,7 +170,7 @@ impl Context {
     ) {
         self.core
             .state
-            .remove_phrases(pattern, match_pattern_length);
+            .remove_pattern(pattern, match_pattern_length);
     }
 
     pub fn find_matching_rules<F>(
