@@ -4,10 +4,11 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use crate::parser;
+use crate::rule::{self, Rule};
 use crate::string_cache::{Atom, StringCache};
 use crate::throne::Context as ThroneContext;
 use crate::token::{Phrase, PhraseGroup};
-use crate::update::update;
+use crate::update::{self, update};
 
 #[wasm_bindgen]
 pub fn init() {
@@ -27,11 +28,6 @@ pub struct Context {
 
 impl From<parser::Error> for JsValue {
     fn from(e: parser::Error) -> Self {
-        #[wasm_bindgen]
-        struct LineColSpanDescriptor {
-            pub value: LineColSpan,
-        }
-
         let js_error = js_sys::Error::new(&format!("{}", e));
         js_sys::Object::define_property(
             &js_error,
@@ -43,6 +39,31 @@ impl From<parser::Error> for JsValue {
         );
         js_error.into()
     }
+}
+
+fn js_from_update_result(result: Result<(), update::Error>, rules: &[Rule]) -> Result<(), JsValue> {
+    match result {
+        Err(e) => {
+            let js_error = js_sys::Error::new(&format!("{}", e));
+            if let Some(rule_source_span) = e.rule(rules).map(|r| r.source_span) {
+                js_sys::Object::define_property(
+                    &js_error,
+                    &JsValue::from("throne_span"),
+                    js_sys::Object::try_from(&JsValue::from(LineColSpanDescriptor {
+                        value: rule_source_span.into(),
+                    }))
+                    .unwrap(),
+                );
+            }
+            Err(js_error.into())
+        }
+        Ok(()) => Ok(()),
+    }
+}
+
+#[wasm_bindgen]
+struct LineColSpanDescriptor {
+    pub value: LineColSpan,
 }
 
 #[wasm_bindgen]
@@ -75,6 +96,17 @@ impl From<pest::error::LineColLocation> for LineColSpan {
     }
 }
 
+impl From<rule::LineColSpan> for LineColSpan {
+    fn from(span: rule::LineColSpan) -> Self {
+        LineColSpan {
+            line_start: span.line_start,
+            line_end: span.line_end,
+            col_start: span.col_start,
+            col_end: span.col_end,
+        }
+    }
+}
+
 #[wasm_bindgen]
 impl Context {
     pub fn from_text(text: &str) -> Result<Context, JsValue> {
@@ -87,25 +119,31 @@ impl Context {
         self.throne_context.append_state(text);
     }
 
-    pub fn update(&mut self, side_input: Option<js_sys::Function>) {
+    pub fn update(&mut self, side_input: Option<js_sys::Function>) -> Result<(), JsValue> {
         if let Some(side_input) = side_input {
             let core = &mut self.throne_context.core;
             let string_cache = &self.throne_context.string_cache;
-            update(core, |phrase: &Phrase| {
-                let js_phrase = js_value_from_phrase(phrase, string_cache);
-                if side_input
-                    .call1(&JsValue::null(), &js_phrase)
-                    .ok()
-                    .filter(|v| v.is_truthy())
-                    .is_some()
-                {
-                    Some(phrase.to_vec())
-                } else {
-                    None
-                }
-            });
+            js_from_update_result(
+                update(core, |phrase: &Phrase| {
+                    let js_phrase = js_value_from_phrase(phrase, string_cache);
+                    if side_input
+                        .call1(&JsValue::null(), &js_phrase)
+                        .ok()
+                        .filter(|v| v.is_truthy())
+                        .is_some()
+                    {
+                        Some(phrase.to_vec())
+                    } else {
+                        None
+                    }
+                }),
+                &core.rules,
+            )
         } else {
-            self.throne_context.update(|_: &Phrase| None);
+            js_from_update_result(
+                self.throne_context.update(|_: &Phrase| None),
+                &self.throne_context.core.rules,
+            )
         }
     }
 

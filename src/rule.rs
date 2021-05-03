@@ -9,7 +9,7 @@ pub struct Rule {
     pub source_span: LineColSpan,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct LineColSpan {
     pub line_start: usize,
     pub line_end: usize,

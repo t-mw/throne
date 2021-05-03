@@ -11,14 +11,24 @@ use crate::token::*;
 const RULE_REPEAT_LIMIT: usize = 2000;
 
 #[derive(Debug)]
-pub enum UpdateError {
+pub enum Error {
     RuleRepeatError(RuleRepeatError),
     ExcessivePermutationError(matching::ExcessivePermutationError),
 }
 
-impl std::error::Error for UpdateError {}
+impl Error {
+    pub fn rule<'a>(&self, rules: &'a [Rule]) -> Option<&'a Rule> {
+        let rule_id = match self {
+            Self::RuleRepeatError(e) => e.rule_id,
+            Self::ExcessivePermutationError(e) => e.rule_id,
+        };
+        rules.iter().find(|r| r.id == rule_id)
+    }
+}
 
-impl fmt::Display for UpdateError {
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::RuleRepeatError(e) => {
@@ -31,15 +41,15 @@ impl fmt::Display for UpdateError {
     }
 }
 
-impl From<RuleRepeatError> for UpdateError {
+impl From<RuleRepeatError> for Error {
     fn from(e: RuleRepeatError) -> Self {
-        UpdateError::RuleRepeatError(e)
+        Error::RuleRepeatError(e)
     }
 }
 
-impl From<matching::ExcessivePermutationError> for UpdateError {
+impl From<matching::ExcessivePermutationError> for Error {
     fn from(e: matching::ExcessivePermutationError) -> Self {
-        UpdateError::ExcessivePermutationError(e)
+        Error::ExcessivePermutationError(e)
     }
 }
 
@@ -64,7 +74,7 @@ impl fmt::Display for RuleRepeatError {
 pub trait SideInput: FnMut(&Phrase) -> Option<Vec<Token>> {}
 impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
 
-pub fn update<F>(core: &mut Core, mut side_input: F) -> Result<(), UpdateError>
+pub fn update<F>(core: &mut Core, mut side_input: F) -> Result<(), Error>
 where
     F: SideInput,
 {

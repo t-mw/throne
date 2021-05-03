@@ -11,7 +11,7 @@ use crate::rule::Rule;
 use crate::state::State;
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
-use crate::update::{self, update, UpdateError};
+use crate::update::{self, update};
 
 #[allow(unused_macros)]
 macro_rules! dump {
@@ -182,7 +182,7 @@ impl Context {
         Ok(rules)
     }
 
-    pub fn update<F>(&mut self, side_input: F) -> Result<(), UpdateError>
+    pub fn update<F>(&mut self, side_input: F) -> Result<(), update::Error>
     where
         F: SideInput,
     {
@@ -2359,18 +2359,32 @@ mod tests {
     }
 
     #[test]
-    fn update_rule_repeat_limit_test() {
+    fn update_rule_repeat_error_test() {
         let mut context = Context::from_text(
-            "foo
+            "foo\n\
              foo = foo",
         )
         .unwrap();
 
+        let result = context.update(|_: &Phrase| None);
         assert!(matches!(
-            context.update(|_: &Phrase| None),
-            Err(update::UpdateError::RuleRepeatError(
-                update::RuleRepeatError { rule_id: 0 }
-            ))
+            result,
+            Err(update::Error::RuleRepeatError(update::RuleRepeatError {
+                rule_id: 0
+            }))
         ));
+
+        if let Err(e) = result {
+            let rule = e.rule(&context.core.rules).unwrap();
+            assert_eq!(
+                rule.source_span,
+                LineColSpan {
+                    line_start: 2,
+                    line_end: 2,
+                    col_start: 1,
+                    col_end: 10
+                }
+            );
+        }
     }
 }

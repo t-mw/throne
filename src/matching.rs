@@ -537,7 +537,7 @@ where
             r.id,
             forward_concrete,
             outputs_concrete,
-            r.source_span.clone(),
+            r.source_span,
         )));
     }
 
