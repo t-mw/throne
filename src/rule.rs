@@ -6,14 +6,29 @@ pub struct Rule {
     pub id: i32,
     pub inputs: Vec<Vec<Token>>,
     pub outputs: Vec<Vec<Token>>,
+    pub source_span: LineColSpan,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LineColSpan {
+    pub line_start: usize,
+    pub line_end: usize,
+    pub col_start: usize,
+    pub col_end: usize,
 }
 
 impl Rule {
-    pub fn new(id: i32, inputs: Vec<Vec<Token>>, outputs: Vec<Vec<Token>>) -> Rule {
+    pub fn new(
+        id: i32,
+        inputs: Vec<Vec<Token>>,
+        outputs: Vec<Vec<Token>>,
+        source_span: LineColSpan,
+    ) -> Rule {
         Rule {
             id,
             inputs,
             outputs,
+            source_span,
         }
     }
 

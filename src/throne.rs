@@ -499,10 +499,21 @@ fn test_rng() -> SmallRng {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rule::LineColSpan;
     use pretty_assertions::{assert_eq, assert_ne};
 
     fn rule_new(inputs: Vec<Vec<Token>>, outputs: Vec<Vec<Token>>) -> Rule {
-        Rule::new(0, inputs, outputs)
+        Rule::new(
+            0,
+            inputs,
+            outputs,
+            LineColSpan {
+                line_start: 0,
+                line_end: 0,
+                col_start: 0,
+                col_end: 0,
+            },
+        )
     }
 
     fn match_variables_with_existing(
@@ -582,7 +593,13 @@ mod tests {
                         tokenize("at 0 0 wood", &mut context.string_cache),
                         tokenize("at 1 2 wood", &mut context.string_cache),
                     ],
-                    vec![tokenize("at 1 0 wood", &mut context.string_cache)]
+                    vec![tokenize("at 1 0 wood", &mut context.string_cache)],
+                    LineColSpan {
+                        line_start: 1,
+                        line_end: 1,
+                        col_start: 1,
+                        col_end: 41
+                    }
                 ),
                 Rule::new(
                     1,
@@ -596,6 +613,12 @@ mod tests {
                         tokenize("at 5 6 wood", &mut context.string_cache),
                         tokenize("at 7 8 wood", &mut context.string_cache),
                     ],
+                    LineColSpan {
+                        line_start: 3,
+                        line_end: 3,
+                        col_start: 1,
+                        col_end: 41
+                    }
                 ),
             ]
         );
@@ -616,8 +639,14 @@ mod tests {
                 vec![
                     tokenize("at 1 2 wood", &mut context.string_cache),
                     tokenize("at 1 0 wood", &mut context.string_cache)
-                ]
-            ),]
+                ],
+                LineColSpan {
+                    line_start: 1,
+                    line_end: 1,
+                    col_start: 1,
+                    col_end: 41
+                }
+            )]
         );
     }
 
@@ -644,11 +673,23 @@ mod tests {
                         tokenize("broken line 3", &mut context.string_cache),
                         tokenize("broken line 4", &mut context.string_cache),
                     ],
+                    LineColSpan {
+                        line_start: 1,
+                        line_end: 4,
+                        col_start: 1,
+                        col_end: 16
+                    }
                 ),
                 Rule::new(
                     1,
                     vec![tokenize("text", &mut context.string_cache)],
                     vec![tokenize("\"broken\ntext\"", &mut context.string_cache)],
+                    LineColSpan {
+                        line_start: 5,
+                        line_end: 7,
+                        col_start: 1,
+                        col_end: 6
+                    }
                 )
             ]
         );
@@ -680,7 +721,13 @@ mod tests {
                     tokenize("test", &mut context.string_cache),
                     tokenize("?state2 B A", &mut context.string_cache)
                 ],
-                vec![]
+                vec![],
+                LineColSpan {
+                    line_start: 3,
+                    line_end: 3,
+                    col_start: 1,
+                    col_end: 37
+                }
             )]
         );
     }
@@ -709,7 +756,13 @@ mod tests {
                     ),
                     tokenize("state2 B A", &mut context.string_cache)
                 ],
-                vec![]
+                vec![],
+                LineColSpan {
+                    line_start: 3,
+                    line_end: 3,
+                    col_start: 1,
+                    col_end: 30
+                }
             )]
         );
     }
@@ -779,7 +832,13 @@ mod tests {
                     tokenize("test A", &mut context.string_cache),
                     tokenize("foo bar", &mut context.string_cache)
                 ],
-                vec![]
+                vec![],
+                LineColSpan {
+                    line_start: 2,
+                    line_end: 2,
+                    col_start: 1,
+                    col_end: 34
+                }
             )]
         );
     }
@@ -805,7 +864,13 @@ mod tests {
                     tokenize("?state bar", &mut context.string_cache),
                     tokenize("test A", &mut context.string_cache),
                 ],
-                vec![]
+                vec![],
+                LineColSpan {
+                    line_start: 2,
+                    line_end: 2,
+                    col_start: 1,
+                    col_end: 28
+                }
             )]
         );
     }
@@ -832,7 +897,13 @@ mod tests {
                         tokenize("?state11", &mut context.string_cache),
                         tokenize("?state21", &mut context.string_cache),
                     ],
-                    vec![]
+                    vec![],
+                    LineColSpan {
+                        line_start: 5,
+                        line_end: 5,
+                        col_start: 1,
+                        col_end: 24
+                    }
                 ),
                 Rule::new(
                     1,
@@ -840,7 +911,13 @@ mod tests {
                         tokenize("?state11", &mut context.string_cache),
                         tokenize("?state22", &mut context.string_cache),
                     ],
-                    vec![]
+                    vec![],
+                    LineColSpan {
+                        line_start: 5,
+                        line_end: 5,
+                        col_start: 1,
+                        col_end: 24
+                    }
                 ),
                 Rule::new(
                     2,
@@ -848,7 +925,13 @@ mod tests {
                         tokenize("?state12", &mut context.string_cache),
                         tokenize("?state21", &mut context.string_cache),
                     ],
-                    vec![]
+                    vec![],
+                    LineColSpan {
+                        line_start: 5,
+                        line_end: 5,
+                        col_start: 1,
+                        col_end: 24
+                    }
                 ),
                 Rule::new(
                     3,
@@ -856,7 +939,13 @@ mod tests {
                         tokenize("?state12", &mut context.string_cache),
                         tokenize("?state22", &mut context.string_cache),
                     ],
-                    vec![]
+                    vec![],
+                    LineColSpan {
+                        line_start: 5,
+                        line_end: 5,
+                        col_start: 1,
+                        col_end: 24
+                    }
                 ),
             ]
         );
@@ -879,7 +968,13 @@ mod tests {
                         tokenize("test1", &mut context.string_cache),
                         tokenize("WILDCARD0", &mut context.string_cache)
                     ],
-                    vec![tokenize("any WILDCARD1", &mut context.string_cache)]
+                    vec![tokenize("any WILDCARD1", &mut context.string_cache)],
+                    LineColSpan {
+                        line_start: 1,
+                        line_end: 1,
+                        col_start: 1,
+                        col_end: 18
+                    }
                 ),
                 Rule::new(
                     1,
@@ -887,7 +982,13 @@ mod tests {
                     vec![
                         tokenize("test2 WILDCARD2", &mut context.string_cache),
                         tokenize("WILDCARD3 any", &mut context.string_cache),
-                    ]
+                    ],
+                    LineColSpan {
+                        line_start: 2,
+                        line_end: 2,
+                        col_start: 1,
+                        col_end: 17
+                    }
                 )
             ]
         );
@@ -938,6 +1039,12 @@ mod tests {
                         tokenize("#test", &mut context.string_cache),
                         tokenize("out1", &mut context.string_cache),
                     ],
+                    LineColSpan {
+                        line_start: 4,
+                        line_end: 4,
+                        col_start: 1,
+                        col_end: 11
+                    }
                 ),
                 Rule::new(
                     1,
@@ -949,6 +1056,12 @@ mod tests {
                         tokenize("#test", &mut context.string_cache),
                         tokenize("out2", &mut context.string_cache),
                     ],
+                    LineColSpan {
+                        line_start: 7,
+                        line_end: 7,
+                        col_start: 1,
+                        col_end: 11
+                    }
                 )
             ]
         );
@@ -989,7 +1102,13 @@ mod tests {
                         tokenize("test 1 2", &mut context.string_cache),
                         tokenize("test 5 6", &mut context.string_cache),
                     ],
-                    vec![tokenize("match", &mut context.string_cache)]
+                    vec![tokenize("match", &mut context.string_cache)],
+                    LineColSpan {
+                        line_start: 3,
+                        line_end: 3,
+                        col_start: 1,
+                        col_end: 28
+                    }
                 ),
                 Rule::new(
                     2,
@@ -998,6 +1117,12 @@ mod tests {
                         tokenize("test 5 6", &mut context.string_cache),
                     ],
                     vec![tokenize("match", &mut context.string_cache)],
+                    LineColSpan {
+                        line_start: 5,
+                        line_end: 5,
+                        col_start: 1,
+                        col_end: 28
+                    }
                 ),
             ]
         );

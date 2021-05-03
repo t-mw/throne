@@ -533,7 +533,12 @@ where
 
         state.unlock_scratch();
 
-        return Ok(Some(Rule::new(r.id, forward_concrete, outputs_concrete)));
+        return Ok(Some(Rule::new(
+            r.id,
+            forward_concrete,
+            outputs_concrete,
+            r.source_span.clone(),
+        )));
     }
 
     state.unlock_scratch();

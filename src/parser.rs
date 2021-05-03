@@ -7,7 +7,7 @@ use rand::rngs::SmallRng;
 use rand::Rng;
 
 use crate::matching::*;
-use crate::rule::Rule;
+use crate::rule::{LineColSpan, Rule};
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
 
@@ -147,6 +147,8 @@ fn pair_to_throne_rule(
 ) -> Rule {
     check_rule_variables(rule_pair.clone(), enable_unused_warnings);
 
+    let source_span: LineColSpan = rule_pair.as_span().into();
+
     let mut pairs = rule_pair.into_inner();
     let inputs_pair = pairs.next().unwrap();
     let outputs_pair = pairs.next().unwrap();
@@ -218,7 +220,7 @@ fn pair_to_throne_rule(
         }
     }
 
-    Rule::new(0, inputs, outputs)
+    Rule::new(0, inputs, outputs, source_span)
 }
 
 // for each backwards predicate, replace it with the corresponding phrase
@@ -432,6 +434,19 @@ fn check_rule_variables(pair: Pair<generated::Rule>, enable_unused_warnings: boo
     for (var_name, count) in &var_counts {
         if *count == 1 {
             println!("WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.", var_name, rule_str);
+        }
+    }
+}
+
+impl From<pest::Span<'_>> for LineColSpan {
+    fn from(span: pest::Span) -> Self {
+        let start_line_col = span.start_pos().line_col();
+        let end_line_col = span.end_pos().line_col();
+        LineColSpan {
+            line_start: start_line_col.0,
+            line_end: end_line_col.0,
+            col_start: start_line_col.1,
+            col_end: end_line_col.1,
         }
     }
 }
