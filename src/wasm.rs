@@ -5,8 +5,9 @@ use std::hash::{Hash, Hasher};
 
 use crate::parser;
 use crate::string_cache::{Atom, StringCache};
-use crate::throne::{update, Context as ThroneContext};
+use crate::throne::Context as ThroneContext;
 use crate::token::{Phrase, PhraseGroup};
+use crate::update::update;
 
 #[wasm_bindgen]
 pub fn init() {
