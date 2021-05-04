@@ -1,8 +1,8 @@
-use rand::{rngs::SmallRng, seq::SliceRandom};
-
 use crate::matching::phrase_equal;
 use crate::string_cache::Atom;
 use crate::token::*;
+
+use rand::{rngs::SmallRng, seq::SliceRandom};
 
 use std::ops::Range;
 

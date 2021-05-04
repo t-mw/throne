@@ -1,14 +1,14 @@
-use wasm_bindgen::prelude::*;
-
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-
 use crate::parser;
 use crate::rule::{self, Rule};
 use crate::string_cache::{Atom, StringCache};
 use crate::throne::Context as ThroneContext;
 use crate::token::{Phrase, PhraseGroup};
 use crate::update::{self, update};
+
+use wasm_bindgen::prelude::*;
+
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 #[wasm_bindgen]
 pub fn init() {

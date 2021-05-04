@@ -1,9 +1,3 @@
-use itertools::Itertools;
-use rand::{self, rngs::SmallRng, thread_rng, SeedableRng};
-
-use std::fmt;
-use std::vec::Vec;
-
 use crate::core::Core;
 use crate::matching::*;
 use crate::parser;
@@ -12,6 +6,12 @@ use crate::state::State;
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
 use crate::update::{self, update};
+
+use itertools::Itertools;
+use rand::{self, rngs::SmallRng, thread_rng, SeedableRng};
+
+use std::fmt;
+use std::vec::Vec;
 
 #[allow(unused_macros)]
 macro_rules! dump {

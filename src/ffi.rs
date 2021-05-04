@@ -1,11 +1,11 @@
+use crate::string_cache::Atom;
+use crate::throne::Context;
+use crate::token::Phrase;
+
 use std::ffi::CStr;
 use std::mem::transmute;
 use std::os::raw::{c_char, c_void};
 use std::slice;
-
-use crate::string_cache::Atom;
-use crate::throne::Context;
-use crate::token::Phrase;
 
 #[repr(C)]
 pub struct CRule {

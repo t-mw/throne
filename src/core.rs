@@ -1,11 +1,11 @@
-use rand::{self, rngs::SmallRng};
-
-use std::vec::Vec;
-
 use crate::matching::*;
 use crate::rule::Rule;
 use crate::state::State;
 use crate::string_cache::Atom;
+
+use rand::{self, rngs::SmallRng};
+
+use std::vec::Vec;
 
 #[derive(Clone)]
 pub struct Core {

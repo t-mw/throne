@@ -1,15 +1,15 @@
-use std::collections::HashMap;
-use std::fmt;
+use crate::matching::*;
+use crate::rule::{LineColSpan, Rule};
+use crate::string_cache::{Atom, StringCache};
+use crate::token::*;
 
 use pest::iterators::Pair;
 use pest::Parser;
 use rand::rngs::SmallRng;
 use rand::Rng;
 
-use crate::matching::*;
-use crate::rule::{LineColSpan, Rule};
-use crate::string_cache::{Atom, StringCache};
-use crate::token::*;
+use std::collections::HashMap;
+use std::fmt;
 
 pub struct ParseResult {
     pub rules: Vec<Rule>,

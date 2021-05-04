@@ -1,12 +1,12 @@
-use std::fmt;
-
-use rand::seq::SliceRandom;
-
 use crate::core::Core;
 use crate::matching;
 use crate::rule::Rule;
 use crate::state::State;
 use crate::token::*;
+
+use rand::seq::SliceRandom;
+
+use std::fmt;
 
 const RULE_REPEAT_LIMIT: usize = 2000;
 

@@ -1,9 +1,9 @@
-use std::fmt;
-
 use crate::rule::Rule;
 use crate::state::State;
 use crate::string_cache::Atom;
 use crate::token::*;
+
+use std::fmt;
 
 const EXCESSIVE_PERMUTATION_LIMIT: usize = 2000;
 
