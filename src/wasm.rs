@@ -2,7 +2,7 @@ use crate::parser;
 use crate::rule::{self, Rule};
 use crate::string_cache::{Atom, StringCache};
 use crate::throne::Context as ThroneContext;
-use crate::token::{Phrase, PhraseGroup};
+use crate::token::{Phrase, PhraseGroup, Token};
 use crate::update::{self, update};
 
 use wasm_bindgen::prelude::*;
@@ -127,23 +127,33 @@ impl Context {
     pub fn update(&mut self, side_input: Option<js_sys::Function>) -> Result<(), JsValue> {
         if let Some(side_input) = side_input {
             let core = &mut self.throne_context.core;
-            let string_cache = &self.throne_context.string_cache;
-            js_from_update_result(
-                update(core, |phrase: &Phrase| {
-                    let js_phrase = js_value_from_phrase(phrase, string_cache);
-                    if side_input
-                        .call1(&JsValue::null(), &js_phrase)
-                        .ok()
-                        .filter(|v| v.is_truthy())
-                        .is_some()
-                    {
-                        Some(phrase.to_vec())
-                    } else {
-                        None
+            let string_cache = &mut self.throne_context.string_cache;
+            let side_input = |phrase: &Phrase| {
+                let js_phrase = js_value_from_phrase(phrase, string_cache);
+                let result = side_input.call1(&JsValue::null(), &js_phrase);
+                match result {
+                    Ok(v) => {
+                        if js_sys::Array::is_array(&v) {
+                            let arr = js_sys::Array::from(&v);
+                            let mut out = vec![phrase[0].clone()];
+                            for item in arr.iter().skip(1) {
+                                if let Some(s) = item.as_string() {
+                                    out.push(Token::new(&s, 0, 0, string_cache));
+                                } else if let Some(n) = item.as_f64() {
+                                    out.push(Token::new_number(n as i32, 0, 0));
+                                } else {
+                                    return None;
+                                }
+                            }
+                            Some(out.normalize())
+                        } else {
+                            None
+                        }
                     }
-                }),
-                &core.rules,
-            )
+                    Err(_) => None,
+                }
+            };
+            js_from_update_result(update(core, side_input), &core.rules)
         } else {
             js_from_update_result(
                 self.throne_context.update(|_: &Phrase| None),
