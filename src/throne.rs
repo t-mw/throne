@@ -2211,6 +2211,19 @@ mod tests {
     fn tokenize_string_test() {
         let mut string_cache = StringCache::new();
 
+        // parse quoted variables as strings
+        assert_eq!(
+            tokenize("\"X\"", &mut string_cache),
+            [Token {
+                atom: string_cache.str_to_atom("X"),
+                flag: TokenFlag::None,
+                is_negated: false,
+                is_consuming: true,
+                open_depth: 0,
+                close_depth: 0,
+            }]
+        );
+
         assert_eq!(
             tokenize("\"string here\"", &mut string_cache),
             [Token::new("string here", 0, 0, &mut string_cache),]

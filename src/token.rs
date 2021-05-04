@@ -224,12 +224,8 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
         }
 
         if *token == "\"" {
-            result.push(Token::new(
-                strings.next().expect("string"),
-                open_depth,
-                close_depth,
-                string_cache,
-            ));
+            let atom = string_cache.str_to_atom(strings.next().expect("string"));
+            result.push(Token::new_atom(atom, open_depth, close_depth));
         } else if is_wildcard_token(token) {
             let var_string = format!("WILDCARD{}", string_cache.wildcard_counter);
             string_cache.wildcard_counter += 1;
