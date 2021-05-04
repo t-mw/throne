@@ -1,15 +1,12 @@
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::i32;
-
-const MAX_STRING_IDX: AtomIdx = i32::MAX - MAX_NUMBER * 2 - 1;
-const MAX_NUMBER: i32 = 99999999;
-
-pub type AtomIdx = i32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Atom {
-    pub idx: AtomIdx,
+    is_number: bool,
+    v: u32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -35,12 +32,11 @@ impl StringCache {
             return atom;
         }
 
-        let idx = self.atom_to_str.len() as AtomIdx;
-        if idx > MAX_STRING_IDX {
-            panic!("String cache full");
-        }
-
-        let atom = Atom { idx };
+        let idx = self.atom_to_str.len().try_into().unwrap();
+        let atom = Atom {
+            is_number: false,
+            v: idx,
+        };
 
         self.atom_to_str.push(text.to_string());
         self.str_to_atom.insert(text.to_string(), atom);
@@ -53,28 +49,25 @@ impl StringCache {
     }
 
     pub fn number_to_atom(n: i32) -> Atom {
-        if n.abs() > MAX_NUMBER {
-            panic!("{} is large than the maximum of {}", n.abs(), MAX_NUMBER);
+        Atom {
+            is_number: true,
+            v: n as u32,
         }
-
-        return Atom {
-            idx: (n + MAX_NUMBER + 1) + MAX_STRING_IDX,
-        };
     }
 
     pub fn atom_to_str(&self, atom: Atom) -> Option<&str> {
-        if atom.idx <= MAX_STRING_IDX {
-            Some(&self.atom_to_str[atom.idx as usize])
-        } else {
+        if atom.is_number {
             None
+        } else {
+            Some(&self.atom_to_str[atom.v as usize])
         }
     }
 
     pub fn atom_to_number(atom: Atom) -> Option<i32> {
-        if atom.idx <= MAX_STRING_IDX {
-            None
+        if atom.is_number {
+            Some(atom.v as i32)
         } else {
-            Some((atom.idx - MAX_STRING_IDX) - MAX_NUMBER - 1)
+            None
         }
     }
 }
