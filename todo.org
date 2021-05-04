@@ -12,10 +12,8 @@
 *** TODO make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
 *** DONE replace #foo -> stage foo, because # does not have special effects like other symbols
     CLOSED: [2021-04-29 Thu 15:24]
-    - Why does removing # on conway's game of life change behavior?
 *** TODO replace !== backwards predicate with ability to use '!' anywhere in a phrase
 *** TODO ability to arbitrarily nest 'stage' scopes
-*** TODO nested labels
 *** TODO ability to put rule output in 'stage' scopes e.g. in1 . in2 = out1 { subset = () } === in1 . in2 . subset = out1
 *** TODO reduce serialization boilerplate with either serde or generated code (like with pest)
 *** TODO allow output in custom backwards predicate, i.e. output is appended to rule
@@ -27,6 +25,7 @@
 *** TODO support matching phrases while binding to them, to avoid retyping them in output e.g. (foo A)@FOO . bar = FOO
 *** TODO look at prolog optimizations
     - could we compile each rule down to a specialized routine with a stack for variable matches to replace test_inputs_with_permutation
+    - bin each phrase by (atom, atom position) and variable name to speed up matching
 *** TODO add syntax for matching on const lists i.e. (FOO | BAR) matched against (a b c): FOO = a, BAR = (b c)
 *** TODO syntax for scheduling some output of a rule to be deleted at the end of the update
 *** TODO ink -> throne converter
@@ -36,19 +35,21 @@
            foo FOO . ^capitalize FOO OUT = `foo capitalized is` OUT
          where OUT can also be a wildcard (or omitted?)
 *** TODO evaluate constant expressions to eliminate rules that will never match
-*** TODO An easy way to test a rule with a chance of success based on a probability extracted from state
+*** TODO an easy way to test a rule with a chance of success based on a probability extracted from state
   - This is currently difficult since the number of times that a rule may be evaluated in an update is not well defined
 *** TODO use const generics to replace find_phrases* and find_phrases_exactly* variants with single function
   - e.g. `find_phrases<const N: usize>(pattern: [Option<&Atom>; N], match_pattern_length: bool) -> Vec<&[Token]> { ... }`
   - replace find_phrase* variants too
 *** TODO measure performance with https://github.com/bodil/smartstring
-*** TODO Add examples
+*** TODO add examples
     - [X] Conway's game of life
     - [ ] Chess
     - [ ] Tic tac toe
     - [ ] Procedural generation
-*** TODO Make () = () optional in prefixed blocks
-*** DONE Detect infinite loops
+*** TODO make () = () optional in prefixed blocks
+*** TODO reduce permutation space beyond first atom
+    - a X . a X = ... or a X . b X = ... with a (0..N) and b (0..N) triggers an O(N^2) search on each update.
+*** DONE detect infinite loops
     CLOSED: [2021-05-03 Mon 13:17]
 *** DONE selectively disable warnings
   CLOSED: [2020-01-24 Fri 14:24]
@@ -65,4 +66,4 @@
 *** DONE performance improvement by sorting states by atom indices + jumping to known ranges during matching or do binary search
 *** DONE modulo
 *** DONE improve performance by, for each phrase in a rule, recording the states that could match the phrase. needs to be re-evaluated each time state is added or removed.
-  - Attempted in 7d27586, worsened performance.
+  - attempted in 7d27586, worsened performance.
