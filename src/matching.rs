@@ -1038,6 +1038,13 @@ pub fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Vec<Token>> {
             let mod_neg = |x: i32, n: i32| x - n * (x / n);
 
             match (n1, n2, n3) {
+                (Some(v1), Some(v2), Some(v3)) => {
+                    if mod_neg(v1, v2) == v3 {
+                        Some(tokens.to_owned())
+                    } else {
+                        None
+                    }
+                }
                 (Some(v1), Some(v2), None) => Some(vec![
                     tokens[0].clone(),
                     tokens[1].clone(),
