@@ -11,6 +11,8 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::fmt;
 
+pub const QUI: &str = "qui";
+
 pub struct ParseResult {
     pub rules: Vec<Rule>,
     pub state: Vec<Vec<Token>>,
@@ -46,7 +48,7 @@ pub fn parse(
     mut string_cache: &mut StringCache,
     rng: &mut SmallRng,
 ) -> Result<ParseResult, Error> {
-    let text = text.replace("()", "qui");
+    let text = text.replace("()", QUI);
 
     let file = generated::Parser::parse(generated::Rule::file, &text)?
         .next()
@@ -60,17 +62,45 @@ pub fn parse(
     for line in file.into_inner() {
         match line.as_rule() {
             generated::Rule::prefixed => {
-                let mut prefixed = line.into_inner();
+                let prefix_block_source_span: LineColSpan = line.as_span().into();
 
+                let mut prefixed = line.into_inner();
                 let prefix_inputs_pair = prefixed.next().unwrap();
+
+                let mut any_input_qui = false;
                 for pair in prefixed {
-                    let r = pair_to_throne_rule(
+                    let (r, has_input_qui) = pair_to_throne_rule(
                         pair,
                         Some(prefix_inputs_pair.clone()),
                         &mut string_cache,
                         enable_unused_warnings,
                     );
                     rules.push((r, enable_unused_warnings));
+
+                    if has_input_qui {
+                        any_input_qui = true;
+                    }
+                }
+
+                // add PREFIX . () = () if there's no other way out from
+                // the prefix block to avoid infinite loops.
+                if !any_input_qui {
+                    let mut inputs = vec![];
+                    let mut outputs = vec![];
+                    add_prefix_inputs_pair_to_inputs_outputs(
+                        prefix_inputs_pair,
+                        &mut inputs,
+                        &mut outputs,
+                        &mut string_cache,
+                        false,
+                    );
+                    inputs.push(tokenize(QUI, string_cache));
+
+                    // source span covers entire prefix block since this rule doesn't exist in source
+                    rules.push((
+                        Rule::new(0, inputs, outputs, prefix_block_source_span),
+                        enable_unused_warnings,
+                    ));
                 }
             }
             generated::Rule::backwards_def => {
@@ -97,7 +127,7 @@ pub fn parse(
             }
             generated::Rule::rule => {
                 rules.push((
-                    pair_to_throne_rule(line, None, &mut string_cache, enable_unused_warnings),
+                    pair_to_throne_rule(line, None, &mut string_cache, enable_unused_warnings).0,
                     enable_unused_warnings,
                 ));
             }
@@ -144,7 +174,7 @@ fn pair_to_throne_rule(
     prefix_inputs_pair: Option<Pair<generated::Rule>>,
     string_cache: &mut StringCache,
     enable_unused_warnings: bool,
-) -> Rule {
+) -> (Rule, bool) {
     check_rule_variables(rule_pair.clone(), enable_unused_warnings);
 
     let source_span: LineColSpan = rule_pair.as_span().into();
@@ -162,53 +192,25 @@ fn pair_to_throne_rule(
         input_phrase.as_rule() == generated::Rule::qui
     });
 
-    let mut handle_input_phrase = |input_phrase: Pair<generated::Rule>, is_prefix_input: bool| {
-        match input_phrase.as_rule() {
-            generated::Rule::copy_phrase => {
-                let copy_phrase = tokenize(
-                    input_phrase.into_inner().next().unwrap().as_str(),
-                    string_cache,
-                );
-
-                inputs.push(copy_phrase.clone());
-                outputs.push(copy_phrase);
-            }
-            // stage phrases have the special behavior of acting as copy phrases when used as
-            // prefixes, except when the prefixed rule includes a qui.
-            generated::Rule::stage_phrase => {
-                let stage_phrase = tokenize(input_phrase.as_str(), string_cache);
-                if !has_input_qui && is_prefix_input {
-                    outputs.push(stage_phrase.clone());
-                }
-                inputs.push(stage_phrase);
-            }
-            _ => {
-                inputs.push(tokenize(input_phrase.as_str(), string_cache));
-            }
-        }
-    };
-
     if let Some(prefix_inputs_pair) = prefix_inputs_pair {
-        // insert stages at beginning of rule input, so that 'first atoms' optimization is effective
-        let prefix_input_pairs = prefix_inputs_pair.into_inner();
-        for p in prefix_input_pairs.clone() {
-            let input_phrase = p.into_inner().next().unwrap();
-            if input_phrase.as_rule() == generated::Rule::stage_phrase {
-                handle_input_phrase(input_phrase, true);
-            }
-        }
-
-        for p in prefix_input_pairs {
-            let input_phrase = p.into_inner().next().unwrap();
-            if input_phrase.as_rule() != generated::Rule::stage_phrase {
-                handle_input_phrase(input_phrase, true);
-            }
-        }
+        add_prefix_inputs_pair_to_inputs_outputs(
+            prefix_inputs_pair,
+            &mut inputs,
+            &mut outputs,
+            string_cache,
+            !has_input_qui,
+        );
     }
 
     for p in input_pairs {
         let input_phrase = p.into_inner().next().unwrap();
-        handle_input_phrase(input_phrase, false);
+        add_input_phrase_pair_to_inputs_outputs(
+            input_phrase,
+            &mut inputs,
+            &mut outputs,
+            string_cache,
+            false,
+        );
     }
 
     for p in outputs_pair.into_inner() {
@@ -220,7 +222,75 @@ fn pair_to_throne_rule(
         }
     }
 
-    Rule::new(0, inputs, outputs, source_span)
+    (Rule::new(0, inputs, outputs, source_span), has_input_qui)
+}
+
+fn add_prefix_inputs_pair_to_inputs_outputs(
+    prefix_inputs_pair: Pair<generated::Rule>,
+    inputs: &mut Vec<VecPhrase>,
+    outputs: &mut Vec<VecPhrase>,
+    string_cache: &mut StringCache,
+    copy_stage_phrase: bool,
+) {
+    // insert stages at beginning of rule input, so that 'first atoms' optimization is effective
+    let prefix_input_pairs = prefix_inputs_pair.into_inner();
+    for p in prefix_input_pairs.clone() {
+        let input_phrase = p.into_inner().next().unwrap();
+        if input_phrase.as_rule() == generated::Rule::stage_phrase {
+            add_input_phrase_pair_to_inputs_outputs(
+                input_phrase,
+                inputs,
+                outputs,
+                string_cache,
+                copy_stage_phrase,
+            );
+        }
+    }
+
+    for p in prefix_input_pairs {
+        let input_phrase = p.into_inner().next().unwrap();
+        if input_phrase.as_rule() != generated::Rule::stage_phrase {
+            add_input_phrase_pair_to_inputs_outputs(
+                input_phrase,
+                inputs,
+                outputs,
+                string_cache,
+                copy_stage_phrase,
+            );
+        }
+    }
+}
+
+fn add_input_phrase_pair_to_inputs_outputs(
+    input_phrase: Pair<generated::Rule>,
+    inputs: &mut Vec<VecPhrase>,
+    outputs: &mut Vec<VecPhrase>,
+    string_cache: &mut StringCache,
+    copy_stage_phrase: bool,
+) {
+    match input_phrase.as_rule() {
+        generated::Rule::copy_phrase => {
+            let copy_phrase = tokenize(
+                input_phrase.into_inner().next().unwrap().as_str(),
+                string_cache,
+            );
+
+            inputs.push(copy_phrase.clone());
+            outputs.push(copy_phrase);
+        }
+        // stage phrases have the special behavior of acting as copy phrases when used as
+        // prefixes, except when the prefixed rule includes a qui.
+        generated::Rule::stage_phrase => {
+            let stage_phrase = tokenize(input_phrase.as_str(), string_cache);
+            if copy_stage_phrase {
+                outputs.push(stage_phrase.clone());
+            }
+            inputs.push(stage_phrase);
+        }
+        _ => {
+            inputs.push(tokenize(input_phrase.as_str(), string_cache));
+        }
+    }
 }
 
 // for each backwards predicate, replace it with the corresponding phrase

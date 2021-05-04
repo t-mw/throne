@@ -44,7 +44,8 @@
     - [ ] Chess
     - [ ] Tic tac toe
     - [ ] Procedural generation
-*** TODO make () = () optional in prefixed blocks
+*** DONE make () = () optional in prefixed blocks
+    CLOSED: [2021-05-04 Tue 19:55]
 *** TODO reduce permutation space beyond first atom
     - a X . a X = ... or a X . b X = ... with a (0..N) and b (0..N) triggers an O(N^2) search on each update.
 *** DONE detect infinite loops

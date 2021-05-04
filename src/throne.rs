@@ -96,7 +96,7 @@ impl Context {
         }
 
         state.update_first_atoms();
-        let qui_atom = string_cache.str_to_atom("qui");
+        let qui_atom = string_cache.str_to_atom(parser::QUI);
 
         Ok(Context {
             core: Core {
@@ -583,7 +583,7 @@ mod tests {
     }
 
     #[test]
-    fn context_from_text_rules_test() {
+    fn context_from_text_prefix_test() {
         let mut context = Context::from_text(
             "at 0 0 wood . at 1 2 wood = at 1 0 wood \n\
              asdf . #test: { \n\
@@ -630,6 +630,22 @@ mod tests {
                         col_end: 41
                     }
                 ),
+                // automatically added rule to avoid infinite loops
+                Rule::new(
+                    2,
+                    vec![
+                        tokenize("#test", &mut context.string_cache),
+                        tokenize("asdf", &mut context.string_cache),
+                        tokenize(parser::QUI, &mut context.string_cache),
+                    ],
+                    vec![],
+                    LineColSpan {
+                        line_start: 2,
+                        line_end: 4,
+                        col_start: 1,
+                        col_end: 2
+                    }
+                )
             ]
         );
     }
@@ -1071,6 +1087,21 @@ mod tests {
                         line_end: 7,
                         col_start: 1,
                         col_end: 11
+                    }
+                ),
+                // automatically added rule to avoid infinite loops
+                Rule::new(
+                    2,
+                    vec![
+                        tokenize("#test", &mut context.string_cache),
+                        tokenize(parser::QUI, &mut context.string_cache)
+                    ],
+                    vec![],
+                    LineColSpan {
+                        line_start: 1,
+                        line_end: 8,
+                        col_start: 1,
+                        col_end: 2
                     }
                 )
             ]

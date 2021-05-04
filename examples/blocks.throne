@@ -94,5 +94,4 @@ fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 2
 #clean: {
   dt _ = ()
   cons = ()
-  () = ()
 }
