@@ -23,6 +23,8 @@ pub struct State {
     // collection of all tokens found in the state phrases
     tokens: Vec<Token>,
 
+    removed_token_ranges: Vec<PhraseTokenRange>,
+
     pub first_atoms: Vec<(usize, Atom)>,
     scratch_idx: Option<(usize, usize)>,
 
@@ -35,6 +37,7 @@ impl State {
         State {
             phrase_ranges: vec![],
             tokens: vec![],
+            removed_token_ranges: vec![],
             first_atoms: vec![],
             scratch_idx: None,
             rev: 0,
@@ -50,21 +53,9 @@ impl State {
         assert!(self.scratch_idx.is_none());
 
         let remove_range = self.phrase_ranges.swap_remove(idx);
-        let remove_len = remove_range.end - remove_range.begin;
-
-        self.tokens.drain(remove_range.begin..remove_range.end);
-        for range in self.phrase_ranges.iter_mut() {
-            if range.begin >= remove_range.end {
-                range.begin -= remove_len;
-                range.end -= remove_len;
-            }
-        }
+        self.removed_token_ranges.push(remove_range);
 
         self.rev += 1;
-    }
-
-    pub fn update_first_atoms(&mut self) {
-        self.first_atoms = extract_first_atoms_state(self);
     }
 
     pub fn remove_phrase(&mut self, phrase: &Phrase) {
@@ -82,12 +73,19 @@ impl State {
         pattern: [Option<Atom>; N],
         match_pattern_length: bool,
     ) {
-        let tokens = &self.tokens;
+        assert!(self.scratch_idx.is_none());
+
+        let tokens = &mut self.tokens;
+        let removed_token_ranges = &mut self.removed_token_ranges;
+        let mut did_remove_tokens = false;
+
         self.phrase_ranges.retain(|range| {
-            let phrase = &tokens[range.begin..range.end];
+            let phrase = tokens.get_range(*range);
+
             if phrase.len() < N || (match_pattern_length && phrase.len() != N) {
                 return true;
             }
+
             for (i, atom) in pattern.iter().enumerate() {
                 if let Some(atom) = atom {
                     if phrase[i].atom != *atom {
@@ -95,8 +93,35 @@ impl State {
                     }
                 }
             }
+
+            removed_token_ranges.push(*range);
+            did_remove_tokens = true;
+
             false
         });
+
+        if did_remove_tokens {
+            self.rev += 1;
+        }
+    }
+
+    pub fn clear_removed_tokens(&mut self) {
+        self.removed_token_ranges
+            .sort_by_key(|range| std::cmp::Reverse(range.begin));
+        for remove_range in self.removed_token_ranges.drain(..) {
+            let remove_len = remove_range.end - remove_range.begin;
+            self.tokens.drain(remove_range.begin..remove_range.end);
+            for range in self.phrase_ranges.iter_mut() {
+                if range.begin >= remove_range.end {
+                    range.begin -= remove_len;
+                    range.end -= remove_len;
+                }
+            }
+        }
+    }
+
+    pub fn update_first_atoms(&mut self) {
+        self.first_atoms = extract_first_atoms_state(self);
     }
 
     pub fn shuffle(&mut self, rng: &mut SmallRng) {

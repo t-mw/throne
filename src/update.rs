@@ -136,6 +136,7 @@ where
 
                 let idx = state.len() - 1;
                 state.remove_idx(idx);
+                state.clear_removed_tokens();
 
                 return Ok(());
             }
