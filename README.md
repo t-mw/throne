@@ -5,7 +5,7 @@
 [crates_img]: https://img.shields.io/crates/v/throne.svg
 [crates_link]: https://crates.io/crates/throne
 
-A game scripting language for rapid prototyping and story logic:
+A game scripting language for prototyping and story logic:
 
 ```
 // Declare the initial state as 'phrases', with one phrase per line.
