@@ -4,26 +4,22 @@ use crate::matching::phrase_equal;
 use crate::string_cache::Atom;
 use crate::token::*;
 
+use std::ops::Range;
+
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct PhraseId {
     idx: usize,
     rev: usize,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-struct PhraseTokenRange {
-    begin: usize,
-    end: usize,
-}
-
 #[derive(Clone, Debug)]
 pub struct State {
     // indexes into token collection
-    phrase_ranges: Vec<PhraseTokenRange>,
+    phrase_ranges: Vec<Range<usize>>,
     // collection of all tokens found in the state phrases
     tokens: Vec<Token>,
 
-    removed_token_ranges: Vec<PhraseTokenRange>,
+    removed_token_ranges: Vec<Range<usize>>,
 
     pub first_atoms: Vec<(usize, Atom)>,
     scratch_idx: Option<(usize, usize)>,
@@ -62,7 +58,7 @@ impl State {
         let remove_idx = self
             .phrase_ranges
             .iter()
-            .position(|range| phrase_equal(self.tokens.get_range(*range), phrase, (0, 0), (0, 0)))
+            .position(|range| phrase_equal(&self.tokens[range.clone()], phrase, (0, 0), (0, 0)))
             .expect("remove_idx");
 
         self.remove_idx(remove_idx);
@@ -80,7 +76,7 @@ impl State {
         let mut did_remove_tokens = false;
 
         self.phrase_ranges.retain(|range| {
-            let phrase = tokens.get_range(*range);
+            let phrase = &tokens[range.clone()];
 
             if phrase.len() < N || (match_pattern_length && phrase.len() != N) {
                 return true;
@@ -94,7 +90,7 @@ impl State {
                 }
             }
 
-            removed_token_ranges.push(*range);
+            removed_token_ranges.push(range.clone());
             did_remove_tokens = true;
 
             false
@@ -107,13 +103,13 @@ impl State {
 
     pub fn clear_removed_tokens(&mut self) {
         self.removed_token_ranges
-            .sort_by_key(|range| std::cmp::Reverse(range.begin));
+            .sort_by_key(|range| std::cmp::Reverse(range.start));
         for remove_range in self.removed_token_ranges.drain(..) {
-            let remove_len = remove_range.end - remove_range.begin;
-            self.tokens.drain(remove_range.begin..remove_range.end);
+            let remove_len = remove_range.end - remove_range.start;
+            self.tokens.drain(remove_range.start..remove_range.end);
             for range in self.phrase_ranges.iter_mut() {
-                if range.begin >= remove_range.end {
-                    range.begin -= remove_len;
+                if range.start >= remove_range.end {
+                    range.start -= remove_len;
                     range.end -= remove_len;
                 }
             }
@@ -132,11 +128,11 @@ impl State {
     }
 
     pub fn push(&mut self, mut phrase: Vec<Token>) -> PhraseId {
-        let begin = self.tokens.len();
+        let start = self.tokens.len();
         self.tokens.append(&mut phrase);
         let end = self.tokens.len();
 
-        self.phrase_ranges.push(PhraseTokenRange { begin, end });
+        self.phrase_ranges.push(Range { start, end });
         self.rev += 1;
 
         let id = PhraseId {
@@ -161,13 +157,13 @@ impl State {
 
     pub fn get(&self, id: PhraseId) -> &Phrase {
         assert!(id.rev == self.rev);
-        self.tokens.get_range(self.phrase_ranges[id.idx])
+        &self.tokens[self.phrase_ranges[id.idx].clone()]
     }
 
     pub fn get_all(&self) -> Vec<Vec<Token>> {
         self.phrase_ranges
             .iter()
-            .map(|range| self.tokens.get_range(*range).to_vec())
+            .map(|range| self.tokens[range.clone()].to_vec())
             .collect::<Vec<_>>()
     }
 
@@ -196,21 +192,11 @@ impl State {
     }
 }
 
-trait TokenCollection {
-    fn get_range(&self, range: PhraseTokenRange) -> &Phrase;
-}
-
-impl TokenCollection for Vec<Token> {
-    fn get_range(&self, range: PhraseTokenRange) -> &Phrase {
-        &self[range.begin..range.end]
-    }
-}
-
 impl std::ops::Index<usize> for State {
     type Output = [Token];
 
     fn index(&self, i: usize) -> &Phrase {
-        self.tokens.get_range(self.phrase_ranges[i])
+        &self.tokens[self.phrase_ranges[i].clone()]
     }
 }
 
