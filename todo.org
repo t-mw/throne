@@ -46,6 +46,8 @@
     - [X] Conway's game of life
     - [ ] Chess
     - [ ] Tic tac toe
+    - [ ] Procedural generation
+*** TODO Make () = () optional in prefixed blocks
 *** DONE Detect infinite loops
     CLOSED: [2021-05-03 Mon 13:17]
 *** DONE selectively disable warnings
