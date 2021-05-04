@@ -16,10 +16,10 @@ pub struct PhraseId {
 pub struct State {
     // indexes into token collection
     phrase_ranges: Vec<Range<usize>>,
+    removed_phrase_ranges: Vec<Range<usize>>,
+
     // collection of all tokens found in the state phrases
     tokens: Vec<Token>,
-
-    removed_token_ranges: Vec<Range<usize>>,
 
     pub first_atoms: Vec<(usize, Atom)>,
     scratch_idx: Option<(usize, usize)>,
@@ -32,8 +32,8 @@ impl State {
     pub fn new() -> State {
         State {
             phrase_ranges: vec![],
+            removed_phrase_ranges: vec![],
             tokens: vec![],
-            removed_token_ranges: vec![],
             first_atoms: vec![],
             scratch_idx: None,
             rev: 0,
@@ -49,7 +49,7 @@ impl State {
         assert!(self.scratch_idx.is_none());
 
         let remove_range = self.phrase_ranges.swap_remove(idx);
-        self.removed_token_ranges.push(remove_range);
+        self.removed_phrase_ranges.push(remove_range);
 
         self.rev += 1;
     }
@@ -72,7 +72,7 @@ impl State {
         assert!(self.scratch_idx.is_none());
 
         let tokens = &mut self.tokens;
-        let removed_token_ranges = &mut self.removed_token_ranges;
+        let removed_phrase_ranges = &mut self.removed_phrase_ranges;
         let mut did_remove_tokens = false;
 
         self.phrase_ranges.retain(|range| {
@@ -90,7 +90,7 @@ impl State {
                 }
             }
 
-            removed_token_ranges.push(range.clone());
+            removed_phrase_ranges.push(range.clone());
             did_remove_tokens = true;
 
             false
@@ -102,9 +102,9 @@ impl State {
     }
 
     pub fn clear_removed_tokens(&mut self) {
-        self.removed_token_ranges
+        self.removed_phrase_ranges
             .sort_by_key(|range| std::cmp::Reverse(range.start));
-        for remove_range in self.removed_token_ranges.drain(..) {
+        for remove_range in self.removed_phrase_ranges.drain(..) {
             let remove_len = remove_range.end - remove_range.start;
             self.tokens.drain(remove_range.start..remove_range.end);
             for range in self.phrase_ranges.iter_mut() {
