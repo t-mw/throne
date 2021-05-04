@@ -2,8 +2,6 @@
 *** DONE support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
     CLOSED: [2021-04-30 Fri 11:16]
 *** TODO decide on consistent syntax for arguments e.g. keywords?
-*** TODO allow hex colors / named colors to be passed directly to sprite
-*** TODO add hex overload to 'color' predicate
 *** TODO arbitrary math expressions e.g. 'expr 2 + A / 3 + 1.5 = B'
 *** TODO option to only process a variable once per stage
 *** TODO lispy key properties to enable pattern matching
