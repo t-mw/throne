@@ -43,7 +43,8 @@
     - [X] Conway's game of life
     - [ ] Chess
     - [ ] Tic tac toe
-    - [ ] Procedural generation
+    - [ ] Procedural generationn
+*** TODO test with https://github.com/yuulive/mo
 *** DONE make () = () optional in prefixed blocks
     CLOSED: [2021-05-04 Tue 19:55]
 *** TODO reduce permutation space beyond first atom
