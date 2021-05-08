@@ -817,11 +817,11 @@ fn test_inputs_with_permutation(
         }
     }
 
-    // try assigning variables from 2-way backwards predicates so that they can be used in side
+    // try assigning variables from backwards predicates so that they can be used in side
     // predicates, ignoring failures because we will check again later.
     for input in inputs
         .iter()
-        .filter(|input| is_twoway_backwards_pred(input))
+        .filter(|input| is_twoway_backwards_pred(input) || is_oneway_backwards_pred(input))
     {
         match_backwards_variables(input, state, variables_matched);
     }

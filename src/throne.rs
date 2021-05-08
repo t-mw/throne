@@ -1804,17 +1804,18 @@ mod tests {
 
         let rule = rule_new(
             vec![
-                tokenize("^test A", &mut string_cache),
+                tokenize("^test B", &mut string_cache),
                 tokenize("+ 2 3 A", &mut string_cache),
+                tokenize("% A 4 B", &mut string_cache),
             ],
-            vec![tokenize("A", &mut string_cache)],
+            vec![tokenize("B", &mut string_cache)],
         );
         let mut state = State::new();
 
         let result = rule_matches_state(&rule, &mut state, &mut |p: &Phrase| {
             assert_eq!(
                 p.get(1).and_then(|t| StringCache::atom_to_number(t.atom)),
-                Some(5)
+                Some(1)
             );
             Some(vec![])
         })
@@ -1823,7 +1824,7 @@ mod tests {
         assert!(result.is_some());
         assert_eq!(
             result.unwrap(),
-            rule_new(vec![], vec![tokenize("5", &mut string_cache)])
+            rule_new(vec![], vec![tokenize("1", &mut string_cache)])
         );
     }
 
