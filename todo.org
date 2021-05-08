@@ -1,10 +1,18 @@
 *** TODO support custom backwards predicate (<<) under stage label
 *** TODO decide on consistent syntax for arguments e.g. keywords?
 *** TODO arbitrary math expressions e.g. 'expr 2 + A / 3 + 1.5 = B'
-*** TODO option to only process a variable once per stage
 *** TODO lispy key properties to enable pattern matching
 *** TODO syntax to match rule only once per update / permanently. or even make matching once per update the default.
   - option to scope permanence by a variable
+  - #stage: { input 3= output } evaluates max 3 times within stage, becomes:
+    #stage: {
+        // must be structured to keep behavior of random rule selection
+        !tmp-counter-123 _ . input = output . tmp-counter-123 2
+        tmp-counter-123 N . > N 0 . - N 1 N' . input = output . tmp-counter-123 N'
+        () = #tmp-cleanup
+    }
+    #tmp-cleanup: { tmp-counter-123 _ = () }
+  - could also allow integer variables to be used instead of constant e.g. #stage: { $count N . input N= output }
 *** TODO make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
 *** TODO replace !== backwards predicate with ability to use '!' anywhere in a phrase
 *** TODO ability to arbitrarily nest 'stage' scopes
