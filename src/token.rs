@@ -131,9 +131,9 @@ impl Token {
         }
     }
 
-    pub fn new_number(n: i32, open_depth: u8, close_depth: u8) -> Token {
+    pub fn new_integer(n: i32, open_depth: u8, close_depth: u8) -> Token {
         Token {
-            atom: StringCache::number_to_atom(n),
+            atom: StringCache::integer_to_atom(n),
             flag: TokenFlag::None,
             is_negated: false,
             is_consuming: true,
@@ -146,14 +146,14 @@ impl Token {
         string_cache.atom_to_str(self.atom)
     }
 
-    pub fn as_number(&self) -> Option<i32> {
-        StringCache::atom_to_number(self.atom)
+    pub fn as_integer(&self) -> Option<i32> {
+        StringCache::atom_to_integer(self.atom)
     }
 
     pub fn to_string(&self, string_cache: &StringCache) -> String {
         self.as_str(string_cache)
             .map(|s| s.to_string())
-            .or_else(|| self.as_number().map(|n| n.to_string()))
+            .or_else(|| self.as_integer().map(|n| n.to_string()))
             .expect("to_string")
     }
 }
@@ -403,7 +403,7 @@ pub fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
                 string += s;
             }
         } else {
-            string += &t.as_number().expect("number").to_string();
+            string += &t.as_integer().expect("integer").to_string();
         }
 
         tokens.push(format!(

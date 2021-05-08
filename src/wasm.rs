@@ -140,7 +140,7 @@ impl Context {
                                 if let Some(s) = item.as_string() {
                                     out.push(Token::new(&s, 0, 0, string_cache));
                                 } else if let Some(n) = item.as_f64() {
-                                    out.push(Token::new_number(n as i32, 0, 0));
+                                    out.push(Token::new_integer(n as i32, 0, 0));
                                 } else {
                                     return None;
                                 }
@@ -217,7 +217,7 @@ fn js_value_from_phrase(phrase: &Phrase, string_cache: &StringCache) -> JsValue 
 fn js_value_from_atom(atom: Atom, string_cache: &StringCache) -> JsValue {
     if let Some(string) = string_cache.atom_to_str(atom) {
         JsValue::from(string)
-    } else if let Some(n) = StringCache::atom_to_number(atom) {
+    } else if let Some(n) = StringCache::atom_to_integer(atom) {
         JsValue::from(n)
     } else {
         JsValue::null()

@@ -117,7 +117,7 @@ impl Context {
             let new_phrase = phrase
                 .iter()
                 .map(|t| {
-                    if StringCache::atom_to_number(t.atom).is_some() {
+                    if StringCache::atom_to_integer(t.atom).is_some() {
                         t.clone()
                     } else {
                         let string = other
@@ -149,8 +149,8 @@ impl Context {
         self.string_cache.atom_to_str(atom)
     }
 
-    pub fn atom_to_number(&self, atom: Atom) -> Option<i32> {
-        StringCache::atom_to_number(atom)
+    pub fn atom_to_integer(&self, atom: Atom) -> Option<i32> {
+        StringCache::atom_to_integer(atom)
     }
 
     pub fn with_test_rng(mut self) -> Context {
@@ -1814,7 +1814,7 @@ mod tests {
 
         let result = rule_matches_state(&rule, &mut state, &mut |p: &Phrase| {
             assert_eq!(
-                p.get(1).and_then(|t| StringCache::atom_to_number(t.atom)),
+                p.get(1).and_then(|t| StringCache::atom_to_integer(t.atom)),
                 Some(1)
             );
             Some(vec![])
@@ -2337,15 +2337,15 @@ mod tests {
 
         assert_eq!(
             phrase.get_group(0),
-            Some(vec![Token::new_number(1, 1, 0)].as_slice())
+            Some(vec![Token::new_integer(1, 1, 0)].as_slice())
         );
         assert_eq!(
             phrase.get_group(1),
-            Some(vec![Token::new_number(2, 0, 0)].as_slice())
+            Some(vec![Token::new_integer(2, 0, 0)].as_slice())
         );
         assert_eq!(
             phrase.get_group(2),
-            Some(vec![Token::new_number(3, 0, 1)].as_slice())
+            Some(vec![Token::new_integer(3, 0, 1)].as_slice())
         );
     }
 
@@ -2358,9 +2358,9 @@ mod tests {
             phrase.get_group(0),
             Some(
                 vec![
-                    Token::new_number(1, 3, 0),
-                    Token::new_number(2, 0, 1),
-                    Token::new_number(3, 0, 1)
+                    Token::new_integer(1, 3, 0),
+                    Token::new_integer(2, 0, 1),
+                    Token::new_integer(3, 0, 1)
                 ]
                 .as_slice()
             )
@@ -2370,9 +2370,9 @@ mod tests {
             phrase.get_group(1),
             Some(
                 vec![
-                    Token::new_number(4, 1, 0),
-                    Token::new_number(5, 1, 0),
-                    Token::new_number(6, 0, 2)
+                    Token::new_integer(4, 1, 0),
+                    Token::new_integer(5, 1, 0),
+                    Token::new_integer(6, 0, 2)
                 ]
                 .as_slice()
             )

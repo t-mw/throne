@@ -5,7 +5,7 @@ use std::i32;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Atom {
-    is_number: bool,
+    is_integer: bool,
     v: u32,
 }
 
@@ -25,7 +25,7 @@ impl StringCache {
         use std::str::FromStr;
 
         if let Some(n) = i32::from_str(text).ok() {
-            return StringCache::number_to_atom(n);
+            return StringCache::integer_to_atom(n);
         }
 
         if let Some(atom) = self.str_to_existing_atom(text) {
@@ -34,7 +34,7 @@ impl StringCache {
 
         let idx = self.atom_to_str.len().try_into().unwrap();
         let atom = Atom {
-            is_number: false,
+            is_integer: false,
             v: idx,
         };
 
@@ -48,23 +48,23 @@ impl StringCache {
         self.str_to_atom.get(text).cloned()
     }
 
-    pub fn number_to_atom(n: i32) -> Atom {
+    pub fn integer_to_atom(n: i32) -> Atom {
         Atom {
-            is_number: true,
+            is_integer: true,
             v: n as u32,
         }
     }
 
     pub fn atom_to_str(&self, atom: Atom) -> Option<&str> {
-        if atom.is_number {
+        if atom.is_integer {
             None
         } else {
             Some(&self.atom_to_str[atom.v as usize])
         }
     }
 
-    pub fn atom_to_number(atom: Atom) -> Option<i32> {
-        if atom.is_number {
+    pub fn atom_to_integer(atom: Atom) -> Option<i32> {
+        if atom.is_integer {
             Some(atom.v as i32)
         } else {
             None

@@ -104,8 +104,8 @@ mod example {
 
                 match (
                     p.get(0).and_then(|t| t.as_str(&context.string_cache)),
-                    p.get(2).and_then(|t| t.as_number()),
-                    p.get(3).and_then(|t| t.as_number()),
+                    p.get(2).and_then(|t| t.as_integer()),
+                    p.get(3).and_then(|t| t.as_integer()),
                 ) {
                     (Some("block-falling"), Some(x), Some(y))
                     | (Some("block-set"), Some(x), Some(y)) => {
