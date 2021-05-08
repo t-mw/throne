@@ -54,6 +54,8 @@
     - currently backwards predicates are evaluated left to right in two passes, so > 2 backwards predicates in the wrong order will fail matching e.g. + C 3 D . % B 2 C . + A 1 B = ...
     - backwards predicates need to be evaluated in order based on variable dependencies.
     - could extend ordering based on dependencies to matching in general, including side predicates and normal state matches, to reduce permutations.
+*** TODO try https://twitter.com/tomaka17/status/1391052081272967170
+    - "you might be able to save a lot of hashmap lookups if you replace a `HashMap<K, V>` with a `HashMap<K, usize>` and a `Slab<V>`. This might be very useful if K is something heavy such as a `String`"
 *** DONE support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
     CLOSED: [2021-04-30 Fri 11:16]
 *** DONE replace #foo -> stage foo, because # does not have special effects like other symbols
