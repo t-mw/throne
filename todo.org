@@ -25,7 +25,9 @@
     - could we compile each rule down to a specialized routine with a stack for variable matches to replace test_inputs_with_permutation
     - bin each phrase by (atom, atom position) and variable name to speed up matching
 *** TODO add syntax for matching on const lists i.e. (FOO | BAR) matched against (a b c): FOO = a, BAR = (b c)
-*** TODO syntax for scheduling some output of a rule to be deleted at the end of the update
+*** DONE syntax for scheduling some output of a rule to be deleted at the end of the update
+    CLOSED: [2021-05-08 Sat 03:24]
+    - left up to embedder.
 *** TODO ink -> throne converter
 *** TODO syntax for inserting the result of an input match directly into output
   - e.g.   foo FOO = `foo capitalized is` (^capitalize FOO <OUT)
