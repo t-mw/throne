@@ -525,7 +525,7 @@ where
             if is_side_pred(v) {
                 let pred = assign_state_vars(v, state, &variables_matched);
 
-                evaluate_side_pred(&pred, side_input);
+                side_input(&pred);
             } else {
                 outputs_concrete.push(assign_state_vars(v, state, &variables_matched));
             }
@@ -888,7 +888,7 @@ where
 {
     let pred = assign_state_vars(pred, state, existing_matches_and_result);
 
-    if let Some(eval_result) = evaluate_side_pred(&pred, side_input) {
+    if let Some(eval_result) = side_input(&pred) {
         if eval_result.len() == 0 {
             return true;
         }
@@ -1076,13 +1076,6 @@ pub fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Vec<Token>> {
         }
         _ => unreachable!("{:?}", tokens[0].flag),
     }
-}
-
-fn evaluate_side_pred<F>(tokens: &Phrase, side_input: &mut F) -> Option<Vec<Token>>
-where
-    F: SideInput,
-{
-    side_input(tokens)
 }
 
 #[inline]
