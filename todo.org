@@ -49,6 +49,10 @@
     CLOSED: [2021-05-04 Tue 19:55]
 *** TODO reduce permutation space beyond first atom
     - a X . a X = ... or a X . b X = ... with a (0..N) and b (0..N) triggers an O(N^2) search on each update.
+*** TODO support backwards predicates in any order
+    - currently backwards predicates are evaluated left to right in two passes, so > 2 backwards predicates in the wrong order will fail matching e.g. + C 3 D . % B 2 C . + A 1 B = ...
+    - backwards predicates need to be evaluated in order based on variable dependencies.
+    - could extend ordering based on dependencies to matching in general, including side predicates and normal state matches, to reduce permutations.
 *** DONE detect infinite loops
     CLOSED: [2021-05-03 Mon 13:17]
 *** DONE selectively disable warnings
