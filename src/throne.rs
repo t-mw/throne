@@ -13,15 +13,6 @@ use rand::{self, rngs::SmallRng, thread_rng, SeedableRng};
 use std::fmt;
 use std::vec::Vec;
 
-#[allow(unused_macros)]
-macro_rules! dump {
-    ($($a:expr),*) => ({
-        let mut txt = format!("{}:{}:", file!(), line!());
-        $({txt += &format!("\t{}={:?};", stringify!($a), $a)});*;
-        println!("DEBUG: {}", txt);
-    })
-}
-
 #[derive(Clone)]
 pub struct Context {
     pub core: Core,
