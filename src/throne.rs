@@ -501,6 +501,8 @@ fn test_rng() -> SmallRng {
 mod tests {
     use super::*;
     use crate::rule::LineColSpan;
+
+    #[cfg(not(target_arch = "wasm32"))]
     use pretty_assertions::{assert_eq, assert_ne};
 
     fn rule_new(inputs: Vec<Vec<Token>>, outputs: Vec<Vec<Token>>) -> Rule {
