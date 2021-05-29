@@ -596,6 +596,8 @@ fn gather_potential_input_state_matches(
     inputs: &Vec<Vec<Token>>,
     state: &State,
 ) -> Option<InputStateMatches> {
+    // only matches that have a structure that is compatible with the input should be returned from
+    // this method, i.e. only variable assignments are preventing the exact matches from being known.
     let mut potential_matches = vec![]; // inputs that could not be inexpensively matched to a single state
     let mut multiple_matches = vec![]; // inputs that may yet be inexpensively matched to a single state
     let mut single_matches = vec![]; // inputs that have been matched to a single state
