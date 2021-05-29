@@ -86,7 +86,7 @@ impl Context {
             state.push(phrase);
         }
 
-        state.update_first_atoms();
+        state.update_cache();
         let qui_atom = string_cache.str_to_atom(parser::QUI);
 
         Ok(Context {
@@ -125,7 +125,7 @@ impl Context {
             self.core.state.push(new_phrase);
         }
 
-        self.core.state.update_first_atoms();
+        self.core.state.update_cache();
     }
 
     pub fn str_to_atom(&mut self, text: &str) -> Atom {
@@ -1421,6 +1421,14 @@ mod tests {
                 ],
                 true,
             ),
+            (
+                rule_new(
+                    vec![tokenize("(nested-first X) Y", &mut string_cache)],
+                    vec![tokenize("X Y", &mut string_cache)],
+                ),
+                vec![tokenize("a b", &mut string_cache)],
+                false,
+            ),
         ];
 
         for (rule, state, expected) in test_cases.drain(..) {
@@ -2036,7 +2044,7 @@ mod tests {
             assert_eq!(
                 actual,
                 expected,
-                "tokens = {}, actual = {}, expected = {}",
+                "\ntokens = {}\nactual = {}\nexpected = {}",
                 tokens.to_string(&string_cache),
                 actual.to_string(&string_cache),
                 expected.to_string(&string_cache),
@@ -2185,7 +2193,7 @@ mod tests {
             assert_eq!(
                 actual,
                 expected,
-                "input = {}, pred = {}",
+                "\ninput = {}\npred = {}",
                 input_tokens.to_string(&string_cache),
                 pred_tokens.to_string(&string_cache)
             );

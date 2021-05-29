@@ -1,6 +1,8 @@
+use crate::string_cache::*;
+
 use regex::Regex;
 
-use crate::string_cache::*;
+use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TokenFlag {
@@ -155,6 +157,15 @@ impl Token {
             .map(|s| s.to_string())
             .or_else(|| self.as_integer().map(|n| n.to_string()))
             .expect("to_string")
+    }
+
+    pub(crate) fn hash_for_matching<H: Hasher>(&self, state: &mut H) {
+        self.atom.hash(state);
+        self.is_negated.hash(state);
+        // exclude 'is_consuming', because it should not affect matching
+        self.flag.hash(state);
+        self.open_depth.hash(state);
+        self.close_depth.hash(state);
     }
 }
 
@@ -350,21 +361,8 @@ pub fn is_var_token(token: &Token) -> bool {
     token.flag == TokenFlag::Variable
 }
 
-pub fn is_twoway_backwards_pred(tokens: &Phrase) -> bool {
-    match tokens[0].flag {
-        TokenFlag::BackwardsPred(BackwardsPred::Plus)
-        | TokenFlag::BackwardsPred(BackwardsPred::Minus) => true,
-        _ => false,
-    }
-}
-
-pub fn is_oneway_backwards_pred(tokens: &Phrase) -> bool {
-    match tokens[0].flag {
-        TokenFlag::BackwardsPred(BackwardsPred::Plus)
-        | TokenFlag::BackwardsPred(BackwardsPred::Minus) => false,
-        TokenFlag::BackwardsPred(_) => true,
-        _ => false,
-    }
+pub fn is_backwards_pred(tokens: &Phrase) -> bool {
+    matches!(tokens[0].flag, TokenFlag::BackwardsPred(_))
 }
 
 pub fn is_side_pred(tokens: &Phrase) -> bool {
@@ -379,7 +377,7 @@ pub fn is_concrete_pred(tokens: &Phrase) -> bool {
     !is_negated_pred(tokens) && is_concrete_token(&tokens[0])
 }
 
-pub fn is_var_pred(tokens: &Vec<Token>) -> bool {
+pub fn is_var_pred(tokens: &Phrase) -> bool {
     !is_negated_pred(tokens) && is_var_token(&tokens[0])
 }
 

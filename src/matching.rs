@@ -314,7 +314,7 @@ pub fn match_state_variables_assuming_compatible_structure(
 ) -> bool {
     let pred_tokens = &state[state_i];
 
-    assert!(test_match_without_variables(input_tokens, pred_tokens).is_some());
+    debug_assert!(test_match_without_variables(input_tokens, pred_tokens).is_some());
 
     let existing_matches_len = existing_matches_and_result.len();
 
@@ -635,71 +635,7 @@ fn gather_potential_input_state_matches(
     let mut single_matches = vec![]; // inputs that have been matched to a single state
 
     for (i_i, input) in inputs.iter().enumerate() {
-        // TODO: exit early if we already know that side predicate or negated predicates won't match
-        if is_concrete_pred(input) {
-            let rule_first_atoms = extract_first_atoms_rule_input(input);
-
-            let start_idx = if let Some(first) = rule_first_atoms {
-                if let Ok(idx) = state
-                    .first_atoms
-                    .binary_search_by(|probe| probe.1.cmp(&first))
-                {
-                    // binary search won't always find the first match,
-                    // so search backwards until we find it
-                    state
-                        .first_atoms
-                        .iter()
-                        .enumerate()
-                        .rev()
-                        .skip(state.first_atoms.len() - 1 - idx)
-                        .take_while(|(_, a)| a.1 == first)
-                        .last()
-                        .expect("start_idx")
-                        .0
-                } else {
-                    return None;
-                }
-            } else {
-                0
-            };
-
-            let mut has_var = false;
-            let mut states = vec![];
-
-            state
-                .first_atoms
-                .iter()
-                .skip(start_idx)
-                .take_while(|a| rule_first_atoms.is_none() || a.1 == rule_first_atoms.unwrap())
-                .for_each(|(s_i, _)| {
-                    if let Some(match_has_var) = test_match_without_variables(input, &state[*s_i]) {
-                        // TODO: calculate has_var outside of loop since it only depends on input
-                        if match_has_var {
-                            has_var = true;
-                        }
-
-                        states.push(*s_i);
-                    }
-                });
-
-            if states.len() == 0 {
-                return None;
-            }
-
-            if states.len() == 1 {
-                single_matches.push(InputStateMatch {
-                    i_i,
-                    has_var,
-                    states,
-                });
-            } else {
-                multiple_matches.push(InputStateMatch {
-                    i_i,
-                    has_var,
-                    states,
-                });
-            }
-        } else if input.len() == 1 && is_var_pred(input) {
+        if input.len() == 1 && is_var_pred(input) {
             // treat input with a single variable as a special case that can match any state
             let states = state.iter().enumerate().map(|(i, _)| i).collect::<Vec<_>>();
             potential_matches.push(InputStateMatch {
@@ -707,34 +643,36 @@ fn gather_potential_input_state_matches(
                 has_var: true,
                 states,
             });
-        } else if is_var_pred(input) {
-            let mut states = vec![];
-            state.iter().enumerate().for_each(|(s_i, phrase_id)| {
-                if let Some(match_has_var) =
-                    test_match_without_variables(input, state.get(phrase_id))
-                {
-                    debug_assert!(match_has_var);
-                    states.push(s_i);
-                }
-            });
+            continue;
+        }
 
-            if states.len() == 0 {
-                return None;
+        if !is_concrete_pred(input) && !is_var_pred(input) {
+            continue;
+        }
+
+        let cached_state_matches = state.match_cached_state_indices_for_rule_input(input)?;
+
+        let has_var = input.iter().any(&is_var_token);
+        let mut states = vec![];
+        for s_i in cached_state_matches {
+            if let Some(match_has_var) = test_match_without_variables(input, &state[s_i]) {
+                debug_assert_eq!(match_has_var, has_var);
+                states.push(s_i);
             }
+        }
 
-            if states.len() == 1 {
-                single_matches.push(InputStateMatch {
-                    i_i,
-                    has_var: true,
-                    states,
-                });
-            } else {
-                multiple_matches.push(InputStateMatch {
-                    i_i,
-                    has_var: true,
-                    states,
-                });
-            };
+        if states.len() == 1 {
+            single_matches.push(InputStateMatch {
+                i_i,
+                has_var,
+                states,
+            });
+        } else {
+            multiple_matches.push(InputStateMatch {
+                i_i,
+                has_var,
+                states,
+            });
         }
     }
 
@@ -812,14 +750,6 @@ fn gather_potential_input_state_matches(
     })
 }
 
-fn extract_first_atoms_rule_input(phrase: &Phrase) -> Option<Atom> {
-    if is_concrete_pred(phrase) {
-        phrase.get(0).filter(|t| !is_var_token(t)).map(|t| t.atom)
-    } else {
-        None
-    }
-}
-
 fn test_inputs_with_permutation(
     p_i: usize,
     inputs: &Vec<Vec<Token>>,
@@ -853,10 +783,7 @@ fn test_inputs_with_permutation(
 
     // try assigning variables from backwards predicates so that they can be used in side
     // predicates, ignoring failures because we will check again later.
-    for input in inputs
-        .iter()
-        .filter(|input| is_twoway_backwards_pred(input) || is_oneway_backwards_pred(input))
-    {
+    for input in inputs.iter().filter(|input| is_backwards_pred(input)) {
         match_backwards_variables(input, state, variables_matched);
     }
 
@@ -867,10 +794,7 @@ fn test_inputs_with_permutation(
     }
 
     // check all backwards predicates in order, aborting if matching fails.
-    for input in inputs
-        .iter()
-        .filter(|input| is_twoway_backwards_pred(input) || is_oneway_backwards_pred(input))
-    {
+    for input in inputs.iter().filter(|input| is_backwards_pred(input)) {
         if !match_backwards_variables(input, state, variables_matched) {
             return false;
         }

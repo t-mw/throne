@@ -105,7 +105,7 @@ where
             state.push(vec![Token::new_atom(core.qui_atom, 1, 1)]);
         }
 
-        state.update_first_atoms();
+        state.update_cache();
 
         for i in 0..rules.len() {
             let rule = &rules[(start_rule_idx + i) % rules.len()];
