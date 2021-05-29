@@ -1057,12 +1057,10 @@ pub fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Vec<Token>> {
             }
         }
         TokenFlag::BackwardsPred(BackwardsPred::Equal) => {
-            if phrase_equal(
-                tokens.get_group(1).expect("== : first argument missing"),
-                tokens.get_group(2).expect("== : second argument missing"),
-                (0, 0),
-                (0, 1),
-            ) {
+            let mut args = tokens.groups().skip(1);
+            let arg1 = args.next().expect("== : first argument missing");
+            let arg2 = args.next().expect("== : second argument missing");
+            if phrase_equal(arg1, arg2, (0, 0), (0, 1)) {
                 if tokens[0].is_negated {
                     None
                 } else {

@@ -2324,51 +2324,72 @@ mod tests {
     }
 
     #[test]
-    fn phrase_get_group_simple_test() {
+    fn phrase_groups_simple_test() {
         let mut string_cache = StringCache::new();
         let phrase = tokenize("1 2 3", &mut string_cache);
 
         assert_eq!(
-            phrase.get_group(0),
-            Some(vec![Token::new_integer(1, 1, 0)].as_slice())
-        );
-        assert_eq!(
-            phrase.get_group(1),
-            Some(vec![Token::new_integer(2, 0, 0)].as_slice())
-        );
-        assert_eq!(
-            phrase.get_group(2),
-            Some(vec![Token::new_integer(3, 0, 1)].as_slice())
+            phrase.groups().collect::<Vec<_>>(),
+            vec![
+                &[Token::new_integer(1, 1, 0)],
+                &[Token::new_integer(2, 0, 0)],
+                &[Token::new_integer(3, 0, 1)]
+            ]
         );
     }
 
     #[test]
-    fn phrase_get_group_compound_test() {
+    fn phrase_groups_compound_test() {
         let mut string_cache = StringCache::new();
         let phrase = tokenize("((1 2) 3) (4 (5 6)", &mut string_cache);
 
         assert_eq!(
-            phrase.get_group(0),
-            Some(
-                vec![
+            phrase.groups().collect::<Vec<_>>(),
+            vec![
+                &[
                     Token::new_integer(1, 3, 0),
                     Token::new_integer(2, 0, 1),
                     Token::new_integer(3, 0, 1)
-                ]
-                .as_slice()
-            )
-        );
-
-        assert_eq!(
-            phrase.get_group(1),
-            Some(
-                vec![
+                ],
+                &[
                     Token::new_integer(4, 1, 0),
                     Token::new_integer(5, 1, 0),
                     Token::new_integer(6, 0, 2)
                 ]
-                .as_slice()
-            )
+            ]
+        );
+
+        assert_eq!(
+            phrase.groups_at_depth(2).collect::<Vec<_>>(),
+            vec![
+                &[Token::new_integer(1, 3, 0), Token::new_integer(2, 0, 1)][..],
+                &[Token::new_integer(3, 0, 1)][..],
+                &[Token::new_integer(4, 1, 0)][..],
+                &[Token::new_integer(5, 1, 0), Token::new_integer(6, 0, 2)][..]
+            ]
+        );
+
+        assert_eq!(
+            phrase.groups_at_depth(3).collect::<Vec<_>>(),
+            vec![
+                &[Token::new_integer(1, 3, 0)],
+                &[Token::new_integer(2, 0, 1)],
+                &[Token::new_integer(5, 1, 0)],
+                &[Token::new_integer(6, 0, 2)]
+            ]
+        );
+
+        assert_eq!(
+            phrase
+                .groups()
+                .nth(0)
+                .unwrap()
+                .groups_at_depth(2)
+                .collect::<Vec<_>>(),
+            vec![
+                &[Token::new_integer(1, 3, 0), Token::new_integer(2, 0, 1)][..],
+                &[Token::new_integer(3, 0, 1)][..],
+            ]
         );
     }
 

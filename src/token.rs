@@ -250,37 +250,24 @@ pub type Phrase = [Token];
 pub type VecPhrase = Vec<Token>;
 
 pub trait PhraseGroup {
-    fn get_group(&self, n: usize) -> Option<&[Token]>;
+    fn groups(&self) -> PhraseGroupIterator<'_>;
+    fn groups_at_depth(&self, depth: u8) -> PhraseGroupIterator<'_>;
     fn normalize(&self) -> Vec<Token>;
 }
 
 impl PhraseGroup for Phrase {
-    fn get_group(&self, n: usize) -> Option<&[Token]> {
-        let mut current_group = 0;
-        let mut depth = 0;
+    fn groups(&self) -> PhraseGroupIterator<'_> {
+        self.groups_at_depth(1)
+    }
 
-        let mut start = None;
-
-        for (i, t) in self.iter().enumerate() {
-            let depth_before = depth;
-
-            depth += t.open_depth;
-            depth -= t.close_depth;
-
-            if depth_before <= 1 {
-                start = Some(i);
-            }
-
-            if depth <= 1 {
-                if current_group == n {
-                    return Some(&self[start.unwrap()..i + 1]);
-                }
-
-                current_group += 1;
-            }
+    fn groups_at_depth(&self, depth: u8) -> PhraseGroupIterator<'_> {
+        PhraseGroupIterator {
+            phrase: self,
+            at_depth: depth,
+            idx: 0,
+            start_idx: None,
+            depth: 0,
         }
-
-        None
     }
 
     fn normalize(&self) -> Vec<Token> {
@@ -310,6 +297,36 @@ impl PhraseGroup for Phrase {
         vec[len - 1].close_depth = 1 + (interior_depth - min_interior_depth) as u8;
 
         return vec;
+    }
+}
+
+pub struct PhraseGroupIterator<'a> {
+    phrase: &'a Phrase,
+    at_depth: u8,
+    idx: usize,
+    start_idx: Option<usize>,
+    depth: u8,
+}
+
+impl<'a> Iterator for PhraseGroupIterator<'a> {
+    type Item = &'a Phrase;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for (i, t) in self.phrase.iter().enumerate().skip(self.idx) {
+            self.depth += t.open_depth;
+            if self.start_idx.is_none() && self.depth >= self.at_depth {
+                self.start_idx = Some(i);
+            }
+            self.depth -= t.close_depth;
+            if self.depth <= self.at_depth {
+                if let Some(start_idx) = self.start_idx.take() {
+                    self.idx = i + 1;
+                    return Some(&self.phrase[start_idx..i + 1]);
+                }
+            }
+        }
+
+        None
     }
 }
 

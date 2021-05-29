@@ -198,17 +198,12 @@ impl Context {
 
 fn js_value_from_phrase(phrase: &Phrase, string_cache: &StringCache) -> JsValue {
     let mut result = vec![];
-    let mut group_n = 0;
-
-    // NB: optimizable, because get_group finds all earlier groups on each call.
-    // could also remove call to normalize() in the process.
-    while let Some(group) = phrase.get_group(group_n) {
+    for group in phrase.groups() {
         if group.len() == 1 {
             result.push(js_value_from_atom(group[0].atom, string_cache));
         } else {
             result.push(js_value_from_phrase(&group.normalize(), string_cache));
         }
-        group_n += 1;
     }
 
     JsValue::from(result.iter().collect::<js_sys::Array>())
