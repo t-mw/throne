@@ -102,7 +102,7 @@ where
         let mut matching_rule = None;
 
         if quiescence {
-            state.push(vec![Token::new_atom(core.qui_atom, 0, 0)]);
+            state.push(vec![Token::new_atom(core.qui_atom, 1, 1)]);
         }
 
         state.update_first_atoms();

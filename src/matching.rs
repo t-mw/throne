@@ -918,6 +918,12 @@ pub fn assign_state_vars(tokens: &Phrase, state: &State, matches: &[MatchLite]) 
         result.push(token.clone());
     }
 
+    // adjust depths for phrases with a single variable that matched a whole state phrase
+    if result.len() == 1 {
+        result[0].open_depth = 1;
+        result[0].close_depth = 1;
+    }
+
     result
 }
 
@@ -933,6 +939,12 @@ pub fn assign_vars(tokens: &Phrase, matches: &[Match]) -> Vec<Token> {
         }
 
         result.push(token.clone());
+    }
+
+    // adjust depths for phrases with a single variable that matched a whole state phrase
+    if result.len() == 1 {
+        result[0].open_depth = 1;
+        result[0].close_depth = 1;
     }
 
     result

@@ -1513,8 +1513,8 @@ mod tests {
                     vec![],
                 ),
                 vec![
-                    tokenize("has bar", &mut string_cache),
-                    tokenize("bar", &mut string_cache),
+                    tokenize("has (a b)", &mut string_cache),
+                    tokenize("a b", &mut string_cache),
                 ],
                 false,
             ),
@@ -1672,6 +1672,32 @@ mod tests {
                     vec![
                         tokenize("bar 1", &mut string_cache),
                         tokenize("1", &mut string_cache),
+                    ],
+                ),
+            ),
+            (
+                rule_new(
+                    vec![
+                        tokenize("foo RESULT", &mut string_cache),
+                        tokenize("RESULT", &mut string_cache),
+                    ],
+                    vec![
+                        tokenize("bar RESULT", &mut string_cache),
+                        tokenize("RESULT", &mut string_cache),
+                    ],
+                ),
+                vec![
+                    tokenize("foo (a (b c))", &mut string_cache),
+                    tokenize("a (b c)", &mut string_cache),
+                ],
+                rule_new(
+                    vec![
+                        tokenize("foo (a (b c))", &mut string_cache),
+                        tokenize("a (b c)", &mut string_cache),
+                    ],
+                    vec![
+                        tokenize("bar (a (b c))", &mut string_cache),
+                        tokenize("a (b c)", &mut string_cache),
                     ],
                 ),
             ),
@@ -1989,11 +2015,11 @@ mod tests {
                 Some(vec![
                     (
                         string_cache.str_to_atom("T2"),
-                        tokenize("t2", &mut string_cache),
+                        vec![Token::new("t2", 0, 0, &mut string_cache)],
                     ),
                     (
                         string_cache.str_to_atom("T3"),
-                        tokenize("t3", &mut string_cache),
+                        vec![Token::new("t3", 0, 0, &mut string_cache)],
                     ),
                 ]),
             ),
@@ -2015,7 +2041,7 @@ mod tests {
                     ),
                     (
                         string_cache.str_to_atom("T3"),
-                        tokenize("t3", &mut string_cache),
+                        vec![Token::new("t3", 0, 0, &mut string_cache)],
                     ),
                 ]),
             ),
@@ -2025,7 +2051,7 @@ mod tests {
                 Some(vec![
                     (
                         string_cache.str_to_atom("T2"),
-                        tokenize("t2", &mut string_cache),
+                        vec![Token::new("t2", 0, 0, &mut string_cache)],
                     ),
                     (
                         string_cache.str_to_atom("T3"),
@@ -2109,7 +2135,7 @@ mod tests {
                 tokenize("t1 t3 t3", &mut string_cache),
                 Some(vec![(
                     string_cache.str_to_atom("T3"),
-                    tokenize("t3", &mut string_cache),
+                    vec![Token::new("t3", 0, 0, &mut string_cache)],
                 )]),
             ),
         ];
@@ -2188,12 +2214,12 @@ mod tests {
 
         assert_eq!(
             tokenize("t1", &mut string_cache),
-            [Token::new("t1", 0, 0, &mut string_cache)]
+            [Token::new("t1", 1, 1, &mut string_cache)]
         );
 
         assert_ne!(
             tokenize("?t1", &mut string_cache),
-            [Token::new("t1", 0, 0, &mut string_cache)]
+            [Token::new("t1", 1, 1, &mut string_cache)]
         );
 
         assert_eq!(
@@ -2214,7 +2240,7 @@ mod tests {
             [
                 Token::new("t1", 1, 0, &mut string_cache),
                 Token::new("t2", 0, 0, &mut string_cache),
-                Token::new("t3", 1, 0, &mut string_cache),
+                Token::new("t3", 3, 2, &mut string_cache),
                 Token::new("t4", 0, 2, &mut string_cache),
             ]
         );
@@ -2241,6 +2267,21 @@ mod tests {
     }
 
     #[test]
+    fn tokenize_var_test() {
+        let mut string_cache = StringCache::new();
+
+        assert_eq!(
+            tokenize("A", &mut string_cache),
+            [Token::new("A", 0, 0, &mut string_cache)]
+        );
+
+        assert_eq!(
+            tokenize("(A)", &mut string_cache),
+            [Token::new("A", 1, 1, &mut string_cache)]
+        );
+    }
+
+    #[test]
     fn tokenize_string_test() {
         let mut string_cache = StringCache::new();
 
@@ -2252,14 +2293,14 @@ mod tests {
                 flag: TokenFlag::None,
                 is_negated: false,
                 is_consuming: true,
-                open_depth: 0,
-                close_depth: 0,
+                open_depth: 1,
+                close_depth: 1,
             }]
         );
 
         assert_eq!(
             tokenize("\"string here\"", &mut string_cache),
-            [Token::new("string here", 0, 0, &mut string_cache),]
+            [Token::new("string here", 1, 1, &mut string_cache),]
         );
 
         assert_eq!(
@@ -2278,7 +2319,7 @@ mod tests {
             [
                 Token::new("t1", 1, 0, &mut string_cache),
                 Token::new("t2", 0, 0, &mut string_cache),
-                Token::new("string here", 1, 0, &mut string_cache),
+                Token::new("string here", 3, 2, &mut string_cache),
                 Token::new("final string", 0, 2, &mut string_cache),
             ]
         );
@@ -2303,7 +2344,7 @@ mod tests {
                 [
                     Token::new("t1", 1, 0, &mut string_cache),
                     Token::new("t2", 0, 0, &mut string_cache),
-                    Token::new("WILDCARD0", 1, 0, &mut string_cache),
+                    Token::new("WILDCARD0", 3, 2, &mut string_cache),
                     Token::new("WILDCARD1", 0, 2, &mut string_cache),
                 ]
             );
@@ -2335,6 +2376,17 @@ mod tests {
                 &[Token::new_integer(2, 0, 0)],
                 &[Token::new_integer(3, 0, 1)]
             ]
+        );
+    }
+
+    #[test]
+    fn phrase_groups_single_test() {
+        let mut string_cache = StringCache::new();
+        let phrase = tokenize("1", &mut string_cache);
+
+        assert_eq!(
+            phrase.groups().collect::<Vec<_>>(),
+            vec![&[Token::new_integer(1, 1, 1)],]
         );
     }
 
@@ -2446,7 +2498,10 @@ mod tests {
         let mut string_cache = StringCache::new();
 
         // test complicated match that caused integer overflow in the past
-        let input_tokens = tokenize("RESULT", &mut string_cache);
+        let mut input_tokens = tokenize("RESULT", &mut string_cache);
+        input_tokens[0].open_depth = 0;
+        input_tokens[0].close_depth = 0;
+
         let pred_tokens = tokenize("ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan \"to your team\")", &mut string_cache);
 
         let result = test_match_without_variables(&input_tokens, &pred_tokens);

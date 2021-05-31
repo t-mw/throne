@@ -159,42 +159,26 @@ impl Token {
 }
 
 pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
-    let mut string = format!("({})", string);
-
-    // remove instances of brackets surrounding single atoms
-    lazy_static! {
-        static ref RE1: Regex = Regex::new(r#"\(\s*(\S+|"[^"]+")\s*\)"#).unwrap();
-    }
-
-    loop {
-        let string1 = string.clone();
-        let string2 = RE1.replace_all(&string1, "$1");
-
-        if string1 == string2 {
-            break;
-        } else {
-            string = string2.into_owned();
-        }
-    }
+    let mut string = string.to_string();
 
     // create iterator for strings surrounded by backticks
     lazy_static! {
-        static ref RE2: Regex = Regex::new(r#""(.*?)""#).unwrap();
+        static ref RE1: Regex = Regex::new(r#""(.*?)""#).unwrap();
     }
 
     let string1 = string.clone();
-    let mut strings = RE2
+    let mut strings = RE1
         .captures_iter(&string1)
         .map(|c| c.get(1).expect("string_capture").as_str());
 
-    string = RE2.replace_all(&string, "\"").to_string();
+    string = RE1.replace_all(&string, "\"").to_string();
 
     // split into tokens
     lazy_static! {
-        static ref RE3: Regex = Regex::new(r"\(|\)|\s+|[^\(\)\s]+").unwrap();
+        static ref RE2: Regex = Regex::new(r"\(|\)|\s+|[^\(\)\s]+").unwrap();
     }
 
-    let tokens = RE3
+    let tokens = RE2
         .find_iter(&string)
         .map(|m| m.as_str())
         .filter(|s| !s.trim().is_empty())
@@ -241,6 +225,13 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
         }
         open_depth = 0;
         close_depth = 0;
+    }
+
+    // phrases should always contain tokens with a depth of 0. single variable phrases are an
+    // exception to this rule, because they should be able to match whole state phrases.
+    if !(result.len() == 1 && is_var_token(&result[0])) {
+        result.first_mut().unwrap().open_depth += 1;
+        result.last_mut().unwrap().close_depth += 1;
     }
 
     result
@@ -350,6 +341,10 @@ pub fn token_equal(
                     == b.close_depth as i32 - b_depth_diffs.1 as i32))
 }
 
+pub fn is_concrete_token(token: &Token) -> bool {
+    token.flag == TokenFlag::None
+}
+
 pub fn is_var_token(token: &Token) -> bool {
     token.flag == TokenFlag::Variable
 }
@@ -380,11 +375,11 @@ pub fn is_negated_pred(tokens: &Phrase) -> bool {
 }
 
 pub fn is_concrete_pred(tokens: &Phrase) -> bool {
-    !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::None
+    !is_negated_pred(tokens) && is_concrete_token(&tokens[0])
 }
 
 pub fn is_var_pred(tokens: &Vec<Token>) -> bool {
-    !is_negated_pred(tokens) && tokens[0].flag == TokenFlag::Variable
+    !is_negated_pred(tokens) && is_var_token(&tokens[0])
 }
 
 pub fn normalize_match_phrase(variable_token: &Token, mut match_phrase: Vec<Token>) -> Vec<Token> {

@@ -5,9 +5,9 @@ fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 2
 #tick . !shape _X _Y _BLOCKS = #new-shape
 #tick . $shape _X _Y _BLOCKS = #input-u
 
-#new-shape . $max-height H = new-shape 4 H ((block -1 0) ((block 0 0) ((block 1 0) ((block 0 1) (cons))))) . #shape-to-blocks (#input-lr)
-#new-shape . $max-height H = new-shape 4 H ((block 0 -1) ((block 0 0) ((block 0 1) (cons)))) . #shape-to-blocks (#input-lr)
-#new-shape . $max-height H = new-shape 4 H ((block 0 -1) ((block 0 0) ((block 0 1) ((block 1 1) (cons))))) . #shape-to-blocks (#input-lr)
+#new-shape . $max-height H = new-shape 4 H ((block -1 0) ((block 0 0) ((block 1 0) ((block 0 1) cons)))) . #shape-to-blocks #input-lr
+#new-shape . $max-height H = new-shape 4 H ((block 0 -1) ((block 0 0) ((block 0 1) cons))) . #shape-to-blocks #input-lr
+#new-shape . $max-height H = new-shape 4 H ((block 0 -1) ((block 0 0) ((block 0 1) ((block 1 1) cons)))) . #shape-to-blocks #input-lr
 
 #shape-to-blocks RETURN: {
   block-falling _ID _X _Y = ()
@@ -39,13 +39,13 @@ fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 2
 #input-u . () = #input-lr
 
 #rotate-shape: {
-  $shape X Y BLOCKS . !new-shape X Y _  = new-shape X Y BLOCKS . new-blocks (cons)
+  $shape X Y BLOCKS . !new-shape X Y _  = new-shape X Y BLOCKS . new-blocks cons
   new-shape X Y ((block DX DY) BLOCKS) . new-blocks BLOCKS2 . + DX2 DX 0 = new-shape X Y BLOCKS . new-blocks ((block DY DX2) BLOCKS2)
-  new-shape X Y _ . new-blocks BLOCKS . () = new-shape X Y BLOCKS . #shape-to-blocks (#input-d)
+  new-shape X Y _ . new-blocks BLOCKS . () = new-shape X Y BLOCKS . #shape-to-blocks #input-d
 }
 
-#input-lr . ^kp left . $shape X Y BLOCKS . + X' 1 X = new-shape X' Y BLOCKS . #shape-to-blocks (#input-d)
-#input-lr . ^kp right . $shape X Y BLOCKS . + X 1 X' = new-shape X' Y BLOCKS . #shape-to-blocks (#input-d)
+#input-lr . ^kp left . $shape X Y BLOCKS . + X' 1 X = new-shape X' Y BLOCKS . #shape-to-blocks #input-d
+#input-lr . ^kp right . $shape X Y BLOCKS . + X 1 X' = new-shape X' Y BLOCKS . #shape-to-blocks #input-d
 #input-lr . () = #input-d
 
 #input-d: {
@@ -88,7 +88,7 @@ fall-timer 25 . default-fall-timer 25 . block-id 0 . max-width 10 . max-height 2
 #fall-tick . fall-timer TIMER . >= TIMER 0 . $dt DT . + TIMER2 DT TIMER . >= TIMER2 0 = fall-timer TIMER2 . #clean
 #fall-tick . fall-timer TIMER . >= TIMER 0 . $dt DT . + TIMER2 DT TIMER . < TIMER2 0 . $default-fall-timer D = fall-timer D . #fall
 
-#fall . shape X Y BLOCKS . + Y' 1 Y = new-shape X Y' BLOCKS . #shape-to-blocks (#clean)
+#fall . shape X Y BLOCKS . + Y' 1 Y = new-shape X Y' BLOCKS . #shape-to-blocks #clean
 #fall . () = #clean
 
 #clean: {
