@@ -213,6 +213,7 @@ pub struct MatchLite {
     pub atom: Atom,
     pub state_i: usize,
     pub depths: (u8, u8),
+    pub normalized_depths: (u8, u8),
     pub range: (usize, usize),
 }
 
@@ -224,15 +225,32 @@ impl MatchLite {
     pub fn to_phrase(&self, state: &State) -> Vec<Token> {
         let mut phrase = self.as_slice(state).to_vec();
 
-        let len = phrase.len();
+        let subset_len = phrase.len();
+        let source_len = state[self.state_i].len();
 
-        if len == 1 {
-            phrase[0].open_depth = 0;
-            phrase[0].close_depth = 0;
-        } else {
-            phrase[0].open_depth -= self.depths.0;
-            phrase[len - 1].close_depth -= self.depths.1;
+        if subset_len < source_len {
+            // if the phrase subset overlaps with the beginning/end of the source phrase, remove the
+            // implicit open/close depth of the source phrase, since we are moving this subset into a
+            // new phrase.
+            if self.range.0 == 0 {
+                phrase[0].open_depth -= 1;
+            }
+            if self.range.1 == source_len {
+                phrase[subset_len - 1].close_depth -= 1;
+            }
         }
+
+        // use the variable open depth as the baseline for the new phrase subset
+        phrase[0].open_depth -= self.normalized_depths.0;
+
+        // calculate close depth required so that sum(open_depth - close_depth) == 0
+        let mut depth = 0;
+        for i in 0..subset_len - 1 {
+            depth += phrase[i].open_depth;
+            depth -= phrase[i].close_depth;
+        }
+        depth += phrase[subset_len - 1].open_depth;
+        phrase[subset_len - 1].close_depth = depth;
 
         phrase
     }
@@ -305,7 +323,7 @@ pub fn match_state_variables_assuming_compatible_structure(
     let mut input_depth = 0;
     let mut pred_depth = 0;
 
-    for token in input_tokens {
+    for (token_i, token) in input_tokens.iter().enumerate() {
         let pred_token = &pred_tokens[pred_token_i];
         pred_token_i += 1;
 
@@ -352,10 +370,24 @@ pub fn match_state_variables_assuming_compatible_structure(
             };
 
             if !variable_already_matched {
+                // remove the implicit open/close depth of the source phrase
+                let normalized_depths = (
+                    if token_i == 0 {
+                        token.open_depth - 1
+                    } else {
+                        token.open_depth
+                    },
+                    if token_i == input_tokens.len() - 1 {
+                        token.close_depth - 1
+                    } else {
+                        token.close_depth
+                    },
+                );
                 let m = MatchLite {
                     atom: token.atom,
                     state_i,
                     depths: (token.open_depth, token.close_depth),
+                    normalized_depths,
                     range: (start_i, end_i),
                 };
 
@@ -919,7 +951,7 @@ pub fn assign_state_vars(tokens: &Phrase, state: &State, matches: &[MatchLite]) 
     }
 
     // adjust depths for phrases with a single variable that matched a whole state phrase
-    if result.len() == 1 {
+    if result.len() == 1 && result[0].open_depth == 0 {
         result[0].open_depth = 1;
         result[0].close_depth = 1;
     }

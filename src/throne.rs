@@ -1192,6 +1192,33 @@ mod tests {
     }
 
     #[test]
+    fn update2_test() {
+        // check that the open/close depths for (bar*) are handled correctly for variable assignment
+        let mut context = Context::from_text(
+            "test\n\
+             test = foo1 (1) . foo2 ((2)) . foo3 (((3)))\n\
+             foo1 BAR = BAR\n\
+             foo2 (BAR) = BAR\n\
+             foo3 (BAR) = BAR",
+        )
+        .unwrap()
+        .with_test_rng();
+
+        context.print();
+        context.update(|_: &Phrase| None).unwrap();
+        context.print();
+
+        assert_eq!(
+            context.core.state.get_all(),
+            [
+                tokenize("2", &mut context.string_cache),
+                tokenize("1", &mut context.string_cache),
+                tokenize("(3)", &mut context.string_cache),
+            ]
+        );
+    }
+
+    #[test]
     fn token_test() {
         let mut string_cache = StringCache::new();
         assert!(!is_var_token(&Token::new("tt1", 1, 1, &mut string_cache)));
@@ -1952,12 +1979,14 @@ mod tests {
                         atom: string_cache.str_to_atom("T1"),
                         state_i: 0,
                         depths: (0, 0),
+                        normalized_depths: (0, 0),
                         range: (0, 1),
                     },
                     MatchLite {
                         atom: string_cache.str_to_atom("T2"),
                         state_i: 0,
                         depths: (0, 0),
+                        normalized_depths: (0, 0),
                         range: (1, 2),
                     },
                 ],
@@ -1973,13 +2002,15 @@ mod tests {
                     MatchLite {
                         atom: string_cache.str_to_atom("T1"),
                         state_i: 0,
-                        depths: (0, 0),
+                        depths: (1, 0),
+                        normalized_depths: (0, 0),
                         range: (0, 2),
                     },
                     MatchLite {
                         atom: string_cache.str_to_atom("T3"),
                         state_i: 1,
-                        depths: (0, 0),
+                        depths: (0, 2),
+                        normalized_depths: (0, 1),
                         range: (0, 3),
                     },
                 ],
@@ -1991,7 +2022,8 @@ mod tests {
                 vec![MatchLite {
                     atom: string_cache.str_to_atom("T2"),
                     state_i: 0,
-                    depths: (0, 0),
+                    depths: (0, 1),
+                    normalized_depths: (0, 0),
                     range: (0, 2),
                 }],
                 tokenize("T1 (!t11 t12)", &mut string_cache),
@@ -2000,7 +2032,15 @@ mod tests {
 
         for (tokens, state, matches, expected) in test_cases.drain(..) {
             let state = State::from_phrases(&state);
-            assert_eq!(assign_state_vars(&tokens, &state, &matches), expected);
+            let actual = assign_state_vars(&tokens, &state, &matches);
+            assert_eq!(
+                actual,
+                expected,
+                "tokens = {}, actual = {}, expected = {}",
+                tokens.to_string(&string_cache),
+                actual.to_string(&string_cache),
+                expected.to_string(&string_cache),
+            );
         }
     }
 
@@ -2141,9 +2181,13 @@ mod tests {
         ];
 
         for (input_tokens, pred_tokens, expected) in test_cases.drain(..) {
+            let actual = match_variables_with_existing(&input_tokens, &pred_tokens);
             assert_eq!(
-                match_variables_with_existing(&input_tokens, &pred_tokens),
-                expected
+                actual,
+                expected,
+                "input = {}, pred = {}",
+                input_tokens.to_string(&string_cache),
+                pred_tokens.to_string(&string_cache)
             );
         }
     }
@@ -2159,6 +2203,7 @@ mod tests {
             atom: string_cache.str_to_atom("T2"),
             state_i: 0,
             depths: (0, 0),
+            normalized_depths: (0, 0),
             range: (1, 2),
         }];
 
@@ -2173,18 +2218,21 @@ mod tests {
                     atom: string_cache.str_to_atom("T2"),
                     state_i: 0,
                     depths: (0, 0),
+                    normalized_depths: (0, 0),
                     range: (1, 2),
                 },
                 MatchLite {
                     atom: string_cache.str_to_atom("T1"),
                     state_i: 0,
                     depths: (1, 0),
+                    normalized_depths: (0, 0),
                     range: (0, 1),
                 },
                 MatchLite {
                     atom: string_cache.str_to_atom("T3"),
                     state_i: 0,
                     depths: (0, 1),
+                    normalized_depths: (0, 0),
                     range: (2, 3),
                 },
             ]

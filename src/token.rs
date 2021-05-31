@@ -159,6 +159,7 @@ impl Token {
 }
 
 pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
+    assert!(!string.is_empty());
     let mut string = string.to_string();
 
     // create iterator for strings surrounded by backticks
@@ -384,21 +385,9 @@ pub fn is_var_pred(tokens: &Vec<Token>) -> bool {
 
 pub fn normalize_match_phrase(variable_token: &Token, mut match_phrase: Vec<Token>) -> Vec<Token> {
     let len = match_phrase.len();
-
-    if len == 1 {
-        match_phrase[0].is_negated = variable_token.is_negated;
-        match_phrase[0].open_depth = variable_token.open_depth;
-        match_phrase[len - 1].close_depth = variable_token.close_depth;
-    } else {
-        match_phrase[0].is_negated = variable_token.is_negated;
-        if variable_token.open_depth > 0 {
-            match_phrase[0].open_depth += variable_token.open_depth
-        }
-        if variable_token.close_depth > 0 {
-            match_phrase[len - 1].close_depth += variable_token.close_depth
-        }
-    }
-
+    match_phrase[0].is_negated = variable_token.is_negated;
+    match_phrase[0].open_depth += variable_token.open_depth;
+    match_phrase[len - 1].close_depth += variable_token.close_depth;
     match_phrase
 }
 
