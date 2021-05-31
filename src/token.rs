@@ -228,7 +228,7 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
         close_depth = 0;
     }
 
-    // phrases should always contain tokens with a depth of 0. single variable phrases are an
+    // phrases should always contain tokens with a depth > 0. single variable phrases are an
     // exception to this rule, because they should be able to match whole state phrases.
     if !(result.len() == 1 && is_var_token(&result[0])) {
         result.first_mut().unwrap().open_depth += 1;
