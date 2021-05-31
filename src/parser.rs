@@ -104,7 +104,7 @@ pub fn parse(
                 }
             }
             generated::Rule::backwards_def => {
-                check_rule_variables(line.clone(), enable_unused_warnings);
+                check_rule_variables_for_pair(line.clone(), enable_unused_warnings);
 
                 let mut backwards_def = line.into_inner();
 
@@ -175,8 +175,7 @@ fn pair_to_throne_rule(
     string_cache: &mut StringCache,
     enable_unused_warnings: bool,
 ) -> (Rule, bool) {
-    check_rule_variables(rule_pair.clone(), enable_unused_warnings);
-
+    let rule_pair_clone = rule_pair.clone();
     let source_span: LineColSpan = rule_pair.as_span().into();
 
     let mut pairs = rule_pair.into_inner();
@@ -222,7 +221,9 @@ fn pair_to_throne_rule(
         }
     }
 
-    (Rule::new(0, inputs, outputs, source_span), has_input_qui)
+    let rule = Rule::new(0, inputs, outputs, source_span);
+    check_rule_variables(&rule, rule_pair_clone, enable_unused_warnings, string_cache);
+    (rule, has_input_qui)
 }
 
 fn add_prefix_inputs_pair_to_inputs_outputs(
@@ -485,7 +486,40 @@ fn replace_variables(
     existing_map
 }
 
-fn check_rule_variables(pair: Pair<generated::Rule>, enable_unused_warnings: bool) {
+fn check_rule_variables(
+    rule: &Rule,
+    pair: Pair<generated::Rule>,
+    enable_unused_warnings: bool,
+    string_cache: &StringCache,
+) {
+    if !enable_unused_warnings {
+        return;
+    }
+
+    let rule_str = pair.as_str();
+
+    let mut var_counts = HashMap::new();
+    for token in rule
+        .inputs
+        .iter()
+        .chain(rule.outputs.iter())
+        .flatten()
+        .filter(|t| is_var_token(t))
+    {
+        let count = var_counts
+            .entry(token.as_str(string_cache).unwrap())
+            .or_insert(0);
+        *count += 1;
+    }
+
+    for (var_name, count) in &var_counts {
+        if *count == 1 {
+            println!("WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.", var_name, rule_str);
+        }
+    }
+}
+
+fn check_rule_variables_for_pair(pair: Pair<generated::Rule>, enable_unused_warnings: bool) {
     if !enable_unused_warnings {
         return;
     }
