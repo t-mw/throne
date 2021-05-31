@@ -650,18 +650,22 @@ fn gather_potential_input_state_matches(
             continue;
         }
 
-        let cached_state_matches = state.match_cached_state_indices_for_rule_input(input)?;
+        let cached_state_matches = state.match_cached_state_indices_for_rule_input(input);
 
-        let has_var = input.iter().any(&is_var_token);
+        let mut has_var = false;
         let mut states = vec![];
         for s_i in cached_state_matches {
-            if let Some(match_has_var) = test_match_without_variables(input, &state[s_i]) {
-                debug_assert_eq!(match_has_var, has_var);
-                states.push(s_i);
+            if let Some(match_has_var) = test_match_without_variables(input, &state[*s_i]) {
+                if match_has_var {
+                    has_var = match_has_var;
+                }
+                states.push(*s_i);
             }
         }
 
-        if states.len() == 1 {
+        if states.len() == 0 {
+            return None;
+        } else if states.len() == 1 {
             single_matches.push(InputStateMatch {
                 i_i,
                 has_var,

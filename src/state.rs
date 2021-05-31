@@ -4,8 +4,6 @@ use crate::token::*;
 
 use rand::{rngs::SmallRng, seq::SliceRandom};
 
-use std::collections::{hash_map::DefaultHasher, HashMap};
-use std::hash::Hasher;
 use std::ops::Range;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -38,8 +36,10 @@ impl State {
     pub(crate) fn remove_idx(&mut self, idx: usize) {
         assert!(!self.is_locked());
 
-        let remove_range = self.storage.phrase_ranges.swap_remove(idx);
-        self.storage.removed_phrase_ranges.push(remove_range);
+        let remove_phrase = self.storage.phrase_ranges.swap_remove(idx);
+        self.storage
+            .removed_phrase_ranges
+            .push(remove_phrase.token_range);
 
         self.storage.rev += 1;
     }
@@ -49,8 +49,13 @@ impl State {
             .storage
             .phrase_ranges
             .iter()
-            .position(|range| {
-                phrase_equal(&self.storage.tokens[range.clone()], phrase, (0, 0), (0, 0))
+            .position(|PhraseMetadata { token_range, .. }| {
+                phrase_equal(
+                    &self.storage.tokens[token_range.clone()],
+                    phrase,
+                    (0, 0),
+                    (0, 0),
+                )
             })
             .expect("remove_idx");
 
@@ -68,26 +73,28 @@ impl State {
         let removed_phrase_ranges = &mut self.storage.removed_phrase_ranges;
         let mut did_remove_tokens = false;
 
-        self.storage.phrase_ranges.retain(|range| {
-            let phrase = &tokens[range.clone()];
+        self.storage
+            .phrase_ranges
+            .retain(|PhraseMetadata { token_range, .. }| {
+                let phrase = &tokens[token_range.clone()];
 
-            if phrase.len() < N || (match_pattern_length && phrase.len() != N) {
-                return true;
-            }
+                if phrase.len() < N || (match_pattern_length && phrase.len() != N) {
+                    return true;
+                }
 
-            for (i, atom) in pattern.iter().enumerate() {
-                if let Some(atom) = atom {
-                    if phrase[i].atom != *atom {
-                        return true;
+                for (i, atom) in pattern.iter().enumerate() {
+                    if let Some(atom) = atom {
+                        if phrase[i].atom != *atom {
+                            return true;
+                        }
                     }
                 }
-            }
 
-            removed_phrase_ranges.push(range.clone());
-            did_remove_tokens = true;
+                removed_phrase_ranges.push(token_range.clone());
+                did_remove_tokens = true;
 
-            false
-        });
+                false
+            });
 
         if did_remove_tokens {
             self.storage.rev += 1;
@@ -103,10 +110,10 @@ impl State {
             self.storage
                 .tokens
                 .drain(remove_range.start..remove_range.end);
-            for range in self.storage.phrase_ranges.iter_mut() {
-                if range.start >= remove_range.end {
-                    range.start -= remove_len;
-                    range.end -= remove_len;
+            for PhraseMetadata { token_range, .. } in self.storage.phrase_ranges.iter_mut() {
+                if token_range.start >= remove_range.end {
+                    token_range.start -= remove_len;
+                    token_range.end -= remove_len;
                 }
             }
         }
@@ -116,12 +123,9 @@ impl State {
         self.match_cache.update_storage(&self.storage);
     }
 
-    pub fn match_cached_state_indices_for_rule_input(
-        &self,
-        input_phrase: &Phrase,
-    ) -> Option<Vec<usize>> {
+    pub fn match_cached_state_indices_for_rule_input(&self, input_phrase: &Phrase) -> &[usize] {
         assert!(self.match_cache.storage_rev == self.storage.rev);
-        self.match_cache.match_rule_input(input_phrase, self.len())
+        self.match_cache.match_rule_input(input_phrase)
     }
 
     pub fn shuffle(&mut self, rng: &mut SmallRng) {
@@ -131,11 +135,21 @@ impl State {
     }
 
     pub fn push(&mut self, mut phrase: Vec<Token>) -> PhraseId {
+        let first_group_is_single_token = phrase[0].open_depth == 1;
+        let first_atom = if first_group_is_single_token && is_concrete_pred(&phrase) {
+            Some(phrase[0].atom)
+        } else {
+            None
+        };
+
         let start = self.storage.tokens.len();
         self.storage.tokens.append(&mut phrase);
         let end = self.storage.tokens.len();
 
-        self.storage.phrase_ranges.push(Range { start, end });
+        self.storage.phrase_ranges.push(PhraseMetadata {
+            token_range: Range { start, end },
+            first_atom,
+        });
         self.storage.rev += 1;
 
         let id = PhraseId {
@@ -162,7 +176,9 @@ impl State {
         self.storage
             .phrase_ranges
             .iter()
-            .map(|range| self.storage.tokens[range.clone()].to_vec())
+            .map(|PhraseMetadata { token_range, .. }| {
+                self.storage.tokens[token_range.clone()].to_vec()
+            })
             .collect::<Vec<_>>()
     }
 
@@ -211,7 +227,7 @@ impl std::ops::Index<usize> for State {
     type Output = [Token];
 
     fn index(&self, i: usize) -> &Phrase {
-        &self.storage.tokens[self.storage.phrase_ranges[i].clone()]
+        self.storage.get_by_metadata(&self.storage.phrase_ranges[i])
     }
 }
 
@@ -231,7 +247,7 @@ struct ScratchState {
 #[derive(Clone, Debug)]
 struct Storage {
     // indexes into token collection
-    phrase_ranges: Vec<Range<usize>>,
+    phrase_ranges: Vec<PhraseMetadata>,
     removed_phrase_ranges: Vec<Range<usize>>,
 
     // collection of all tokens found in the state phrases
@@ -261,32 +277,42 @@ impl Storage {
 
     fn get(&self, id: PhraseId) -> &Phrase {
         assert!(id.rev == self.rev);
-        &self.tokens[self.phrase_ranges[id.idx].clone()]
+        self.get_by_metadata(&self.phrase_ranges[id.idx])
+    }
+
+    fn get_by_metadata(&self, metadata: &PhraseMetadata) -> &Phrase {
+        &self.tokens[metadata.token_range.clone()]
     }
 }
 
 #[derive(Clone, Debug)]
+struct PhraseMetadata {
+    token_range: Range<usize>,
+    first_atom: Option<Atom>,
+}
+
+#[derive(Clone, Debug)]
 struct MatchCache {
-    first_atoms: Vec<(usize, Atom)>,
-    by_length: HashMap<usize, Vec<usize>>,
-    by_group_hash_position: HashMap<(u64, usize), Vec<usize>>,
+    first_atom_pairs: Vec<(Atom, usize)>,
+    first_atom_indices: Vec<usize>,
+    all_state_indices: Vec<usize>,
     storage_rev: usize,
 }
 
 impl MatchCache {
     fn new() -> Self {
         MatchCache {
-            first_atoms: vec![],
-            by_length: HashMap::new(),
-            by_group_hash_position: HashMap::new(),
+            first_atom_pairs: vec![],
+            first_atom_indices: vec![],
+            all_state_indices: vec![],
             storage_rev: 0,
         }
     }
 
     fn clear(&mut self) {
-        self.first_atoms.clear();
-        self.by_length.clear();
-        self.by_group_hash_position.clear();
+        self.first_atom_pairs.clear();
+        self.first_atom_indices.clear();
+        self.all_state_indices.clear();
     }
 
     fn update_storage(&mut self, storage: &Storage) {
@@ -296,116 +322,53 @@ impl MatchCache {
         self.storage_rev = storage.rev;
 
         self.clear();
-        self.first_atoms = extract_first_atoms_state(storage);
-
-        for (s_i, phrase_id) in storage.iter().enumerate() {
-            let phrase = storage.get(phrase_id);
-            self.cache_state_phrase_matches(s_i, phrase);
-        }
-    }
-
-    fn cache_state_phrase_matches(&mut self, state_index: usize, phrase: &Phrase) {
-        let group_count = phrase.groups().count();
-        self.by_length
-            .entry(group_count)
-            .or_default()
-            .push(state_index);
-        for (g_i, g) in phrase.groups().enumerate() {
-            let mut hasher = DefaultHasher::new();
-            for token in g {
-                token.hash_for_matching(&mut hasher);
+        for (s_i, phrase_metadata) in storage.phrase_ranges.iter().enumerate() {
+            if let Some(first_atom) = phrase_metadata.first_atom {
+                self.first_atom_pairs.push((first_atom, s_i));
             }
-            let group_hash = hasher.finish();
-            self.by_group_hash_position
-                .entry((group_hash, g_i))
-                .or_default()
-                .push(state_index);
         }
+        self.first_atom_pairs.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        for (_, s_i) in &self.first_atom_pairs {
+            self.first_atom_indices.push(*s_i);
+        }
+        self.all_state_indices = (0..storage.phrase_ranges.len()).collect();
     }
 
-    fn match_rule_input(&self, input_phrase: &Phrase, storage_length: usize) -> Option<Vec<usize>> {
-        if let Some(rule_first_atom) = extract_first_atom_rule_input(input_phrase) {
-            let start_idx = if let Ok(idx) = self
-                .first_atoms
-                .binary_search_by(|probe| probe.1.cmp(&rule_first_atom))
+    fn match_rule_input(&self, input_phrase: &Phrase) -> &[usize] {
+        let first_group_is_single_token = input_phrase[0].open_depth == 1;
+        if first_group_is_single_token && is_concrete_pred(input_phrase) {
+            let input_first_atom = input_phrase[0].atom;
+            if let Ok(idx) = self
+                .first_atom_pairs
+                .binary_search_by(|(atom, _)| atom.cmp(&input_first_atom))
             {
                 // binary search won't always find the first match,
                 // so search backwards until we find it
-                self.first_atoms
+                let start_idx = self
+                    .first_atom_pairs
                     .iter()
                     .enumerate()
                     .rev()
-                    .skip(self.first_atoms.len() - 1 - idx)
-                    .take_while(|(_, a)| a.1 == rule_first_atom)
+                    .skip(self.first_atom_pairs.len() - 1 - idx)
+                    .take_while(|(_, (atom, _))| *atom == input_first_atom)
                     .last()
-                    .expect("start_idx")
-                    .0
-            } else {
-                return None;
-            };
-
-            return Some(
-                self.first_atoms
+                    .expect("start idx")
+                    .0;
+                let end_idx = self
+                    .first_atom_pairs
                     .iter()
-                    .skip(start_idx)
-                    .take_while(|(_, a)| *a == rule_first_atom)
-                    .map(|(s_i, _)| *s_i)
-                    .collect(),
-            );
+                    .enumerate()
+                    .skip(idx)
+                    .take_while(|(_, (atom, _))| *atom == input_first_atom)
+                    .last()
+                    .expect("end idx")
+                    .0;
+                return &self.first_atom_indices[start_idx..end_idx + 1];
+            } else {
+                return &[];
+            };
         }
 
-        let mut sets = vec![self.by_length.get(&input_phrase.groups().count())?];
-        for (g_i, g) in input_phrase.groups().enumerate() {
-            if g.len() > 1 || !is_concrete_pred(g) {
-                continue;
-            }
-            let mut hasher = DefaultHasher::new();
-            for token in g {
-                token.hash_for_matching(&mut hasher);
-            }
-            let group_hash = hasher.finish();
-            sets.push(self.by_group_hash_position.get(&(group_hash, g_i))?);
-        }
-
-        // check rarest match first
-        sets.sort_by_key(|s| s.len());
-
-        let mut set_match_counts = vec![0; storage_length];
-        for set in &sets {
-            for s_i in *set {
-                set_match_counts[*s_i] += 1;
-            }
-        }
-
-        let matches: Vec<_> = set_match_counts
-            .drain(..)
-            .enumerate()
-            .filter(|(_, count)| *count == sets.len())
-            .map(|(s_i, _)| s_i)
-            .collect();
-        if matches.len() == 0 {
-            None
-        } else {
-            Some(matches)
-        }
-    }
-}
-
-fn extract_first_atoms_state(storage: &Storage) -> Vec<(usize, Atom)> {
-    let mut atoms: Vec<(usize, Atom)> = storage
-        .iter()
-        .enumerate()
-        .map(|(s_i, phrase_id)| (s_i, storage.get(phrase_id)[0].atom))
-        .collect();
-    atoms.sort_unstable_by(|a, b| a.1.cmp(&b.1));
-    atoms
-}
-
-fn extract_first_atom_rule_input(phrase: &Phrase) -> Option<Atom> {
-    let first_group_is_single_token = phrase[0].open_depth == 1;
-    if first_group_is_single_token && is_concrete_pred(phrase) {
-        phrase.get(0).filter(|t| !is_var_token(t)).map(|t| t.atom)
-    } else {
-        None
+        return &self.all_state_indices;
     }
 }

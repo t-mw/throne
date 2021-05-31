@@ -1784,8 +1784,13 @@ mod tests {
             let mut state = State::from_phrases(&state);
 
             let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
+            println!("state:\n{}", build_state(&state, &string_cache));
 
-            assert!(result.is_some());
+            assert!(
+                result.is_some(),
+                "\nrule: {}",
+                rule.to_string(&string_cache)
+            );
 
             let actual = result.unwrap();
             assert_eq!(

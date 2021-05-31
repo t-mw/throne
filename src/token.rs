@@ -2,7 +2,7 @@ use crate::string_cache::*;
 
 use regex::Regex;
 
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TokenFlag {
@@ -157,15 +157,6 @@ impl Token {
             .map(|s| s.to_string())
             .or_else(|| self.as_integer().map(|n| n.to_string()))
             .expect("to_string")
-    }
-
-    pub(crate) fn hash_for_matching<H: Hasher>(&self, state: &mut H) {
-        self.atom.hash(state);
-        self.is_negated.hash(state);
-        // exclude 'is_consuming', because it should not affect matching
-        self.flag.hash(state);
-        self.open_depth.hash(state);
-        self.close_depth.hash(state);
     }
 }
 
