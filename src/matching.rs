@@ -210,16 +210,16 @@ fn base_match(tokens1: &Phrase, tokens2: &Phrase, matcher: &mut impl BaseMatcher
 
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct MatchLite {
-    pub atom: Atom,
+    pub var_atom: Atom,
+    pub var_open_close_depth: (u8, u8),
+    pub var_open_close_depth_norm: (u8, u8),
     pub state_i: usize,
-    pub depths: (u8, u8),
-    pub normalized_depths: (u8, u8),
-    pub range: (usize, usize),
+    pub state_token_range: (usize, usize),
 }
 
 impl MatchLite {
     fn as_slice<'a>(&self, state: &'a State) -> &'a [Token] {
-        &state[self.state_i][self.range.0..self.range.1]
+        &state[self.state_i][self.state_token_range.0..self.state_token_range.1]
     }
 
     pub fn to_phrase(&self, state: &State) -> Vec<Token> {
@@ -232,16 +232,16 @@ impl MatchLite {
             // if the phrase subset overlaps with the beginning/end of the source phrase, remove the
             // implicit open/close depth of the source phrase, since we are moving this subset into a
             // new phrase.
-            if self.range.0 == 0 {
+            if self.state_token_range.0 == 0 {
                 phrase[0].open_depth -= 1;
             }
-            if self.range.1 == source_len {
+            if self.state_token_range.1 == source_len {
                 phrase[subset_len - 1].close_depth -= 1;
             }
         }
 
         // use the variable open depth as the baseline for the new phrase subset
-        phrase[0].open_depth -= self.normalized_depths.0;
+        phrase[0].open_depth -= self.var_open_close_depth_norm.0;
 
         // calculate close depth required so that sum(open_depth - close_depth) == 0
         let mut depth = 0;
@@ -351,12 +351,12 @@ pub fn match_state_variables_assuming_compatible_structure(
             let variable_already_matched = if let Some(ref existing_match) =
                 existing_matches_and_result
                     .iter()
-                    .find(|m| m.atom == token.atom)
+                    .find(|m| m.var_atom == token.atom)
             {
                 if !phrase_equal(
                     &existing_match.as_slice(state),
                     &pred_tokens[start_i..end_i],
-                    existing_match.depths,
+                    existing_match.var_open_close_depth,
                     (token.open_depth, token.close_depth),
                 ) {
                     // this match of the variable conflicted with an existing match
@@ -384,11 +384,11 @@ pub fn match_state_variables_assuming_compatible_structure(
                     },
                 );
                 let m = MatchLite {
-                    atom: token.atom,
+                    var_atom: token.atom,
+                    var_open_close_depth: (token.open_depth, token.close_depth),
+                    var_open_close_depth_norm: normalized_depths,
                     state_i,
-                    depths: (token.open_depth, token.close_depth),
-                    normalized_depths,
-                    range: (start_i, end_i),
+                    state_token_range: (start_i, end_i),
                 };
 
                 existing_matches_and_result.push(m);
@@ -941,7 +941,7 @@ pub fn assign_state_vars(tokens: &Phrase, state: &State, matches: &[MatchLite]) 
 
     for token in tokens {
         if is_var_token(token) {
-            if let Some(m) = matches.iter().find(|m| m.atom == token.atom) {
+            if let Some(m) = matches.iter().find(|m| m.var_atom == token.atom) {
                 result.append(&mut normalize_match_phrase(token, m.to_phrase(state)));
                 continue;
             }

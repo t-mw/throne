@@ -532,7 +532,7 @@ mod tests {
             Some(
                 result
                     .iter()
-                    .map(|m| (m.atom, m.to_phrase(&state)))
+                    .map(|m| (m.var_atom, m.to_phrase(&state)))
                     .collect::<Vec<_>>(),
             )
         } else {
@@ -1976,18 +1976,18 @@ mod tests {
                 vec![tokenize("1 2 3", &mut string_cache)],
                 vec![
                     MatchLite {
-                        atom: string_cache.str_to_atom("T1"),
+                        var_atom: string_cache.str_to_atom("T1"),
+                        var_open_close_depth: (0, 0),
+                        var_open_close_depth_norm: (0, 0),
                         state_i: 0,
-                        depths: (0, 0),
-                        normalized_depths: (0, 0),
-                        range: (0, 1),
+                        state_token_range: (0, 1),
                     },
                     MatchLite {
-                        atom: string_cache.str_to_atom("T2"),
+                        var_atom: string_cache.str_to_atom("T2"),
+                        var_open_close_depth: (0, 0),
+                        var_open_close_depth_norm: (0, 0),
                         state_i: 0,
-                        depths: (0, 0),
-                        normalized_depths: (0, 0),
-                        range: (1, 2),
+                        state_token_range: (1, 2),
                     },
                 ],
                 tokenize("+ 1 2 T3", &mut string_cache),
@@ -2000,18 +2000,18 @@ mod tests {
                 ],
                 vec![
                     MatchLite {
-                        atom: string_cache.str_to_atom("T1"),
+                        var_atom: string_cache.str_to_atom("T1"),
+                        var_open_close_depth: (1, 0),
+                        var_open_close_depth_norm: (0, 0),
                         state_i: 0,
-                        depths: (1, 0),
-                        normalized_depths: (0, 0),
-                        range: (0, 2),
+                        state_token_range: (0, 2),
                     },
                     MatchLite {
-                        atom: string_cache.str_to_atom("T3"),
+                        var_atom: string_cache.str_to_atom("T3"),
+                        var_open_close_depth: (0, 2),
+                        var_open_close_depth_norm: (0, 1),
                         state_i: 1,
-                        depths: (0, 2),
-                        normalized_depths: (0, 1),
-                        range: (0, 3),
+                        state_token_range: (0, 3),
                     },
                 ],
                 tokenize("(t11 t12) (T2 (t31 (t32 t33)))", &mut string_cache),
@@ -2020,11 +2020,11 @@ mod tests {
                 tokenize("T1 !T2", &mut string_cache),
                 vec![tokenize("t11 t12", &mut string_cache)],
                 vec![MatchLite {
-                    atom: string_cache.str_to_atom("T2"),
+                    var_atom: string_cache.str_to_atom("T2"),
+                    var_open_close_depth: (0, 1),
+                    var_open_close_depth_norm: (0, 0),
                     state_i: 0,
-                    depths: (0, 1),
-                    normalized_depths: (0, 0),
-                    range: (0, 2),
+                    state_token_range: (0, 2),
                 }],
                 tokenize("T1 (!t11 t12)", &mut string_cache),
             ),
@@ -2200,11 +2200,11 @@ mod tests {
         let state = State::from_phrases(&[tokenize("t1 t2 t3", &mut string_cache)]);
 
         let mut matches = vec![MatchLite {
-            atom: string_cache.str_to_atom("T2"),
+            var_atom: string_cache.str_to_atom("T2"),
+            var_open_close_depth: (0, 0),
+            var_open_close_depth_norm: (0, 0),
             state_i: 0,
-            depths: (0, 0),
-            normalized_depths: (0, 0),
-            range: (1, 2),
+            state_token_range: (1, 2),
         }];
 
         let result = match_state_variables_with_existing(&input_tokens, &state, 0, &mut matches);
@@ -2215,25 +2215,25 @@ mod tests {
             matches,
             [
                 MatchLite {
-                    atom: string_cache.str_to_atom("T2"),
+                    var_atom: string_cache.str_to_atom("T2"),
+                    var_open_close_depth: (0, 0),
+                    var_open_close_depth_norm: (0, 0),
                     state_i: 0,
-                    depths: (0, 0),
-                    normalized_depths: (0, 0),
-                    range: (1, 2),
+                    state_token_range: (1, 2),
                 },
                 MatchLite {
-                    atom: string_cache.str_to_atom("T1"),
+                    var_atom: string_cache.str_to_atom("T1"),
+                    var_open_close_depth: (1, 0),
+                    var_open_close_depth_norm: (0, 0),
                     state_i: 0,
-                    depths: (1, 0),
-                    normalized_depths: (0, 0),
-                    range: (0, 1),
+                    state_token_range: (0, 1),
                 },
                 MatchLite {
-                    atom: string_cache.str_to_atom("T3"),
+                    var_atom: string_cache.str_to_atom("T3"),
+                    var_open_close_depth: (0, 1),
+                    var_open_close_depth_norm: (0, 0),
                     state_i: 0,
-                    depths: (0, 1),
-                    normalized_depths: (0, 0),
-                    range: (2, 3),
+                    state_token_range: (2, 3),
                 },
             ]
         )
