@@ -175,7 +175,9 @@ impl Context {
 
         let mut rules = vec![];
         for rule in &self.core.rules {
-            if let Some(matching_rule) = rule_matches_state(&rule, state, &mut side_input)? {
+            if let Some(matching_rule) =
+                rule_matches_state(&rule, state, &mut side_input)?.map(|result| result.rule)
+            {
                 rules.push(matching_rule);
             }
         }
@@ -191,7 +193,7 @@ impl Context {
     }
 
     pub fn execute_rule(&mut self, rule: &Rule) {
-        update::execute_rule(rule, &mut self.core.state);
+        update::execute_rule(rule, &mut self.core.state, None);
     }
 
     pub fn print(&self) {
@@ -500,14 +502,13 @@ fn test_rng() -> SmallRng {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rule::LineColSpan;
+    use crate::rule::{LineColSpan, RuleBuilder};
 
     #[cfg(not(target_arch = "wasm32"))]
     use pretty_assertions::{assert_eq, assert_ne};
 
     fn rule_new(inputs: Vec<Vec<Token>>, outputs: Vec<Vec<Token>>) -> Rule {
-        Rule::new(
-            0,
+        RuleBuilder::new(
             inputs,
             outputs,
             LineColSpan {
@@ -517,6 +518,7 @@ mod tests {
                 col_end: 0,
             },
         )
+        .build(0)
     }
 
     fn match_variables_with_existing(
@@ -590,8 +592,7 @@ mod tests {
         assert_eq!(
             context.core.rules,
             [
-                Rule::new(
-                    0,
+                RuleBuilder::new(
                     vec![
                         tokenize("at 0 0 wood", &mut context.string_cache),
                         tokenize("at 1 2 wood", &mut context.string_cache),
@@ -603,9 +604,9 @@ mod tests {
                         col_start: 1,
                         col_end: 41
                     }
-                ),
-                Rule::new(
-                    1,
+                )
+                .build(0),
+                RuleBuilder::new(
                     vec![
                         tokenize("#test", &mut context.string_cache),
                         tokenize("asdf", &mut context.string_cache),
@@ -622,10 +623,10 @@ mod tests {
                         col_start: 1,
                         col_end: 41
                     }
-                ),
+                )
+                .build(1),
                 // automatically added rule to avoid infinite loops
-                Rule::new(
-                    2,
+                RuleBuilder::new(
                     vec![
                         tokenize("#test", &mut context.string_cache),
                         tokenize("asdf", &mut context.string_cache),
@@ -639,6 +640,7 @@ mod tests {
                         col_end: 2
                     }
                 )
+                .build(2)
             ]
         );
     }
@@ -649,8 +651,7 @@ mod tests {
 
         assert_eq!(
             context.core.rules,
-            [Rule::new(
-                0,
+            [RuleBuilder::new(
                 vec![
                     tokenize("at 0 0 wood", &mut context.string_cache),
                     tokenize("at 1 2 wood", &mut context.string_cache),
@@ -665,7 +666,8 @@ mod tests {
                     col_start: 1,
                     col_end: 41
                 }
-            )]
+            )
+            .build(0)]
         );
     }
 
@@ -684,8 +686,7 @@ mod tests {
         assert_eq!(
             context.core.rules,
             [
-                Rule::new(
-                    0,
+                RuleBuilder::new(
                     vec![tokenize("broken line 1", &mut context.string_cache)],
                     vec![
                         tokenize("broken line 2", &mut context.string_cache),
@@ -698,9 +699,9 @@ mod tests {
                         col_start: 1,
                         col_end: 16
                     }
-                ),
-                Rule::new(
-                    1,
+                )
+                .build(0),
+                RuleBuilder::new(
                     vec![tokenize("text", &mut context.string_cache)],
                     vec![tokenize("\"broken\ntext\"", &mut context.string_cache)],
                     LineColSpan {
@@ -710,6 +711,7 @@ mod tests {
                         col_end: 6
                     }
                 )
+                .build(1)
             ]
         );
     }
@@ -730,8 +732,7 @@ mod tests {
 
         assert_eq!(
             context.core.rules,
-            [Rule::new(
-                0,
+            [RuleBuilder::new(
                 vec![
                     tokenize(
                         "?state1 A D_BACK18164667602342569625",
@@ -747,7 +748,8 @@ mod tests {
                     col_start: 1,
                     col_end: 37
                 }
-            )]
+            )
+            .build(0)]
         );
     }
 
@@ -766,8 +768,7 @@ mod tests {
 
         assert_eq!(
             context.core.rules,
-            [Rule::new(
-                0,
+            [RuleBuilder::new(
                 vec![
                     tokenize(
                         "state1 A D_BACK18164667602342569625",
@@ -782,7 +783,8 @@ mod tests {
                     col_start: 1,
                     col_end: 30
                 }
-            )]
+            )
+            .build(0)]
         );
     }
 
@@ -844,8 +846,7 @@ mod tests {
 
         assert_eq!(
             context.core.rules,
-            [Rule::new(
-                0,
+            [RuleBuilder::new(
                 vec![
                     tokenize("?state A", &mut context.string_cache),
                     tokenize("test A", &mut context.string_cache),
@@ -858,7 +859,8 @@ mod tests {
                     col_start: 1,
                     col_end: 34
                 }
-            )]
+            )
+            .build(0)]
         );
     }
 
@@ -876,8 +878,7 @@ mod tests {
 
         assert_eq!(
             context.core.rules,
-            [Rule::new(
-                0,
+            [RuleBuilder::new(
                 vec![
                     tokenize("?state A", &mut context.string_cache),
                     tokenize("?state bar", &mut context.string_cache),
@@ -890,7 +891,8 @@ mod tests {
                     col_start: 1,
                     col_end: 28
                 }
-            )]
+            )
+            .build(0)]
         );
     }
 
@@ -910,8 +912,7 @@ mod tests {
         assert_eq!(
             context.core.rules,
             [
-                Rule::new(
-                    0,
+                RuleBuilder::new(
                     vec![
                         tokenize("?state11", &mut context.string_cache),
                         tokenize("?state21", &mut context.string_cache),
@@ -923,9 +924,9 @@ mod tests {
                         col_start: 1,
                         col_end: 24
                     }
-                ),
-                Rule::new(
-                    1,
+                )
+                .build(0),
+                RuleBuilder::new(
                     vec![
                         tokenize("?state11", &mut context.string_cache),
                         tokenize("?state22", &mut context.string_cache),
@@ -937,9 +938,9 @@ mod tests {
                         col_start: 1,
                         col_end: 24
                     }
-                ),
-                Rule::new(
-                    2,
+                )
+                .build(1),
+                RuleBuilder::new(
                     vec![
                         tokenize("?state12", &mut context.string_cache),
                         tokenize("?state21", &mut context.string_cache),
@@ -951,9 +952,9 @@ mod tests {
                         col_start: 1,
                         col_end: 24
                     }
-                ),
-                Rule::new(
-                    3,
+                )
+                .build(2),
+                RuleBuilder::new(
                     vec![
                         tokenize("?state12", &mut context.string_cache),
                         tokenize("?state22", &mut context.string_cache),
@@ -965,7 +966,8 @@ mod tests {
                         col_start: 1,
                         col_end: 24
                     }
-                ),
+                )
+                .build(3),
             ]
         );
     }
@@ -981,8 +983,7 @@ mod tests {
         assert_eq!(
             context.core.rules,
             [
-                Rule::new(
-                    0,
+                RuleBuilder::new(
                     vec![
                         tokenize("test1", &mut context.string_cache),
                         tokenize("WILDCARD0", &mut context.string_cache)
@@ -994,9 +995,9 @@ mod tests {
                         col_start: 1,
                         col_end: 18
                     }
-                ),
-                Rule::new(
-                    1,
+                )
+                .build(0),
+                RuleBuilder::new(
                     vec![tokenize("test2 WILDCARD2", &mut context.string_cache)],
                     vec![
                         tokenize("test2 WILDCARD2", &mut context.string_cache),
@@ -1009,6 +1010,7 @@ mod tests {
                         col_end: 17
                     }
                 )
+                .build(1)
             ]
         );
     }
@@ -1048,8 +1050,7 @@ mod tests {
         assert_eq!(
             context.core.rules,
             [
-                Rule::new(
-                    0,
+                RuleBuilder::new(
                     vec![
                         tokenize("#test", &mut context.string_cache),
                         tokenize("in1", &mut context.string_cache)
@@ -1064,9 +1065,9 @@ mod tests {
                         col_start: 1,
                         col_end: 11
                     }
-                ),
-                Rule::new(
-                    1,
+                )
+                .build(0),
+                RuleBuilder::new(
                     vec![
                         tokenize("#test", &mut context.string_cache),
                         tokenize("in2", &mut context.string_cache)
@@ -1081,10 +1082,10 @@ mod tests {
                         col_start: 1,
                         col_end: 11
                     }
-                ),
+                )
+                .build(1),
                 // automatically added rule to avoid infinite loops
-                Rule::new(
-                    2,
+                RuleBuilder::new(
                     vec![
                         tokenize("#test", &mut context.string_cache),
                         tokenize(parser::QUI, &mut context.string_cache)
@@ -1097,6 +1098,7 @@ mod tests {
                         col_end: 2
                     }
                 )
+                .build(2)
             ]
         );
     }
@@ -1130,8 +1132,7 @@ mod tests {
         assert_eq!(
             context.find_matching_rules(&mut |_: &Phrase| None).unwrap(),
             [
-                Rule::new(
-                    0,
+                RuleBuilder::new(
                     vec![
                         tokenize("test 1 2", &mut context.string_cache),
                         tokenize("test 5 6", &mut context.string_cache),
@@ -1143,9 +1144,9 @@ mod tests {
                         col_start: 1,
                         col_end: 28
                     }
-                ),
-                Rule::new(
-                    2,
+                )
+                .build(0),
+                RuleBuilder::new(
                     vec![
                         tokenize("test 3 4", &mut context.string_cache),
                         tokenize("test 5 6", &mut context.string_cache),
@@ -1157,7 +1158,8 @@ mod tests {
                         col_start: 1,
                         col_end: 28
                     }
-                ),
+                )
+                .build(2),
             ]
         );
     }
@@ -1792,7 +1794,7 @@ mod tests {
                 rule.to_string(&string_cache)
             );
 
-            let actual = result.unwrap();
+            let actual = result.unwrap().rule;
             assert_eq!(
                 actual,
                 expected,
@@ -1882,7 +1884,7 @@ mod tests {
 
         assert!(result.is_some());
         assert_eq!(
-            result.unwrap(),
+            result.unwrap().rule,
             rule_new(vec![], vec![tokenize("1", &mut string_cache)])
         );
     }
@@ -1907,7 +1909,7 @@ mod tests {
 
         assert!(result.is_some());
         assert_eq!(
-            result.unwrap(),
+            result.unwrap().rule,
             rule_new(vec![], vec![tokenize("2", &mut string_cache)])
         );
     }
@@ -1932,7 +1934,7 @@ mod tests {
 
         assert!(result.is_some());
         assert_eq!(
-            result.unwrap(),
+            result.unwrap().rule,
             rule_new(vec![], vec![tokenize("4", &mut string_cache)])
         );
     }
@@ -2045,7 +2047,8 @@ mod tests {
 
         for (tokens, state, matches, expected) in test_cases.drain(..) {
             let state = State::from_phrases(&state);
-            let actual = assign_state_vars(&tokens, &state, &matches);
+            let actual =
+                assign_state_vars(&tokens, &state, &matches, &mut PhraseGroupCounter::new());
             assert_eq!(
                 actual,
                 expected,

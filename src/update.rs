@@ -100,9 +100,10 @@ where
 
     loop {
         let mut matching_rule = None;
+        let mut rule_output_phrase_group_counts = vec![];
 
         if quiescence {
-            state.push(vec![Token::new_atom(core.qui_atom, 1, 1)]);
+            state.push_with_metadata(vec![Token::new_atom(core.qui_atom, 1, 1)], 1);
         }
 
         state.update_cache();
@@ -110,8 +111,9 @@ where
         for i in 0..rules.len() {
             let rule = &rules[(start_rule_idx + i) % rules.len()];
 
-            if let Some(rule) = matching::rule_matches_state(&rule, state, &mut side_input)? {
-                matching_rule = Some(rule);
+            if let Some(result) = matching::rule_matches_state(&rule, state, &mut side_input)? {
+                matching_rule = Some(result.rule);
+                rule_output_phrase_group_counts = result.output_phrase_group_counts;
                 break;
             }
         }
@@ -157,14 +159,18 @@ where
             }
 
             executed_rule_ids.push(matching_rule.id);
-            execute_rule(matching_rule, state);
+            execute_rule(matching_rule, state, Some(&rule_output_phrase_group_counts));
         } else {
             quiescence = true;
         }
     }
 }
 
-pub fn execute_rule(rule: &Rule, state: &mut State) {
+pub fn execute_rule(
+    rule: &Rule,
+    state: &mut State,
+    rule_output_phrase_group_counts: Option<&[usize]>,
+) {
     let inputs = &rule.inputs;
     let outputs = &rule.outputs;
 
@@ -174,7 +180,11 @@ pub fn execute_rule(rule: &Rule, state: &mut State) {
         }
     });
 
-    outputs.iter().for_each(|output| {
-        state.push(output.clone());
+    outputs.iter().enumerate().for_each(|(output_i, output)| {
+        if let Some(group_counts) = rule_output_phrase_group_counts {
+            state.push_with_metadata(output.clone(), group_counts[output_i]);
+        } else {
+            state.push(output.clone());
+        }
     });
 }

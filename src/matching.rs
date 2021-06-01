@@ -1,4 +1,4 @@
-use crate::rule::Rule;
+use crate::rule::{Rule, RuleBuilder};
 use crate::state::State;
 use crate::string_cache::Atom;
 use crate::token::*;
@@ -484,11 +484,11 @@ impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
 // Checks whether the rule's forward and backward predicates match the state.
 // Returns a new rule with all variables resolved, with backwards/side
 // predicates removed.
-pub fn rule_matches_state<F>(
+pub(crate) fn rule_matches_state<F>(
     r: &Rule,
     state: &mut State,
     side_input: &mut F,
-) -> Result<Option<Rule>, ExcessivePermutationError>
+) -> Result<Option<RuleMatchesStateResult>, ExcessivePermutationError>
 where
     F: SideInput,
 {
@@ -496,12 +496,13 @@ where
     let outputs = &r.outputs;
 
     // per input, a list of states that could match the input
-    let input_state_matches =
-        if let Some(matches) = gather_potential_input_state_matches(inputs, state) {
-            matches
-        } else {
-            return Ok(None);
-        };
+    let input_state_matches = if let Some(matches) =
+        gather_potential_input_state_matches(inputs, &r.input_phrase_group_counts, state)
+    {
+        matches
+    } else {
+        return Ok(None);
+    };
 
     // precompute values required for deriving branch indices.
     let mut input_rev_permutation_counts = vec![1; input_state_matches.potential_matches.len()];
@@ -546,36 +547,58 @@ where
         let mut forward_concrete = vec![];
         let mut outputs_concrete = vec![];
 
+        let mut input_phrase_group_counts = vec![];
         inputs
             .iter()
             .filter(|pred| is_concrete_pred(pred) || is_var_pred(pred))
             .for_each(|v| {
-                forward_concrete.push(assign_state_vars(v, state, &variables_matched));
+                let mut group_counter = PhraseGroupCounter::new();
+                forward_concrete.push(assign_state_vars(
+                    v,
+                    state,
+                    &variables_matched,
+                    &mut group_counter,
+                ));
+                input_phrase_group_counts.push(group_counter.group_count);
             });
 
+        let mut output_phrase_group_counts = vec![];
         outputs.iter().for_each(|v| {
             if is_side_pred(v) {
-                let pred = assign_state_vars(v, state, &variables_matched);
-
+                let pred =
+                    assign_state_vars(v, state, &variables_matched, &mut PhraseGroupCounter::new());
                 side_input(&pred);
             } else {
-                outputs_concrete.push(assign_state_vars(v, state, &variables_matched));
+                let mut group_counter = PhraseGroupCounter::new();
+                outputs_concrete.push(assign_state_vars(
+                    v,
+                    state,
+                    &variables_matched,
+                    &mut group_counter,
+                ));
+                output_phrase_group_counts.push(group_counter.group_count);
             }
         });
 
         state.unlock_scratch();
 
-        return Ok(Some(Rule::new(
-            r.id,
-            forward_concrete,
-            outputs_concrete,
-            r.source_span,
-        )));
+        return Ok(Some(RuleMatchesStateResult {
+            rule: RuleBuilder::new(forward_concrete, outputs_concrete, r.source_span)
+                .input_phrase_group_counts(input_phrase_group_counts)
+                .build(r.id),
+            output_phrase_group_counts,
+        }));
     }
 
     state.unlock_scratch();
 
     Ok(None)
+}
+
+#[derive(Debug)]
+pub(crate) struct RuleMatchesStateResult {
+    pub rule: Rule,
+    pub output_phrase_group_counts: Vec<usize>,
 }
 
 #[derive(Debug)]
@@ -626,6 +649,7 @@ impl InputStateMatch {
 
 fn gather_potential_input_state_matches(
     inputs: &Vec<Vec<Token>>,
+    input_phrase_group_counts: &Vec<usize>,
     state: &State,
 ) -> Option<InputStateMatches> {
     // only matches that have a structure that is compatible with the input should be returned from
@@ -650,7 +674,8 @@ fn gather_potential_input_state_matches(
             continue;
         }
 
-        let cached_state_matches = state.match_cached_state_indices_for_rule_input(input);
+        let cached_state_matches =
+            state.match_cached_state_indices_for_rule_input(input, input_phrase_group_counts[i_i]);
 
         let mut has_var = false;
         let mut states = vec![];
@@ -827,11 +852,12 @@ fn match_backwards_variables(
     state: &mut State,
     existing_matches_and_result: &mut Vec<MatchLite>,
 ) -> bool {
-    let pred = assign_state_vars(pred, state, existing_matches_and_result);
+    let mut group_counter = PhraseGroupCounter::new();
+    let pred = assign_state_vars(pred, state, existing_matches_and_result, &mut group_counter);
 
     if let Some(eval_result) = evaluate_backwards_pred(&pred) {
         let s_i = state.len();
-        state.push(eval_result);
+        state.push_with_metadata(eval_result, group_counter.group_count);
 
         match_state_variables_with_existing(&pred, state, s_i, existing_matches_and_result)
     } else {
@@ -848,7 +874,8 @@ fn match_side_variables<F>(
 where
     F: SideInput,
 {
-    let pred = assign_state_vars(pred, state, existing_matches_and_result);
+    let mut group_counter = PhraseGroupCounter::new();
+    let pred = assign_state_vars(pred, state, existing_matches_and_result, &mut group_counter);
 
     if let Some(eval_result) = side_input(&pred) {
         if eval_result.len() == 0 {
@@ -856,7 +883,7 @@ where
         }
 
         let s_i = state.len();
-        state.push(eval_result);
+        state.push_with_metadata(eval_result, group_counter.group_count);
 
         match_state_variables_with_existing(&pred, state, s_i, existing_matches_and_result)
     } else {
@@ -864,24 +891,35 @@ where
     }
 }
 
-pub fn assign_state_vars(tokens: &Phrase, state: &State, matches: &[MatchLite]) -> Vec<Token> {
+pub(crate) fn assign_state_vars(
+    tokens: &Phrase,
+    state: &State,
+    matches: &[MatchLite],
+    group_counter: &mut PhraseGroupCounter,
+) -> Vec<Token> {
     let mut result: Vec<Token> = vec![];
 
     for token in tokens {
         if is_var_token(token) {
             if let Some(m) = matches.iter().find(|m| m.var_atom == token.atom) {
-                result.append(&mut normalize_match_phrase(token, m.to_phrase(state)));
+                let mut append_phrase = normalize_match_phrase(token, m.to_phrase(state));
+                for t in &append_phrase {
+                    group_counter.count(t);
+                }
+                result.append(&mut append_phrase);
                 continue;
             }
         }
 
         result.push(token.clone());
+        group_counter.count(token);
     }
 
     // adjust depths for phrases with a single variable that matched a whole state phrase
     if result.len() == 1 && result[0].open_depth == 0 {
         result[0].open_depth = 1;
         result[0].close_depth = 1;
+        group_counter.group_count += 1;
     }
 
     result

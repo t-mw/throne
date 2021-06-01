@@ -1,5 +1,5 @@
 use crate::matching::*;
-use crate::rule::{LineColSpan, Rule};
+use crate::rule::{LineColSpan, Rule, RuleBuilder};
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
 
@@ -55,7 +55,7 @@ pub fn parse(
         .unwrap();
 
     let mut state: Vec<Vec<Token>> = vec![];
-    let mut rules: Vec<(Rule, bool)> = vec![];
+    let mut rule_builders: Vec<(RuleBuilder, bool)> = vec![];
     let mut backwards_preds: Vec<(VecPhrase, Vec<VecPhrase>)> = vec![];
     let mut enable_unused_warnings = true;
 
@@ -75,7 +75,7 @@ pub fn parse(
                         &mut string_cache,
                         enable_unused_warnings,
                     );
-                    rules.push((r, enable_unused_warnings));
+                    rule_builders.push((r, enable_unused_warnings));
 
                     if has_input_qui {
                         any_input_qui = true;
@@ -97,8 +97,8 @@ pub fn parse(
                     inputs.push(tokenize(QUI, string_cache));
 
                     // source span covers entire prefix block since this rule doesn't exist in source
-                    rules.push((
-                        Rule::new(0, inputs, outputs, prefix_block_source_span),
+                    rule_builders.push((
+                        RuleBuilder::new(inputs, outputs, prefix_block_source_span),
                         enable_unused_warnings,
                     ));
                 }
@@ -126,7 +126,7 @@ pub fn parse(
                 backwards_preds.push((first_phrase, other_phrases));
             }
             generated::Rule::rule => {
-                rules.push((
+                rule_builders.push((
                     pair_to_throne_rule(line, None, &mut string_cache, enable_unused_warnings).0,
                     enable_unused_warnings,
                 ));
@@ -147,21 +147,23 @@ pub fn parse(
         }
     }
 
-    let mut new_rules = vec![];
-    for (rule, enable_unused_warnings_for_rule) in &rules {
+    let mut new_rule_builders = vec![];
+    for (rule, enable_unused_warnings_for_rule) in &rule_builders {
         if let Some(mut replaced_rules) = replace_backwards_preds(
             &rule,
             &backwards_preds,
             &string_cache,
             *enable_unused_warnings_for_rule,
         ) {
-            new_rules.append(&mut replaced_rules);
+            new_rule_builders.append(&mut replaced_rules);
         }
     }
 
-    for (i, rule) in new_rules.iter_mut().enumerate() {
-        rule.id = i as i32;
-    }
+    let new_rules = new_rule_builders
+        .drain(..)
+        .enumerate()
+        .map(|(i, builder)| builder.build(i as i32))
+        .collect();
 
     Ok(ParseResult {
         rules: new_rules,
@@ -174,7 +176,7 @@ fn pair_to_throne_rule(
     prefix_inputs_pair: Option<Pair<generated::Rule>>,
     string_cache: &mut StringCache,
     enable_unused_warnings: bool,
-) -> (Rule, bool) {
+) -> (RuleBuilder, bool) {
     let rule_pair_clone = rule_pair.clone();
     let source_span: LineColSpan = rule_pair.as_span().into();
 
@@ -221,9 +223,17 @@ fn pair_to_throne_rule(
         }
     }
 
-    let rule = Rule::new(0, inputs, outputs, source_span);
-    check_rule_variables(&rule, rule_pair_clone, enable_unused_warnings, string_cache);
-    (rule, has_input_qui)
+    check_rule_variables(
+        &inputs,
+        &outputs,
+        rule_pair_clone,
+        enable_unused_warnings,
+        string_cache,
+    );
+    (
+        RuleBuilder::new(inputs, outputs, source_span),
+        has_input_qui,
+    )
 }
 
 fn add_prefix_inputs_pair_to_inputs_outputs(
@@ -296,11 +306,11 @@ fn add_input_phrase_pair_to_inputs_outputs(
 
 // for each backwards predicate, replace it with the corresponding phrase
 fn replace_backwards_preds(
-    rule: &Rule,
+    rule: &RuleBuilder,
     backwards_preds: &Vec<(VecPhrase, Vec<VecPhrase>)>,
     string_cache: &StringCache,
     enable_unused_warnings: bool,
-) -> Option<Vec<Rule>> {
+) -> Option<Vec<RuleBuilder>> {
     let mut backwards_preds_per_input = vec![vec![]; rule.inputs.len()];
     let mut backwards_pred_pointers = vec![0; rule.inputs.len()];
 
@@ -337,7 +347,7 @@ fn replace_backwards_preds(
         _ => return Some(vec![rule.clone()]),
     };
 
-    let mut new_rules = vec![];
+    let mut new_rule_builders = vec![];
     'outer: loop {
         let mut nonvariable_matches: Vec<Match> = vec![];
         let mut matches: Vec<Match> = vec![];
@@ -420,7 +430,7 @@ fn replace_backwards_preds(
                 .iter()
                 .map(|output| assign_vars(output, &nonvariable_matches))
                 .collect();
-            new_rules.push(new_rule);
+            new_rule_builders.push(new_rule);
         }
 
         // find next permutation of backwards predicates in rule
@@ -446,7 +456,7 @@ fn replace_backwards_preds(
         }
     }
 
-    Some(new_rules)
+    Some(new_rule_builders)
 }
 
 // replace all variable tokens in a phrase with unique tokens,
@@ -487,7 +497,8 @@ fn replace_variables(
 }
 
 fn check_rule_variables(
-    rule: &Rule,
+    inputs: &Vec<Vec<Token>>,
+    outputs: &Vec<Vec<Token>>,
     pair: Pair<generated::Rule>,
     enable_unused_warnings: bool,
     string_cache: &StringCache,
@@ -499,10 +510,9 @@ fn check_rule_variables(
     let rule_str = pair.as_str();
 
     let mut var_counts = HashMap::new();
-    for token in rule
-        .inputs
+    for token in inputs
         .iter()
-        .chain(rule.outputs.iter())
+        .chain(outputs.iter())
         .flatten()
         .filter(|t| is_var_token(t))
     {

@@ -123,9 +123,15 @@ impl State {
         self.match_cache.update_storage(&self.storage);
     }
 
-    pub fn match_cached_state_indices_for_rule_input(&self, input_phrase: &Phrase) -> &[usize] {
+    pub fn match_cached_state_indices_for_rule_input(
+        &self,
+        input_phrase: &Phrase,
+        input_phrase_group_count: usize,
+    ) -> &[usize] {
         assert!(self.match_cache.storage_rev == self.storage.rev);
-        self.match_cache.match_rule_input(input_phrase)
+        debug_assert_eq!(input_phrase.groups().count(), input_phrase_group_count);
+        self.match_cache
+            .match_rule_input(input_phrase, input_phrase_group_count)
     }
 
     pub fn shuffle(&mut self, rng: &mut SmallRng) {
@@ -134,7 +140,16 @@ impl State {
         self.storage.rev += 1;
     }
 
-    pub fn push(&mut self, mut phrase: Vec<Token>) -> PhraseId {
+    pub fn push(&mut self, phrase: Vec<Token>) -> PhraseId {
+        let group_count = phrase.groups().count();
+        self.push_with_metadata(phrase, group_count)
+    }
+
+    pub(crate) fn push_with_metadata(
+        &mut self,
+        mut phrase: Vec<Token>,
+        group_count: usize,
+    ) -> PhraseId {
         let first_group_is_single_token = phrase[0].open_depth == 1;
         let first_atom = if first_group_is_single_token && is_concrete_pred(&phrase) {
             Some(phrase[0].atom)
@@ -149,6 +164,7 @@ impl State {
         self.storage.phrase_ranges.push(PhraseMetadata {
             token_range: Range { start, end },
             first_atom,
+            group_count,
         });
         self.storage.rev += 1;
 
@@ -289,13 +305,14 @@ impl Storage {
 struct PhraseMetadata {
     token_range: Range<usize>,
     first_atom: Option<Atom>,
+    group_count: usize,
 }
 
 #[derive(Clone, Debug)]
 struct MatchCache {
     first_atom_pairs: Vec<(Atom, usize)>,
     first_atom_indices: Vec<usize>,
-    all_state_indices: Vec<usize>,
+    state_indices_by_length: Vec<Vec<usize>>,
     storage_rev: usize,
 }
 
@@ -304,7 +321,7 @@ impl MatchCache {
         MatchCache {
             first_atom_pairs: vec![],
             first_atom_indices: vec![],
-            all_state_indices: vec![],
+            state_indices_by_length: vec![],
             storage_rev: 0,
         }
     }
@@ -312,7 +329,7 @@ impl MatchCache {
     fn clear(&mut self) {
         self.first_atom_pairs.clear();
         self.first_atom_indices.clear();
-        self.all_state_indices.clear();
+        self.state_indices_by_length.clear();
     }
 
     fn update_storage(&mut self, storage: &Storage) {
@@ -326,15 +343,19 @@ impl MatchCache {
             if let Some(first_atom) = phrase_metadata.first_atom {
                 self.first_atom_pairs.push((first_atom, s_i));
             }
+            if self.state_indices_by_length.len() < phrase_metadata.group_count + 1 {
+                self.state_indices_by_length
+                    .resize(phrase_metadata.group_count + 1, vec![]);
+            }
+            self.state_indices_by_length[phrase_metadata.group_count].push(s_i);
         }
         self.first_atom_pairs.sort_unstable_by(|a, b| a.0.cmp(&b.0));
         for (_, s_i) in &self.first_atom_pairs {
             self.first_atom_indices.push(*s_i);
         }
-        self.all_state_indices = (0..storage.phrase_ranges.len()).collect();
     }
 
-    fn match_rule_input(&self, input_phrase: &Phrase) -> &[usize] {
+    fn match_rule_input(&self, input_phrase: &Phrase, input_phrase_group_count: usize) -> &[usize] {
         let first_group_is_single_token = input_phrase[0].open_depth == 1;
         if first_group_is_single_token && is_concrete_pred(input_phrase) {
             let input_first_atom = input_phrase[0].atom;
@@ -369,6 +390,10 @@ impl MatchCache {
             };
         }
 
-        return &self.all_state_indices;
+        if let Some(v) = &self.state_indices_by_length.get(input_phrase_group_count) {
+            v
+        } else {
+            &[]
+        }
     }
 }

@@ -257,10 +257,8 @@ impl PhraseGroup for Phrase {
     fn groups_at_depth(&self, depth: u8) -> PhraseGroupIterator<'_> {
         PhraseGroupIterator {
             phrase: self,
-            at_depth: depth,
             idx: 0,
-            start_idx: None,
-            depth: 0,
+            counter: PhraseGroupCounter::new_at_depth(depth),
         }
     }
 
@@ -296,10 +294,8 @@ impl PhraseGroup for Phrase {
 
 pub struct PhraseGroupIterator<'a> {
     phrase: &'a Phrase,
-    at_depth: u8,
     idx: usize,
-    start_idx: Option<usize>,
-    depth: u8,
+    counter: PhraseGroupCounter,
 }
 
 impl<'a> Iterator for PhraseGroupIterator<'a> {
@@ -307,19 +303,52 @@ impl<'a> Iterator for PhraseGroupIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         for (i, t) in self.phrase.iter().enumerate().skip(self.idx) {
-            self.depth += t.open_depth;
-            if self.start_idx.is_none() && self.depth >= self.at_depth {
-                self.start_idx = Some(i);
-            }
-            self.depth -= t.close_depth;
-            if self.depth <= self.at_depth {
-                if let Some(start_idx) = self.start_idx.take() {
-                    self.idx = i + 1;
-                    return Some(&self.phrase[start_idx..i + 1]);
-                }
+            if let Some(start_idx) = self.counter.count(t) {
+                self.idx = i + 1;
+                return Some(&self.phrase[start_idx..i + 1]);
             }
         }
 
+        None
+    }
+}
+
+pub(crate) struct PhraseGroupCounter {
+    depth: u8,
+    at_depth: u8,
+    idx: usize,
+    start_idx: Option<usize>,
+    pub group_count: usize,
+}
+
+impl PhraseGroupCounter {
+    pub(crate) fn new() -> Self {
+        Self::new_at_depth(1)
+    }
+
+    fn new_at_depth(depth: u8) -> Self {
+        PhraseGroupCounter {
+            depth: 0,
+            at_depth: depth,
+            idx: 0,
+            start_idx: None,
+            group_count: 0,
+        }
+    }
+
+    pub(crate) fn count(&mut self, token: &Token) -> Option<usize> {
+        self.depth += token.open_depth;
+        if self.start_idx.is_none() && self.depth >= self.at_depth {
+            self.start_idx = Some(self.idx);
+        }
+        self.idx += 1;
+        self.depth -= token.close_depth;
+        if self.depth <= self.at_depth {
+            if let Some(start_idx) = self.start_idx.take() {
+                self.group_count += 1;
+                return Some(start_idx);
+            }
+        }
         None
     }
 }
