@@ -104,7 +104,7 @@ impl State {
     pub fn clear_removed_tokens(&mut self) {
         self.storage
             .removed_phrase_ranges
-            .sort_by_key(|range| std::cmp::Reverse(range.start));
+            .sort_unstable_by_key(|range| std::cmp::Reverse(range.start));
         for remove_range in self.storage.removed_phrase_ranges.drain(..) {
             let remove_len = remove_range.end - remove_range.start;
             self.storage
