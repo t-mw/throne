@@ -79,10 +79,10 @@ impl Context {
         mut string_cache: StringCache,
         rng: &mut SmallRng,
     ) -> Result<Context, parser::Error> {
-        let mut result = parser::parse(text, &mut string_cache, rng)?;
+        let result = parser::parse(text, &mut string_cache, rng)?;
 
         let mut state = State::new();
-        for phrase in result.state.drain(..) {
+        for phrase in result.state.into_iter() {
             state.push(phrase);
         }
 
@@ -1237,7 +1237,7 @@ mod tests {
     fn rule_matches_state_truthiness_test() {
         let mut string_cache = StringCache::new();
 
-        let mut test_cases = vec![
+        let test_cases = vec![
             (
                 rule_new(
                     vec![
@@ -1433,7 +1433,7 @@ mod tests {
             ),
         ];
 
-        for (rule, state, expected) in test_cases.drain(..) {
+        for (rule, state, expected) in test_cases.into_iter() {
             let mut state = State::from_phrases(&state);
 
             let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
@@ -1450,7 +1450,7 @@ mod tests {
     fn rule_matches_state_truthiness_negated_test() {
         let mut string_cache = StringCache::new();
 
-        let mut test_cases = vec![
+        let test_cases = vec![
             (
                 rule_new(vec![tokenize("!test", &mut string_cache)], vec![]),
                 vec![
@@ -1557,7 +1557,7 @@ mod tests {
             ),
         ];
 
-        for (rule, state, expected) in test_cases.drain(..) {
+        for (rule, state, expected) in test_cases.into_iter() {
             let mut state = State::from_phrases(&state);
 
             let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
@@ -1574,7 +1574,7 @@ mod tests {
     fn rule_matches_state_truthiness_nonconsuming_test() {
         let mut string_cache = StringCache::new();
 
-        let mut test_cases = vec![
+        let test_cases = vec![
             (
                 rule_new(
                     vec![
@@ -1611,7 +1611,7 @@ mod tests {
             ),
         ];
 
-        for (rule, state, expected) in test_cases.drain(..) {
+        for (rule, state, expected) in test_cases.into_iter() {
             let mut state = State::from_phrases(&state);
 
             let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
@@ -1628,7 +1628,7 @@ mod tests {
     fn rule_matches_state_output_test() {
         let mut string_cache = StringCache::new();
 
-        let mut test_cases = vec![
+        let test_cases = vec![
             (
                 rule_new(
                     vec![
@@ -1782,7 +1782,7 @@ mod tests {
             ),
         ];
 
-        for (rule, state, expected) in test_cases.drain(..) {
+        for (rule, state, expected) in test_cases.into_iter() {
             let mut state = State::from_phrases(&state);
 
             let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
@@ -1943,7 +1943,7 @@ mod tests {
     fn evaluate_backwards_pred_test() {
         let mut string_cache = StringCache::new();
 
-        let mut test_cases = vec![
+        let test_cases = vec![
             (
                 tokenize("+ A 2 3", &mut string_cache),
                 Some(tokenize("+ 1 2 3", &mut string_cache)),
@@ -1976,7 +1976,7 @@ mod tests {
             ),
         ];
 
-        for (input, expected) in test_cases.drain(..) {
+        for (input, expected) in test_cases.into_iter() {
             assert_eq!(evaluate_backwards_pred(&input), expected);
         }
     }
@@ -1985,7 +1985,7 @@ mod tests {
     fn assign_state_vars_test() {
         let mut string_cache = StringCache::new();
 
-        let mut test_cases = vec![
+        let test_cases = vec![
             (
                 tokenize("+ T1 T2 T3", &mut string_cache),
                 vec![tokenize("1 2 3", &mut string_cache)],
@@ -2045,7 +2045,7 @@ mod tests {
             ),
         ];
 
-        for (tokens, state, matches, expected) in test_cases.drain(..) {
+        for (tokens, state, matches, expected) in test_cases.into_iter() {
             let state = State::from_phrases(&state);
             let actual =
                 assign_state_vars(&tokens, &state, &matches, &mut PhraseGroupCounter::new());
@@ -2064,7 +2064,7 @@ mod tests {
     fn match_variables_test() {
         let mut string_cache = StringCache::new();
 
-        let mut test_cases = vec![
+        let test_cases = vec![
             (
                 tokenize("t1 T2 T3", &mut string_cache),
                 tokenize("t1 t2 t3", &mut string_cache),
@@ -2196,7 +2196,7 @@ mod tests {
             ),
         ];
 
-        for (input_tokens, pred_tokens, expected) in test_cases.drain(..) {
+        for (input_tokens, pred_tokens, expected) in test_cases.into_iter() {
             let actual = match_variables_with_existing(&input_tokens, &pred_tokens);
             assert_eq!(
                 actual,

@@ -160,7 +160,7 @@ pub fn parse(
     }
 
     let new_rules = new_rule_builders
-        .drain(..)
+        .into_iter()
         .enumerate()
         .map(|(i, builder)| builder.build(i as i32))
         .collect();
