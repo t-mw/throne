@@ -77,17 +77,8 @@ impl State {
             .phrase_ranges
             .retain(|PhraseMetadata { token_range, .. }| {
                 let phrase = &tokens[token_range.clone()];
-
-                if phrase.len() < N || (match_pattern_length && phrase.len() != N) {
+                if !test_phrase_pattern_match(phrase, pattern, match_pattern_length) {
                     return true;
-                }
-
-                for (i, atom) in pattern.iter().enumerate() {
-                    if let Some(atom) = atom {
-                        if phrase[i].atom != *atom {
-                            return true;
-                        }
-                    }
                 }
 
                 removed_phrase_ranges.push(token_range.clone());

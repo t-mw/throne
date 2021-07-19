@@ -73,38 +73,3 @@ pub extern "C" fn throne_context_find_matching_rules(
 
     return len;
 }
-
-#[no_mangle]
-pub extern "C" fn throne_context_find_phrase5(
-    context: *mut Context,
-    atom_ptr1: *const Atom,
-    atom_ptr2: *const Atom,
-    atom_ptr3: *const Atom,
-    atom_ptr4: *const Atom,
-    atom_ptr5: *const Atom,
-    result_ptr: *mut Atom,
-    result_len: usize,
-) -> usize {
-    let context = unsafe { &mut *context };
-    let result = unsafe { slice::from_raw_parts_mut(result_ptr, result_len) };
-
-    let ptr_to_atom = |atom_ptr: *const Atom| unsafe { atom_ptr.as_ref() };
-
-    if let Some(phrase) = context.find_phrase5(
-        ptr_to_atom(atom_ptr1),
-        ptr_to_atom(atom_ptr2),
-        ptr_to_atom(atom_ptr3),
-        ptr_to_atom(atom_ptr4),
-        ptr_to_atom(atom_ptr5),
-    ) {
-        let len = phrase.len().min(result_len);
-
-        for i in 0..len {
-            result[i] = phrase[i].atom;
-        }
-
-        len
-    } else {
-        0
-    }
-}

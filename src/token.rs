@@ -443,3 +443,21 @@ pub fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
 
     tokens.join(" ")
 }
+
+pub fn test_phrase_pattern_match<const N: usize>(
+    phrase: &Phrase,
+    pattern: [Option<Atom>; N],
+    match_pattern_length: bool,
+) -> bool {
+    if phrase.len() < N || (match_pattern_length && phrase.len() != N) {
+        return false;
+    }
+    if pattern
+        .iter()
+        .enumerate()
+        .any(|(i, atom)| atom.filter(|atom| phrase[i].atom != *atom).is_some())
+    {
+        return false;
+    }
+    true
+}

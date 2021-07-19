@@ -200,251 +200,33 @@ impl Context {
         println!("{}", self);
     }
 
-    pub fn find_phrase<'a>(&'a self, a1: Option<&Atom>) -> Option<&'a [Token]> {
-        self.find_phrase2(a1, None)
-    }
-
-    pub fn find_phrase2<'a>(&'a self, a1: Option<&Atom>, a2: Option<&Atom>) -> Option<&'a [Token]> {
-        self.find_phrase3(a1, a2, None)
-    }
-
-    pub fn find_phrase3<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-        a3: Option<&Atom>,
-    ) -> Option<&'a [Token]> {
-        self.find_phrase4(a1, a2, a3, None)
-    }
-
-    pub fn find_phrase4<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-        a3: Option<&Atom>,
-        a4: Option<&Atom>,
-    ) -> Option<&'a [Token]> {
-        self.find_phrase5(a1, a2, a3, a4, None)
-    }
-
-    pub fn find_phrase5<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-        a3: Option<&Atom>,
-        a4: Option<&Atom>,
-        a5: Option<&Atom>,
-    ) -> Option<&'a [Token]> {
+    pub fn find_phrase<const N: usize>(
+        &self,
+        pattern: [Option<Atom>; N],
+        match_pattern_length: bool,
+    ) -> Option<&[Token]> {
         for phrase_id in self.core.state.iter() {
-            let p = self.core.state.get(phrase_id);
-
-            match (
-                p.get(0).map(|t| &t.atom),
-                p.get(1).map(|t| &t.atom),
-                p.get(2).map(|t| &t.atom),
-                p.get(3).map(|t| &t.atom),
-                p.get(4).map(|t| &t.atom),
-            ) {
-                (s1, s2, s3, s4, s5)
-                    if (a1.is_none() || a1 == s1)
-                        && (a2.is_none() || a2 == s2)
-                        && (a3.is_none() || a3 == s3)
-                        && (a4.is_none() || a4 == s4)
-                        && (a5.is_none() || a5 == s5) =>
-                {
-                    return Some(p);
-                }
-                _ => (),
-            };
+            let phrase = self.core.state.get(phrase_id);
+            if test_phrase_pattern_match(phrase, pattern, match_pattern_length) {
+                return Some(phrase);
+            }
         }
-
         None
     }
 
-    pub fn find_phrases<'a>(&'a self, a1: Option<&Atom>) -> Vec<&'a [Token]> {
-        self.find_phrases2(a1, None)
-    }
-
-    pub fn find_phrases2<'a>(&'a self, a1: Option<&Atom>, a2: Option<&Atom>) -> Vec<&'a [Token]> {
-        self.find_phrases3(a1, a2, None)
-    }
-
-    pub fn find_phrases3<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-        a3: Option<&Atom>,
-    ) -> Vec<&'a [Token]> {
-        self.find_phrases4(a1, a2, a3, None)
-    }
-
-    pub fn find_phrases4<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-        a3: Option<&Atom>,
-        a4: Option<&Atom>,
-    ) -> Vec<&'a [Token]> {
-        self.find_phrases5(a1, a2, a3, a4, None)
-    }
-
-    pub fn find_phrases5<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-        a3: Option<&Atom>,
-        a4: Option<&Atom>,
-        a5: Option<&Atom>,
-    ) -> Vec<&'a [Token]> {
-        self.core
-            .state
-            .iter()
-            .filter_map(|phrase_id| {
-                let p = self.core.state.get(phrase_id);
-
-                if match (
-                    p.get(0).map(|t| &t.atom),
-                    p.get(1).map(|t| &t.atom),
-                    p.get(2).map(|t| &t.atom),
-                    p.get(3).map(|t| &t.atom),
-                    p.get(4).map(|t| &t.atom),
-                ) {
-                    (s1, s2, s3, s4, s5) => {
-                        (a1.is_none() || a1 == s1)
-                            && (a2.is_none() || a2 == s2)
-                            && (a3.is_none() || a3 == s3)
-                            && (a4.is_none() || a4 == s4)
-                            && (a5.is_none() || a5 == s5)
-                    }
-                } {
-                    Some(p)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    // --- find phrases with with exact length ---
-
-    pub fn find_phrases_exactly1<'a>(&'a self, a1: Option<&Atom>) -> Vec<&'a [Token]> {
-        self.core
-            .state
-            .iter()
-            .filter_map(|phrase_id| {
-                let p = self.core.state.get(phrase_id);
-
-                if p.len() == 1 && (a1.is_none() || a1 == Some(&p[0].atom)) {
-                    Some(p)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn find_phrases_exactly2<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-    ) -> Vec<&'a [Token]> {
-        self.core
-            .state
-            .iter()
-            .filter_map(|phrase_id| {
-                let p = self.core.state.get(phrase_id);
-
-                if p.len() == 2
-                    && (a1.is_none() || a1 == Some(&p[0].atom))
-                    && (a2.is_none() || a2 == Some(&p[1].atom))
-                {
-                    Some(p)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn find_phrases_exactly3<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-        a3: Option<&Atom>,
-    ) -> Vec<&'a [Token]> {
-        self.core
-            .state
-            .iter()
-            .filter_map(|phrase_id| {
-                let p = self.core.state.get(phrase_id);
-
-                if p.len() == 3
-                    && (a1.is_none() || a1 == Some(&p[0].atom))
-                    && (a2.is_none() || a2 == Some(&p[1].atom))
-                    && (a3.is_none() || a3 == Some(&p[2].atom))
-                {
-                    Some(p)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn find_phrases_exactly4<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-        a3: Option<&Atom>,
-        a4: Option<&Atom>,
-    ) -> Vec<&'a [Token]> {
-        self.core
-            .state
-            .iter()
-            .filter_map(|phrase_id| {
-                let p = self.core.state.get(phrase_id);
-
-                if p.len() == 4
-                    && (a1.is_none() || a1 == Some(&p[0].atom))
-                    && (a2.is_none() || a2 == Some(&p[1].atom))
-                    && (a3.is_none() || a3 == Some(&p[2].atom))
-                    && (a4.is_none() || a4 == Some(&p[3].atom))
-                {
-                    Some(p)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    pub fn find_phrases_exactly5<'a>(
-        &'a self,
-        a1: Option<&Atom>,
-        a2: Option<&Atom>,
-        a3: Option<&Atom>,
-        a4: Option<&Atom>,
-        a5: Option<&Atom>,
-    ) -> Vec<&'a [Token]> {
-        self.core
-            .state
-            .iter()
-            .filter_map(|phrase_id| {
-                let p = self.core.state.get(phrase_id);
-
-                if p.len() == 5
-                    && (a1.is_none() || a1 == Some(&p[0].atom))
-                    && (a2.is_none() || a2 == Some(&p[1].atom))
-                    && (a3.is_none() || a3 == Some(&p[2].atom))
-                    && (a4.is_none() || a4 == Some(&p[3].atom))
-                    && (a5.is_none() || a5 == Some(&p[4].atom))
-                {
-                    Some(p)
-                } else {
-                    None
-                }
-            })
-            .collect()
+    pub fn find_phrases<const N: usize>(
+        &self,
+        pattern: [Option<Atom>; N],
+        match_pattern_length: bool,
+    ) -> Vec<&Phrase> {
+        let mut result = vec![];
+        for phrase_id in self.core.state.iter() {
+            let phrase = self.core.state.get(phrase_id);
+            if test_phrase_pattern_match(phrase, pattern, match_pattern_length) {
+                result.push(phrase);
+            }
+        }
+        result
     }
 }
 
@@ -2600,6 +2382,51 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[test]
+    fn find_phrases_test() {
+        let mut context =
+            Context::from_text("foo . a foo . a b bar . a foo c . c foo b . bar b c . a foo b c")
+                .unwrap();
+        let foo_atom = context.str_to_atom("foo");
+        let phrases: Vec<VecPhrase> = context
+            .find_phrases([None, Some(foo_atom), None], false)
+            .iter()
+            .map(|p| p.to_vec())
+            .collect();
+
+        for phrase in &phrases {
+            println!("{}", build_phrase(&phrase, &context.string_cache));
+        }
+        assert_eq!(
+            phrases,
+            [
+                tokenize("a foo c", &mut context.string_cache),
+                tokenize("c foo b", &mut context.string_cache),
+                tokenize("a foo b c", &mut context.string_cache),
+            ]
+        );
+    }
+
+    #[test]
+    fn find_phrases_exact_length_test() {
+        let mut context =
+            Context::from_text("foo . a foo . a b bar . a foo c . c foo b . bar b c . a foo b c")
+                .unwrap();
+        let foo_atom = context.str_to_atom("foo");
+        let phrases: Vec<VecPhrase> = context
+            .find_phrases([None, Some(foo_atom), None], true)
+            .iter()
+            .map(|p| p.to_vec())
+            .collect();
+        assert_eq!(
+            phrases,
+            [
+                tokenize("a foo c", &mut context.string_cache),
+                tokenize("c foo b", &mut context.string_cache),
+            ]
+        );
     }
 
     #[test]
