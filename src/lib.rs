@@ -25,6 +25,7 @@ mod wasm;
 pub use crate::context::{Context, ContextBuilder};
 pub use crate::core::Core;
 #[cfg(not(target_arch = "wasm32"))]
+#[doc(hidden)]
 pub use crate::ffi::*;
 pub use crate::rule::Rule;
 pub use crate::state::State;
