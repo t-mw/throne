@@ -14,6 +14,8 @@ mod parser;
 mod rule;
 mod state;
 mod string_cache;
+#[cfg(test)]
+mod tests;
 mod throne;
 mod token;
 mod update;
