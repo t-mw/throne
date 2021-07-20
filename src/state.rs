@@ -1,5 +1,5 @@
 use crate::matching::phrase_equal;
-use crate::string_cache::Atom;
+use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
 
 use rand::{rngs::SmallRng, seq::SliceRandom};
@@ -387,4 +387,12 @@ impl MatchCache {
             &[]
         }
     }
+}
+
+pub fn state_to_string(state: &State, string_cache: &StringCache) -> String {
+    state
+        .iter()
+        .map(|phrase_id| state.get(phrase_id).to_string(string_cache))
+        .collect::<Vec<_>>()
+        .join("\n")
 }

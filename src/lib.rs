@@ -28,8 +28,10 @@ pub use crate::ffi::*;
 pub use crate::rule::Rule;
 pub use crate::state::State;
 pub use crate::string_cache::{Atom, StringCache};
-pub use crate::throne::{Context, ContextBuilder, PhraseString};
-pub use crate::token::{build_phrase, tokenize, Phrase, PhraseGroup, Token, VecPhrase};
+pub use crate::throne::{Context, ContextBuilder};
+pub use crate::token::{
+    phrase_to_string, tokenize, Phrase, PhraseGroup, PhraseString, Token, VecPhrase,
+};
 pub use crate::update::update;
 #[cfg(target_arch = "wasm32")]
 pub use crate::wasm::*;

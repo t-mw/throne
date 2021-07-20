@@ -1,9 +1,8 @@
 use crate::matching::*;
 use crate::parser;
 use crate::rule::{LineColSpan, Rule, RuleBuilder};
-use crate::state::State;
+use crate::state::{self, State};
 use crate::string_cache::{Atom, StringCache};
-use crate::throne::{build_state, PhraseString};
 use crate::token::*;
 use crate::update;
 use crate::Context;
@@ -1256,7 +1255,7 @@ fn rule_matches_state_output_test() {
         let mut state = State::from_phrases(&state);
 
         let result = rule_matches_state(&rule, &mut state, &mut |_: &Phrase| None).unwrap();
-        println!("state:\n{}", build_state(&state, &string_cache));
+        println!("state:\n{}", state::state_to_string(&state, &string_cache));
 
         assert!(
             result.is_some(),
@@ -2084,7 +2083,7 @@ fn find_phrases_test() {
         .collect();
 
     for phrase in &phrases {
-        println!("{}", build_phrase(&phrase, &context.string_cache));
+        println!("{}", phrase_to_string(&phrase, &context.string_cache));
     }
     assert_eq!(
         phrases,

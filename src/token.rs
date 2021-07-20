@@ -409,7 +409,17 @@ pub fn normalize_match_phrase(variable_token: &Token, mut match_phrase: Vec<Toke
     match_phrase
 }
 
-pub fn build_phrase(phrase: &Phrase, string_cache: &StringCache) -> String {
+pub trait PhraseString {
+    fn to_string(&self, string_cache: &StringCache) -> String;
+}
+
+impl PhraseString for Phrase {
+    fn to_string(&self, string_cache: &StringCache) -> String {
+        phrase_to_string(self, string_cache)
+    }
+}
+
+pub fn phrase_to_string(phrase: &Phrase, string_cache: &StringCache) -> String {
     let mut tokens = vec![];
 
     for t in phrase {

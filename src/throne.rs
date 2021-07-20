@@ -2,7 +2,7 @@ use crate::core::Core;
 use crate::matching::*;
 use crate::parser;
 use crate::rule::Rule;
-use crate::state::State;
+use crate::state::{self, State};
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
 use crate::update::{self, update};
@@ -232,7 +232,7 @@ impl Context {
 
 impl fmt::Display for Context {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let state = build_state(&self.core.state, &self.string_cache);
+        let state = state::state_to_string(&self.core.state, &self.string_cache);
 
         let mut rules = self
             .core
@@ -257,22 +257,4 @@ impl fmt::Display for Context {
             }
         )
     }
-}
-
-pub trait PhraseString {
-    fn to_string(&self, string_cache: &StringCache) -> String;
-}
-
-impl PhraseString for Phrase {
-    fn to_string(&self, string_cache: &StringCache) -> String {
-        build_phrase(self, string_cache)
-    }
-}
-
-pub fn build_state(state: &State, string_cache: &StringCache) -> String {
-    state
-        .iter()
-        .map(|phrase_id| build_phrase(state.get(phrase_id), string_cache))
-        .collect::<Vec<_>>()
-        .join("\n")
 }

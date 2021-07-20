@@ -1,5 +1,5 @@
 use crate::string_cache::StringCache;
-use crate::token::{build_phrase, PhraseGroup, Token};
+use crate::token::{phrase_to_string, PhraseGroup, Token};
 
 use std::marker::PhantomData;
 
@@ -87,13 +87,13 @@ fn rule_to_string_common(
 ) -> String {
     let inputs = inputs
         .iter()
-        .map(|p| build_phrase(p, string_cache))
+        .map(|p| phrase_to_string(p, string_cache))
         .collect::<Vec<_>>()
         .join(" . ");
 
     let outputs = outputs
         .iter()
-        .map(|p| build_phrase(p, string_cache))
+        .map(|p| phrase_to_string(p, string_cache))
         .collect::<Vec<_>>()
         .join(" . ");
 
