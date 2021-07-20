@@ -6,6 +6,7 @@ extern crate pest_derive;
 extern crate rand;
 extern crate regex;
 
+mod context;
 mod core;
 #[cfg(not(target_arch = "wasm32"))]
 mod ffi;
@@ -16,19 +17,18 @@ mod state;
 mod string_cache;
 #[cfg(test)]
 mod tests;
-mod throne;
 mod token;
 mod update;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
+pub use crate::context::{Context, ContextBuilder};
 pub use crate::core::Core;
 #[cfg(not(target_arch = "wasm32"))]
 pub use crate::ffi::*;
 pub use crate::rule::Rule;
 pub use crate::state::State;
 pub use crate::string_cache::{Atom, StringCache};
-pub use crate::throne::{Context, ContextBuilder};
 pub use crate::token::{
     phrase_to_string, tokenize, Phrase, PhraseGroup, PhraseString, Token, VecPhrase,
 };

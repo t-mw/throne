@@ -1,5 +1,5 @@
+use crate::context::Context;
 use crate::string_cache::Atom;
-use crate::throne::Context;
 use crate::token::Phrase;
 
 use std::ffi::CStr;

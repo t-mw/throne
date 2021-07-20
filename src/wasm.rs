@@ -1,7 +1,7 @@
+use crate::context::Context as ThroneContext;
 use crate::parser;
 use crate::rule::{self, Rule};
 use crate::string_cache::{Atom, StringCache};
-use crate::throne::Context as ThroneContext;
 use crate::token::{Phrase, PhraseGroup, Token};
 use crate::update::{self, update};
 
