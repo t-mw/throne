@@ -49,7 +49,7 @@ When a predicate accepts three input variables and one of the variables remains 
 
 ## Constructs
 
-Syntactic sugar exists to make it easier to write complex rules, but in the end these constructs compile down to the simple form described in the introduction. The following table lists the available constructs:
+Special syntax exists to make it easier to write complex rules, but in the end these constructs compile down to the simple form described in the introduction. The following table lists the available constructs:
 
 | Syntax | Effect | Example | Compiled Form |
 | --- | --- | --- | --- |
