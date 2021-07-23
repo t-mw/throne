@@ -1,4 +1,4 @@
-//! Throne is a game scripting language for prototyping and story logic.
+//! Throne is a scripting language for game prototyping and story logic.
 //!
 //! Documentation for learning the language itself can be found on [Github](https://github.com/t-mw/throne#reference).
 //!

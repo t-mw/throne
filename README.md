@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/throne.svg)](https://crates.io/crates/throne)
 [![Docs Status](https://docs.rs/throne/badge.svg)](https://docs.rs/throne)
 
-A game scripting language for prototyping and story logic:
+A scripting language for game prototyping and story logic:
 
 ```
 // Declare the initial state as 'phrases', with one phrase per line.
