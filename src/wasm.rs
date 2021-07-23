@@ -115,13 +115,16 @@ impl Context {
         })
     }
 
-    pub fn append_state(&mut self, text: &str) {
-        self.throne_context.append_state(text);
+    pub fn push_state(&mut self, text: &str) {
+        self.throne_context.push_state(text);
     }
 
     pub fn remove_state_by_first_atom(&mut self, text: &str) {
         let atom = self.throne_context.str_to_atom(text);
-        self.throne_context.remove_state([Some(atom)], false);
+        self.throne_context
+            .core
+            .state
+            .remove_pattern([Some(atom)], false);
     }
 
     pub fn update_with_side_input(
