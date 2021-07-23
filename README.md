@@ -65,9 +65,9 @@ Special syntax exists to make it easier to write complex rules, but in the end t
 | A set of rules surrounded by curly braces prefixed with `INPUT:` where `INPUT` is a list of phrases | Copies `INPUT` to each rule's inputs. | <pre>foo . bar: {<br/>  hello = world<br/>  123 = 456<br/>}</pre> | <pre>foo . bar . hello = world<br/>foo . bar . 123 = 456</pre> |
 | `<<PHRASE . PHRASES` where `PHRASE` is a single phrase and `PHRASES` is a list of phrases | Replaces `<<PHRASE` with `PHRASES` wherever it exists in a rule's list of inputs. | <pre><<arithmetic A B . + A 1 B<br/><<arithmetic A B . - A 1 B<br/>foo . <<arithmetic X Y = Y</pre> | <pre>foo . + X 1 Y = Y<br/>foo . - X 1 Y = Y</pre> |
 
-### The `()` atom
+### The `()` Phrase
 
-Finally, `()` is the absence of state. When present in a rule's list of outputs it has no effect, besides making it possible to write rules that produce no output (e.g. `foo = ()`).
+The `()` phrase represents the absence of state. When present in a rule's list of outputs it has no effect, besides making it possible to write rules that produce no output (e.g. `foo = ()`).
 When present in a rule's list of inputs it has the effect of producing a match when no other rules can be matched. For example, in the following script the first rule will only ever be matched last:
 
 ```
@@ -77,6 +77,17 @@ foo = bar     // matched first
 ```
 
 In this way `()` can be used as a form of control flow, overriding the usual random order of rule execution.
+
+### Stage Phrases
+
+Prefixing a phrase with `#` marks it as a 'stage' phrase.
+Stage phrases behave in largely the same way as normal phrases, but their presence should be used to indicate how far a script has executed within a sequence of 'stages'. A stage phrase can be included in a rule's inputs to only execute the rule within that stage of the script's execution, and included in a rule's outputs to define the transition to a new stage of the script's execution.
+
+Stage phrases only differ in their behavior to normal phrases when used as a prefix to a set of curly braces. In this case the stage phrase will be copied to not only the inputs of the rules within the braces, but also the outputs, except when a rule includes `()` as an input phrase. This makes it easy to scope execution of the prefixed set of rules to a stage and finally transition to a second stage once execution of the first stage is complete.
+
+| Example | Compiled Form |
+| --- | --- |
+| <pre>#first-stage: {<br/>  foo = bar<br/>  () = #second-stage<br/>}</pre> | <pre>#first-stage . foo = #first-stage . bar<br/>#first-stage . () = #second-stage</pre> |
 
 ## Examples
 - [blocks](examples/blocks.throne) - a simple tile matching game run with `cargo run --example blocks`.
