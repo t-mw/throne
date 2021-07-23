@@ -1,9 +1,7 @@
 # throne
 
-[![Crates.io][crates_img]][crates_link]
-
-[crates_img]: https://img.shields.io/crates/v/throne.svg
-[crates_link]: https://crates.io/crates/throne
+[![Crates.io](https://img.shields.io/crates/v/throne.svg)](https://crates.io/crates/throne)
+[![Docs Status](https://docs.rs/throne/badge.svg)](https://docs.rs/throne)
 
 A game scripting language for prototyping and story logic:
 
@@ -14,7 +12,8 @@ Sarah is child of Mary
 Tom is child of David
 
 // Define rules with the format: INPUT = OUTPUT.
-CHILD is child of PARENT . AUNT is sister of PARENT . COUSIN is child of AUNT = COUSIN is cousin of CHILD
+CHILD is child of PARENT . AUNT is sister of PARENT .
+    COUSIN is child of AUNT = COUSIN is cousin of CHILD
 
 // The final state will be:
 //    Sarah is cousin of Tom
@@ -42,7 +41,7 @@ The following predicates can be used as one of the items in a rule's list of inp
 | `% X Y Z` | Matches when the modulo of `X` with `Y` equals `Z` | `% DEGREES 360 REM` |
 | `= X Y` | Matches when `X` equals `Y` | `= HEALTH 100` |
 | `!X` | Matches when `X` does not exist in the state | `!this does not exist` |
-| `^X` | Calls the host application and matches depending on the response  | `^os-clock-hour 12` |
+| `^X` | Calls the host application and matches depending on the response | `^os-clock-hour 12` |
 
 When a predicate accepts two input variables, both variables must be assigned a value for the predicate to produce a match. A value is assigned either by writing a constant inline or by sharing a variable with another of the rule's inputs.
 When a predicate accepts three input variables and one of the variables remains unassigned, it will be assigned the expected value according to the effect of the predicate e.g. `A` will be assigned the value `8` in `+ 2 A 10`.

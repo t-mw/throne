@@ -74,6 +74,7 @@ impl fmt::Display for RuleRepeatError {
 pub trait SideInput: FnMut(&Phrase) -> Option<Vec<Token>> {}
 impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
 
+/// A free function equivalent to [Context::update_with_side_input](crate::Context::update_with_side_input) if required to avoid lifetime conflicts.
 pub fn update<F>(core: &mut Core, mut side_input: F) -> Result<(), Error>
 where
     F: SideInput,
@@ -105,8 +106,6 @@ where
         if quiescence {
             state.push_with_metadata(vec![Token::new_atom(core.qui_atom, 1, 1)], 1);
         }
-
-        state.update_cache();
 
         for i in 0..rules.len() {
             let rule = &rules[(start_rule_idx + i) % rules.len()];
@@ -159,26 +158,32 @@ where
             }
 
             executed_rule_ids.push(matching_rule.id);
-            execute_rule(matching_rule, state, Some(&rule_output_phrase_group_counts));
+            assert!(execute_rule(
+                matching_rule,
+                state,
+                Some(&rule_output_phrase_group_counts)
+            ));
         } else {
             quiescence = true;
         }
     }
 }
 
-pub fn execute_rule(
+pub(crate) fn execute_rule(
     rule: &Rule,
     state: &mut State,
     rule_output_phrase_group_counts: Option<&[usize]>,
-) {
+) -> bool {
     let inputs = &rule.inputs;
     let outputs = &rule.outputs;
 
-    inputs.iter().for_each(|input| {
+    for input in inputs {
         if input[0].is_consuming {
-            state.remove_phrase(input);
+            if !state.remove_phrase(input) {
+                return false;
+            }
         }
-    });
+    }
 
     outputs.iter().enumerate().for_each(|(output_i, output)| {
         if let Some(group_counts) = rule_output_phrase_group_counts {
@@ -187,4 +192,6 @@ pub fn execute_rule(
             state.push(output.clone());
         }
     });
+
+    true
 }

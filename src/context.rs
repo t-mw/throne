@@ -5,7 +5,7 @@ use crate::rule::Rule;
 use crate::state::{self, State};
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
-use crate::update::{self, update};
+use crate::update::{self, update, SideInput};
 
 use itertools::Itertools;
 use rand::{self, rngs::SmallRng, thread_rng, SeedableRng};
@@ -13,17 +13,15 @@ use rand::{self, rngs::SmallRng, thread_rng, SeedableRng};
 use std::fmt;
 use std::vec::Vec;
 
-#[derive(Clone)]
-pub struct Context {
-    pub core: Core,
-    pub string_cache: StringCache,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub struct PhraseId {
-    idx: usize,
-}
-
+/// Used to build a [Context].
+///
+/// ```
+/// # use throne::ContextBuilder;
+/// let context = ContextBuilder::new()
+///     .text("foo = bar")
+///     .build()
+///     .unwrap_or_else(|e| panic!("Failed to build throne context: {}", e));
+/// ```
 pub struct ContextBuilder<'a> {
     text: &'a str,
     string_cache: StringCache,
@@ -39,33 +37,54 @@ impl<'a> ContextBuilder<'a> {
         }
     }
 
+    /// Sets the script text used to define the initial state and rules of the [Context].
     pub fn text(mut self, text: &'a str) -> Self {
         self.text = text;
         self
     }
 
+    /// Sets the [StringCache] used for the [Context].
     pub fn string_cache(mut self, string_cache: StringCache) -> Self {
         self.string_cache = string_cache;
         self
     }
 
+    /// Sets the random number generator used for the [Context].
+    ///
+    /// Defaults to `rand::rngs::SmallRng::from_rng(&mut rand::thread_rng())`.
     pub fn rng(mut self, rng: &'a mut SmallRng) -> Self {
         self.rng = Some(rng);
         self
     }
 
+    /// Builds the [Context] using the provided script text to define the initial state and rules.
+    /// Returns an error if the script text could not be parsed.
     pub fn build(self) -> Result<Context, parser::Error> {
-        let mut default_rng = SmallRng::from_rng(&mut thread_rng()).unwrap();
         Context::new(
             self.text,
             self.string_cache,
-            self.rng.unwrap_or(&mut default_rng),
+            self.rng.unwrap_or(&mut default_rng()),
         )
     }
 }
 
+fn default_rng() -> SmallRng {
+    // NB: update doc for ContextBuilder::rng if this changes
+    SmallRng::from_rng(&mut thread_rng()).unwrap()
+}
+
+/// Stores the [State], [Rules](Rule) and [Atom] mappings for a throne script.
+///
+/// Create a new `Context` using a [ContextBuilder].
+#[derive(Clone)]
+#[non_exhaustive]
+pub struct Context {
+    pub core: Core,
+    pub string_cache: StringCache,
+}
+
 impl Context {
-    pub fn from_text(text: &str) -> Result<Self, parser::Error> {
+    pub(crate) fn from_text(text: &str) -> Result<Self, parser::Error> {
         ContextBuilder::new().text(text).build()
     }
 
@@ -86,7 +105,6 @@ impl Context {
             state.push(phrase);
         }
 
-        state.update_cache();
         let qui_atom = string_cache.str_to_atom(parser::QUI);
 
         Ok(Context {
@@ -102,6 +120,82 @@ impl Context {
         })
     }
 
+    /// Executes any [Rule] that matches the current [State] until the set of matching rules is exhausted.
+    pub fn update(&mut self) -> Result<(), update::Error> {
+        self.update_with_side_input(|_: &Phrase| None)
+    }
+
+    /// Equivalent to [Context::update()] with a callback to respond to `^` predicates.
+    pub fn update_with_side_input<F>(&mut self, side_input: F) -> Result<(), update::Error>
+    where
+        F: SideInput,
+    {
+        update(&mut self.core, side_input)
+    }
+
+    /// Executes a specific [Rule].
+    ///
+    /// Returns `true` if the [Rule] was successfully executed or `false` if some of its inputs could not be matched to the current [State].
+    pub fn execute_rule(&mut self, rule: &Rule) -> bool {
+        update::execute_rule(rule, &mut self.core.state, None)
+    }
+
+    /// Returns the set of [Rules](Rule) that may be executed in the next update.
+    pub fn find_matching_rules<F>(
+        &self,
+        mut side_input: F,
+    ) -> Result<Vec<Rule>, ExcessivePermutationError>
+    where
+        F: SideInput,
+    {
+        let state = &mut self.core.state.clone();
+
+        let mut rules = vec![];
+        for rule in &self.core.rules {
+            if let Some(matching_rule) =
+                rule_matches_state(&rule, state, &mut side_input)?.map(|result| result.rule)
+            {
+                rules.push(matching_rule);
+            }
+        }
+
+        Ok(rules)
+    }
+
+    /// Alias for [StringCache::str_to_atom].
+    pub fn str_to_atom(&mut self, text: &str) -> Atom {
+        self.string_cache.str_to_atom(text)
+    }
+
+    /// Alias for [StringCache::str_to_existing_atom].
+    pub fn str_to_existing_atom(&self, text: &str) -> Option<Atom> {
+        self.string_cache.str_to_existing_atom(text)
+    }
+
+    /// Alias for [StringCache::atom_to_str].
+    pub fn atom_to_str(&self, atom: Atom) -> Option<&str> {
+        self.string_cache.atom_to_str(atom)
+    }
+
+    /// Alias for [StringCache::atom_to_integer].
+    pub fn atom_to_integer(&self, atom: Atom) -> Option<i32> {
+        StringCache::atom_to_integer(atom)
+    }
+
+    #[cfg(test)]
+    pub fn with_test_rng(mut self) -> Context {
+        self.core.rng = crate::tests::test_rng();
+        self
+    }
+
+    /// Converts the provided text to a [Phrase] and adds it to the context's [State].
+    pub fn push_state(&mut self, phrase_text: &str) {
+        self.core
+            .state
+            .push(tokenize(phrase_text, &mut self.string_cache));
+    }
+
+    /// Copies the state from another `Context` to this one.
     pub fn extend_state_from_context(&mut self, other: &Context) {
         for phrase_id in other.core.state.iter() {
             let phrase = other.core.state.get(phrase_id);
@@ -124,72 +218,9 @@ impl Context {
                 .collect();
             self.core.state.push(new_phrase);
         }
-
-        self.core.state.update_cache();
     }
 
-    pub fn str_to_atom(&mut self, text: &str) -> Atom {
-        self.string_cache.str_to_atom(text)
-    }
-
-    pub fn str_to_existing_atom(&self, text: &str) -> Option<Atom> {
-        self.string_cache.str_to_existing_atom(text)
-    }
-
-    pub fn atom_to_str(&self, atom: Atom) -> Option<&str> {
-        self.string_cache.atom_to_str(atom)
-    }
-
-    pub fn atom_to_integer(&self, atom: Atom) -> Option<i32> {
-        StringCache::atom_to_integer(atom)
-    }
-
-    #[cfg(test)]
-    pub fn with_test_rng(mut self) -> Context {
-        self.core.rng = crate::tests::test_rng();
-        self
-    }
-
-    pub fn append_state(&mut self, text: &str) {
-        self.core.state.push(tokenize(text, &mut self.string_cache));
-    }
-
-    pub fn find_matching_rules<F>(
-        &self,
-        mut side_input: F,
-    ) -> Result<Vec<Rule>, ExcessivePermutationError>
-    where
-        F: SideInput,
-    {
-        let state = &mut self.core.state.clone();
-
-        let mut rules = vec![];
-        for rule in &self.core.rules {
-            if let Some(matching_rule) =
-                rule_matches_state(&rule, state, &mut side_input)?.map(|result| result.rule)
-            {
-                rules.push(matching_rule);
-            }
-        }
-
-        Ok(rules)
-    }
-
-    pub fn update(&mut self) -> Result<(), update::Error> {
-        self.update_with_side_input(|_: &Phrase| None)
-    }
-
-    pub fn update_with_side_input<F>(&mut self, side_input: F) -> Result<(), update::Error>
-    where
-        F: SideInput,
-    {
-        update(&mut self.core, side_input)
-    }
-
-    pub fn execute_rule(&mut self, rule: &Rule) {
-        update::execute_rule(rule, &mut self.core.state, None);
-    }
-
+    /// Prints a representation of the `Context` to the console.
     pub fn print(&self) {
         println!("{}", self);
     }

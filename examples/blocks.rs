@@ -50,8 +50,8 @@ mod example {
         let down = context.str_to_atom("down");
 
         while window.is_open() && !window.is_key_down(Key::Escape) {
-            context.append_state("#tick");
-            context.append_state("dt 3");
+            context.push_state("#tick");
+            context.push_state("dt 3");
             // context.print();
 
             let string_to_key = |s: &throne::Atom| match s {

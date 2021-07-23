@@ -6,12 +6,14 @@ use rand::{rngs::SmallRng, seq::SliceRandom};
 
 use std::ops::Range;
 
+/// References a phrase in a [State].
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct PhraseId {
     idx: usize,
     rev: usize,
 }
 
+/// Stores a set of [Phrases](Phrase).
 #[derive(Clone, Debug)]
 pub struct State {
     storage: Storage,
@@ -20,7 +22,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> State {
+    pub(crate) fn new() -> State {
         State {
             storage: Storage::new(),
             match_cache: MatchCache::new(),
@@ -28,6 +30,7 @@ impl State {
         }
     }
 
+    /// Removes a phrase by [PhraseId].
     pub fn remove(&mut self, id: PhraseId) {
         assert!(id.rev == self.storage.rev);
         self.remove_idx(id.idx);
@@ -44,24 +47,36 @@ impl State {
         self.storage.rev += 1;
     }
 
-    pub fn remove_phrase(&mut self, phrase: &Phrase) {
-        let remove_idx = self
-            .storage
-            .phrase_ranges
-            .iter()
-            .position(|PhraseMetadata { token_range, .. }| {
-                phrase_equal(
-                    &self.storage.tokens[token_range.clone()],
-                    phrase,
-                    (0, 0),
-                    (0, 0),
-                )
-            })
-            .expect("remove_idx");
+    /// Removes the first occurrence of `phrase` from the state.
+    ///
+    /// Returns `false` if the phrase could not be found.
+    pub fn remove_phrase(&mut self, phrase: &Phrase) -> bool {
+        let remove_idx =
+            self.storage
+                .phrase_ranges
+                .iter()
+                .position(|PhraseMetadata { token_range, .. }| {
+                    phrase_equal(
+                        &self.storage.tokens[token_range.clone()],
+                        phrase,
+                        (0, 0),
+                        (0, 0),
+                    )
+                });
 
-        self.remove_idx(remove_idx);
+        if let Some(remove_idx) = remove_idx {
+            self.remove_idx(remove_idx);
+            true
+        } else {
+            false
+        }
     }
 
+    /// Removes any phrases matching the provided `pattern`.
+    ///
+    /// If `match_pattern_length` is `true`, only phrases matching the exact length of the provided
+    /// `pattern` will be removed. Otherwise, phrases longer than the provided `pattern` may be removed,
+    /// if their beginning subset matches the pattern.
     pub fn remove_pattern<const N: usize>(
         &mut self,
         pattern: [Option<Atom>; N],
@@ -92,7 +107,7 @@ impl State {
         }
     }
 
-    pub fn clear_removed_tokens(&mut self) {
+    pub(crate) fn clear_removed_tokens(&mut self) {
         self.storage
             .removed_phrase_ranges
             .sort_unstable_by_key(|range| std::cmp::Reverse(range.start));
@@ -110,11 +125,11 @@ impl State {
         }
     }
 
-    pub fn update_cache(&mut self) {
+    pub(crate) fn update_cache(&mut self) {
         self.match_cache.update_storage(&self.storage);
     }
 
-    pub fn match_cached_state_indices_for_rule_input(
+    pub(crate) fn match_cached_state_indices_for_rule_input(
         &self,
         input_phrase: &Phrase,
         input_phrase_group_count: usize,
@@ -125,12 +140,13 @@ impl State {
             .match_rule_input(input_phrase, input_phrase_group_count)
     }
 
-    pub fn shuffle(&mut self, rng: &mut SmallRng) {
+    pub(crate) fn shuffle(&mut self, rng: &mut SmallRng) {
         assert!(self.scratch_state.is_none());
         self.storage.phrase_ranges.shuffle(rng);
         self.storage.rev += 1;
     }
 
+    /// Adds a new `phrase` to the `State` and returns a [PhraseId] referencing the newly added phrase.
     pub fn push(&mut self, phrase: Vec<Token>) -> PhraseId {
         let group_count = phrase.groups().count();
         self.push_with_metadata(phrase, group_count)
@@ -167,18 +183,22 @@ impl State {
         id
     }
 
+    /// Returns the number of phrases in the `State`.
     pub fn len(&self) -> usize {
         self.storage.phrase_ranges.len()
     }
 
+    /// Returns an iterator of references to phrases in the `State`.
     pub fn iter(&self) -> impl Iterator<Item = PhraseId> + '_ {
         self.storage.iter()
     }
 
+    /// Returns the [Phrase] referenced by the provided [PhraseId].
     pub fn get(&self, id: PhraseId) -> &Phrase {
         self.storage.get(id)
     }
 
+    /// Constructs and returns a [Vec] of all phrases in the `State`.
     pub fn get_all(&self) -> Vec<Vec<Token>> {
         self.storage
             .phrase_ranges
@@ -189,6 +209,11 @@ impl State {
             .collect::<Vec<_>>()
     }
 
+    /// Returns an iterator of references to phrases matching the provided `pattern`.
+    ///
+    /// If `match_pattern_length` is `true`, only phrases matching the exact length of the provided
+    /// `pattern` will be returned. Otherwise, phrases longer than the provided `pattern` may be returned,
+    /// if their beginning subset matches the pattern.
     pub fn iter_pattern<const N: usize>(
         &self,
         pattern: [Option<Atom>; N],
@@ -199,16 +224,16 @@ impl State {
         })
     }
 
-    pub fn from_phrases(phrases: &[Vec<Token>]) -> State {
+    #[cfg(test)]
+    pub(crate) fn from_phrases(phrases: &[Vec<Token>]) -> State {
         let mut state = State::new();
         for p in phrases {
             state.push(p.clone());
         }
-        state.update_cache();
         state
     }
 
-    pub fn lock_scratch(&mut self) {
+    pub(crate) fn lock_scratch(&mut self) {
         self.scratch_state = Some(ScratchState {
             storage_phrase_ranges_len: self.storage.phrase_ranges.len(),
             storage_tokens_len: self.storage.tokens.len(),
@@ -216,12 +241,12 @@ impl State {
         });
     }
 
-    pub fn unlock_scratch(&mut self) {
+    pub(crate) fn unlock_scratch(&mut self) {
         self.reset_scratch();
         self.scratch_state = None;
     }
 
-    pub fn reset_scratch(&mut self) {
+    pub(crate) fn reset_scratch(&mut self) {
         let ScratchState {
             storage_phrase_ranges_len,
             storage_tokens_len,
@@ -399,7 +424,7 @@ impl MatchCache {
     }
 }
 
-pub fn state_to_string(state: &State, string_cache: &StringCache) -> String {
+pub(crate) fn state_to_string(state: &State, string_cache: &StringCache) -> String {
     state
         .iter()
         .map(|phrase_id| state.get(phrase_id).to_string(string_cache))

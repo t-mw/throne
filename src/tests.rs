@@ -576,7 +576,7 @@ fn context_from_text_comment_state_test() {
 fn context_append_state_test() {
     let mut context = Context::from_text("test 1 2").unwrap();
 
-    context.append_state("test 3 4");
+    context.push_state("test 3 4");
 
     assert_eq!(
         context.core.state.get_all(),

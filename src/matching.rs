@@ -2,6 +2,7 @@ use crate::rule::{Rule, RuleBuilder};
 use crate::state::State;
 use crate::string_cache::Atom;
 use crate::token::*;
+use crate::update::SideInput;
 
 use std::fmt;
 
@@ -477,10 +478,6 @@ pub fn match_variables_assuming_compatible_structure(
     true
 }
 
-// https://stackoverflow.com/questions/44246722/is-there-any-way-to-create-an-alias-of-a-specific-fnmut
-pub trait SideInput: FnMut(&Phrase) -> Option<Vec<Token>> {}
-impl<F> SideInput for F where F: FnMut(&Phrase) -> Option<Vec<Token>> {}
-
 // Checks whether the rule's forward and backward predicates match the state.
 // Returns a new rule with all variables resolved, with backwards/side
 // predicates removed.
@@ -492,6 +489,8 @@ pub(crate) fn rule_matches_state<F>(
 where
     F: SideInput,
 {
+    state.update_cache();
+
     let inputs = &r.inputs;
     let outputs = &r.outputs;
 

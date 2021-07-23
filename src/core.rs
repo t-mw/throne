@@ -2,11 +2,13 @@ use crate::matching::*;
 use crate::rule::Rule;
 use crate::state::State;
 use crate::string_cache::Atom;
+use crate::update::SideInput;
 
 use rand::{self, rngs::SmallRng};
 
 use std::vec::Vec;
 
+/// Stores the [State] and [Rules](Rule) for a [Context](crate::context::Context).
 #[derive(Clone)]
 pub struct Core {
     pub state: State,

@@ -3,12 +3,16 @@ use crate::token::{phrase_to_string, PhraseGroup, Token};
 
 use std::marker::PhantomData;
 
+/// Represents a throne rule.
+///
+/// A `Rule` is uniquely identified by its `id`.
+/// Each input and output for a `Rule` is a [Phrase](crate::Phrase).
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Rule {
     pub id: i32,
     pub inputs: Vec<Vec<Token>>,
     pub outputs: Vec<Vec<Token>>,
-    pub input_phrase_group_counts: Vec<usize>,
+    pub(crate) input_phrase_group_counts: Vec<usize>,
     pub source_span: LineColSpan,
     marker: PhantomData<()>,
 }

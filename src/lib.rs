@@ -1,3 +1,40 @@
+//! Throne is a game scripting language for prototyping and story logic.
+//!
+//! Documentation for learning the language itself can be found on [Github](https://github.com/t-mw/throne#readme).
+//!
+//! # Example
+//!
+//! ```
+//! use throne::{ContextBuilder, tokenize};
+//!
+//! // Write your script text inline or in an external file included with `include_str!(..)`
+//! let script = r#"
+//! Mary is sister of David
+//! Sarah is child of Mary
+//! Tom is child of David
+//!
+//! CHILD is child of PARENT . AUNT is sister of PARENT .
+//!     COUSIN is child of AUNT = COUSIN is cousin of CHILD
+//! "#;
+//!
+//! // Build the throne context using your script text to define the initial state and rules
+//! let mut context = ContextBuilder::new()
+//!     .text(script)
+//!     .build()
+//!     .unwrap_or_else(|e| panic!("Failed to build throne context: {}", e));
+//!
+//! // Execute an update step
+//! context.update().unwrap_or_else(|e| panic!("Throne context update failed: {}", e));
+//!
+//! // Fetch the updated state
+//! let state = context.core.state.get_all();
+//!
+//! // Convert a string to a throne phrase
+//! let expected_state_phrase = tokenize("Sarah is cousin of Tom", &mut context.string_cache);
+//!
+//! assert_eq!(state, vec![expected_state_phrase]);
+//! ```
+
 #[macro_use]
 extern crate lazy_static;
 extern crate pest;
@@ -11,14 +48,14 @@ mod core;
 #[cfg(not(target_arch = "wasm32"))]
 mod ffi;
 mod matching;
-mod parser;
+pub mod parser;
 mod rule;
-mod state;
+pub mod state;
 mod string_cache;
 #[cfg(test)]
 mod tests;
-mod token;
-mod update;
+pub mod token;
+pub mod update;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 

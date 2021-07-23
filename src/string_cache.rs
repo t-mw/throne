@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::i32;
 
+/// References a string or integer stored in a [StringCache].
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Atom {
@@ -9,26 +10,32 @@ pub struct Atom {
     v: u32,
 }
 
-#[derive(Clone, Debug, Default)]
+/// Stores the mappings between a set of [Atoms](Atom) and the primitives that they reference.
+#[derive(Clone, Debug)]
 pub struct StringCache {
     atom_to_str: Vec<String>,
     str_to_atom: HashMap<String, Atom>,
-    pub wildcard_counter: i32,
+    pub(crate) wildcard_counter: i32,
 }
 
 impl StringCache {
-    pub fn new() -> StringCache {
-        Default::default()
+    pub(crate) fn new() -> StringCache {
+        StringCache {
+            atom_to_str: vec![],
+            str_to_atom: HashMap::new(),
+            wildcard_counter: 0,
+        }
     }
 
-    pub fn str_to_atom(&mut self, text: &str) -> Atom {
+    /// Returns an [Atom] referencing the provided `string`, defining a new [Atom] if necessary.
+    pub fn str_to_atom(&mut self, string: &str) -> Atom {
         use std::str::FromStr;
 
-        if let Some(n) = i32::from_str(text).ok() {
+        if let Some(n) = i32::from_str(string).ok() {
             return StringCache::integer_to_atom(n);
         }
 
-        if let Some(atom) = self.str_to_existing_atom(text) {
+        if let Some(atom) = self.str_to_existing_atom(string) {
             return atom;
         }
 
@@ -38,23 +45,26 @@ impl StringCache {
             v: idx,
         };
 
-        self.atom_to_str.push(text.to_string());
-        self.str_to_atom.insert(text.to_string(), atom);
+        self.atom_to_str.push(string.to_string());
+        self.str_to_atom.insert(string.to_string(), atom);
 
         atom
     }
 
-    pub fn str_to_existing_atom(&self, text: &str) -> Option<Atom> {
-        self.str_to_atom.get(text).cloned()
+    /// Returns an [Atom] referencing the provided `string`, only if an [Atom] was previously defined for the string.
+    pub fn str_to_existing_atom(&self, string: &str) -> Option<Atom> {
+        self.str_to_atom.get(string).cloned()
     }
 
-    pub fn integer_to_atom(n: i32) -> Atom {
+    /// Returns an [Atom] referencing the provided `integer`.
+    pub fn integer_to_atom(integer: i32) -> Atom {
         Atom {
             is_integer: true,
-            v: n as u32,
+            v: integer as u32,
         }
     }
 
+    /// Returns the string referenced by the provided `atom`.
     pub fn atom_to_str(&self, atom: Atom) -> Option<&str> {
         if atom.is_integer {
             None
@@ -63,6 +73,7 @@ impl StringCache {
         }
     }
 
+    /// Returns the integer referenced by the provided `atom`.
     pub fn atom_to_integer(atom: Atom) -> Option<i32> {
         if atom.is_integer {
             Some(atom.v as i32)

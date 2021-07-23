@@ -37,13 +37,13 @@ impl fmt::Display for Error {
     }
 }
 
-mod generated {
+pub mod generated {
     #[derive(Parser)]
     #[grammar = "throne.pest"]
     pub struct Parser;
 }
 
-pub fn parse(
+pub(crate) fn parse(
     text: &str,
     mut string_cache: &mut StringCache,
     rng: &mut SmallRng,

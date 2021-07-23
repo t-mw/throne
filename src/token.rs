@@ -122,7 +122,7 @@ impl Token {
         }
     }
 
-    pub fn new_atom(atom: Atom, open_depth: u8, close_depth: u8) -> Token {
+    pub(crate) fn new_atom(atom: Atom, open_depth: u8, close_depth: u8) -> Token {
         Token {
             atom,
             flag: TokenFlag::None,
@@ -133,7 +133,7 @@ impl Token {
         }
     }
 
-    pub fn new_integer(n: i32, open_depth: u8, close_depth: u8) -> Token {
+    pub(crate) fn new_integer(n: i32, open_depth: u8, close_depth: u8) -> Token {
         Token {
             atom: StringCache::integer_to_atom(n),
             flag: TokenFlag::None,
@@ -160,6 +160,7 @@ impl Token {
     }
 }
 
+/// Converts the provided `string` to a [Phrase].
 pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
     assert!(!string.is_empty());
     let mut string = string.to_string();
@@ -240,8 +241,12 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
     result
 }
 
+/// A sequence of [Tokens](Token) representing a phrase, usually produced using [tokenize].
+///
+/// The owned representation of a `Phrase` is `Vec<Token>`.
+/// A `Phrase` occurs as a [State](crate::State) item or as an input or output item in a [Rule](crate::Rule).
 pub type Phrase = [Token];
-pub type VecPhrase = Vec<Token>;
+pub(crate) type VecPhrase = Vec<Token>;
 
 pub trait PhraseGroup {
     fn groups(&self) -> PhraseGroupIterator<'_>;
@@ -354,7 +359,7 @@ impl PhraseGroupCounter {
 }
 
 #[inline]
-pub fn token_equal(
+pub(crate) fn token_equal(
     a: &Token,
     b: &Token,
     ignore_depth: bool,
@@ -373,35 +378,38 @@ pub fn token_equal(
                     == b.close_depth as i32 - b_depth_diffs.1 as i32))
 }
 
-pub fn is_concrete_token(token: &Token) -> bool {
+pub(crate) fn is_concrete_token(token: &Token) -> bool {
     token.flag == TokenFlag::None
 }
 
-pub fn is_var_token(token: &Token) -> bool {
+pub(crate) fn is_var_token(token: &Token) -> bool {
     token.flag == TokenFlag::Variable
 }
 
-pub fn is_backwards_pred(tokens: &Phrase) -> bool {
+pub(crate) fn is_backwards_pred(tokens: &Phrase) -> bool {
     matches!(tokens[0].flag, TokenFlag::BackwardsPred(_))
 }
 
-pub fn is_side_pred(tokens: &Phrase) -> bool {
+pub(crate) fn is_side_pred(tokens: &Phrase) -> bool {
     tokens[0].flag == TokenFlag::Side
 }
 
-pub fn is_negated_pred(tokens: &Phrase) -> bool {
+pub(crate) fn is_negated_pred(tokens: &Phrase) -> bool {
     tokens[0].is_negated
 }
 
-pub fn is_concrete_pred(tokens: &Phrase) -> bool {
+pub(crate) fn is_concrete_pred(tokens: &Phrase) -> bool {
     !is_negated_pred(tokens) && is_concrete_token(&tokens[0])
 }
 
-pub fn is_var_pred(tokens: &Phrase) -> bool {
+pub(crate) fn is_var_pred(tokens: &Phrase) -> bool {
     !is_negated_pred(tokens) && is_var_token(&tokens[0])
 }
 
-pub fn normalize_match_phrase(variable_token: &Token, mut match_phrase: Vec<Token>) -> Vec<Token> {
+pub(crate) fn normalize_match_phrase(
+    variable_token: &Token,
+    mut match_phrase: Vec<Token>,
+) -> Vec<Token> {
     let len = match_phrase.len();
     match_phrase[0].is_negated = variable_token.is_negated;
     match_phrase[0].open_depth += variable_token.open_depth;
@@ -419,7 +427,7 @@ impl PhraseString for Phrase {
     }
 }
 
-pub fn phrase_to_string(phrase: &Phrase, string_cache: &StringCache) -> String {
+pub(crate) fn phrase_to_string(phrase: &Phrase, string_cache: &StringCache) -> String {
     let mut tokens = vec![];
 
     for t in phrase {
@@ -454,7 +462,7 @@ pub fn phrase_to_string(phrase: &Phrase, string_cache: &StringCache) -> String {
     tokens.join(" ")
 }
 
-pub fn test_phrase_pattern_match<const N: usize>(
+pub(crate) fn test_phrase_pattern_match<const N: usize>(
     phrase: &Phrase,
     pattern: [Option<Atom>; N],
     match_pattern_length: bool,
