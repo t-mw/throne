@@ -73,7 +73,7 @@ fn default_rng() -> SmallRng {
     SmallRng::from_rng(&mut thread_rng()).unwrap()
 }
 
-/// Stores the [State], [Rules](Rule) and [Atom] mappings for a throne script.
+/// Stores the [State], [Rules](Rule) and [Atom] mappings for a Throne script.
 ///
 /// Create a new `Context` using a [ContextBuilder].
 #[derive(Clone)]

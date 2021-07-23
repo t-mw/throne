@@ -17,11 +17,11 @@
 //!     COUSIN is child of AUNT = COUSIN is cousin of CHILD
 //! "#;
 //!
-//! // Build the throne context using your script text to define the initial state and rules
+//! // Build the Throne context using your script text to define the initial state and rules
 //! let mut context = ContextBuilder::new()
 //!     .text(script)
 //!     .build()
-//!     .unwrap_or_else(|e| panic!("Failed to build throne context: {}", e));
+//!     .unwrap_or_else(|e| panic!("Failed to build Throne context: {}", e));
 //!
 //! // Execute an update step
 //! context.update().unwrap_or_else(|e| panic!("Throne context update failed: {}", e));
@@ -29,7 +29,7 @@
 //! // Fetch the updated state
 //! let state = context.core.state.get_all();
 //!
-//! // Convert a string to a throne phrase
+//! // Convert a string to a Throne phrase
 //! let expected_state_phrase = tokenize("Sarah is cousin of Tom", &mut context.string_cache);
 //!
 //! assert_eq!(state, vec![expected_state_phrase]);

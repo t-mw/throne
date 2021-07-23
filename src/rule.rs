@@ -3,7 +3,7 @@ use crate::token::{phrase_to_string, PhraseGroup, Token};
 
 use std::marker::PhantomData;
 
-/// Represents a throne rule.
+/// Represents a Throne rule.
 ///
 /// A `Rule` is uniquely identified by its `id`.
 /// Each input and output for a `Rule` is a [Phrase](crate::Phrase).
