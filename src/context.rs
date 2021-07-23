@@ -125,7 +125,7 @@ impl Context {
         self.update_with_side_input(|_: &Phrase| None)
     }
 
-    /// Equivalent to [Context::update()] with a callback to respond to `^` predicates.
+    /// Equivalent to [Context::update()], but accepts a callback to respond to `^` predicates.
     pub fn update_with_side_input<F>(&mut self, side_input: F) -> Result<(), update::Error>
     where
         F: SideInput,
