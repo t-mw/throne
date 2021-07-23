@@ -48,14 +48,14 @@ mod core;
 #[cfg(not(target_arch = "wasm32"))]
 mod ffi;
 mod matching;
-pub mod parser;
+mod parser;
 mod rule;
-pub mod state;
+mod state;
 mod string_cache;
 #[cfg(test)]
 mod tests;
 pub mod token;
-pub mod update;
+mod update;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
@@ -65,9 +65,15 @@ pub use crate::core::Core;
 #[doc(hidden)]
 pub use crate::ffi::*;
 pub use crate::rule::Rule;
-pub use crate::state::State;
+pub use crate::state::{PhraseId, State};
 pub use crate::string_cache::{Atom, StringCache};
 pub use crate::token::{tokenize, Phrase, PhraseGroup, PhraseString, Token};
-pub use crate::update::update;
+pub use crate::update::{update, SideInput};
 #[cfg(target_arch = "wasm32")]
 pub use crate::wasm::*;
+
+pub mod errors {
+    pub use crate::matching::ExcessivePermutationError;
+    pub use crate::parser::Error as ParserError;
+    pub use crate::update::{Error as UpdateError, RuleRepeatError};
+}
