@@ -6,7 +6,7 @@ use rand::{rngs::SmallRng, seq::SliceRandom};
 
 use std::ops::Range;
 
-/// References a phrase in a [State].
+/// References a [Phrase] in a [State].
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct PhraseId {
     idx: usize,
