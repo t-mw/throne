@@ -154,16 +154,6 @@ impl Context {
         self.core.state.push(tokenize(text, &mut self.string_cache));
     }
 
-    pub fn remove_state<const N: usize>(
-        &mut self,
-        pattern: [Option<Atom>; N],
-        match_pattern_length: bool,
-    ) {
-        self.core
-            .state
-            .remove_pattern(pattern, match_pattern_length);
-    }
-
     pub fn find_matching_rules<F>(
         &self,
         mut side_input: F,
@@ -202,35 +192,6 @@ impl Context {
 
     pub fn print(&self) {
         println!("{}", self);
-    }
-
-    pub fn find_phrase<const N: usize>(
-        &self,
-        pattern: [Option<Atom>; N],
-        match_pattern_length: bool,
-    ) -> Option<&[Token]> {
-        for phrase_id in self.core.state.iter() {
-            let phrase = self.core.state.get(phrase_id);
-            if test_phrase_pattern_match(phrase, pattern, match_pattern_length) {
-                return Some(phrase);
-            }
-        }
-        None
-    }
-
-    pub fn find_phrases<const N: usize>(
-        &self,
-        pattern: [Option<Atom>; N],
-        match_pattern_length: bool,
-    ) -> Vec<&Phrase> {
-        let mut result = vec![];
-        for phrase_id in self.core.state.iter() {
-            let phrase = self.core.state.get(phrase_id);
-            if test_phrase_pattern_match(phrase, pattern, match_pattern_length) {
-                result.push(phrase);
-            }
-        }
-        result
     }
 }
 

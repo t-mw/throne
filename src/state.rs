@@ -171,7 +171,7 @@ impl State {
         self.storage.phrase_ranges.len()
     }
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = PhraseId> + 'a {
+    pub fn iter(&self) -> impl Iterator<Item = PhraseId> + '_ {
         self.storage.iter()
     }
 
@@ -187,6 +187,16 @@ impl State {
                 self.storage.tokens[token_range.clone()].to_vec()
             })
             .collect::<Vec<_>>()
+    }
+
+    pub fn iter_pattern<const N: usize>(
+        &self,
+        pattern: [Option<Atom>; N],
+        match_pattern_length: bool,
+    ) -> impl Iterator<Item = PhraseId> + '_ {
+        self.iter().filter(move |phrase_id| {
+            test_phrase_pattern_match(self.get(*phrase_id), pattern, match_pattern_length)
+        })
     }
 
     pub fn from_phrases(phrases: &[Vec<Token>]) -> State {

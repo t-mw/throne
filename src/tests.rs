@@ -2077,9 +2077,10 @@ fn find_phrases_test() {
             .unwrap();
     let foo_atom = context.str_to_atom("foo");
     let phrases: Vec<VecPhrase> = context
-        .find_phrases([None, Some(foo_atom), None], false)
-        .iter()
-        .map(|p| p.to_vec())
+        .core
+        .state
+        .iter_pattern([None, Some(foo_atom), None], false)
+        .map(|phrase_id| context.core.state.get(phrase_id).to_vec())
         .collect();
 
     for phrase in &phrases {
@@ -2102,9 +2103,10 @@ fn find_phrases_exact_length_test() {
             .unwrap();
     let foo_atom = context.str_to_atom("foo");
     let phrases: Vec<VecPhrase> = context
-        .find_phrases([None, Some(foo_atom), None], true)
-        .iter()
-        .map(|p| p.to_vec())
+        .core
+        .state
+        .iter_pattern([None, Some(foo_atom), None], true)
+        .map(|phrase_id| context.core.state.get(phrase_id).to_vec())
         .collect();
     assert_eq!(
         phrases,
@@ -2116,12 +2118,15 @@ fn find_phrases_exact_length_test() {
 }
 
 #[test]
-fn remove_phrase_test() {
+fn remove_pattern_test() {
     let mut context =
         Context::from_text("foo . a foo . a b bar . a foo c . c foo b . bar b c . a foo b c")
             .unwrap();
     let foo_atom = context.str_to_atom("foo");
-    context.remove_state([None, Some(foo_atom), None], false);
+    context
+        .core
+        .state
+        .remove_pattern([None, Some(foo_atom), None], false);
     assert_eq!(
         context.core.state.get_all(),
         [
@@ -2139,7 +2144,10 @@ fn remove_phrase_exact_length_test() {
         Context::from_text("foo . a foo . a b bar . a foo c . c foo b . bar b c . a foo b c")
             .unwrap();
     let foo_atom = context.str_to_atom("foo");
-    context.remove_state([None, Some(foo_atom), None], true);
+    context
+        .core
+        .state
+        .remove_pattern([None, Some(foo_atom), None], true);
     assert_eq!(
         context.core.state.get_all(),
         [
