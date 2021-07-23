@@ -185,7 +185,11 @@ impl Context {
         Ok(rules)
     }
 
-    pub fn update<F>(&mut self, side_input: F) -> Result<(), update::Error>
+    pub fn update(&mut self) -> Result<(), update::Error> {
+        self.update_with_side_input(|_: &Phrase| None)
+    }
+
+    pub fn update_with_side_input<F>(&mut self, side_input: F) -> Result<(), update::Error>
     where
         F: SideInput,
     {

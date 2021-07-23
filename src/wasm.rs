@@ -124,7 +124,10 @@ impl Context {
         self.throne_context.remove_state([Some(atom)], false);
     }
 
-    pub fn update(&mut self, side_input: Option<js_sys::Function>) -> Result<(), JsValue> {
+    pub fn update_with_side_input(
+        &mut self,
+        side_input: Option<js_sys::Function>,
+    ) -> Result<(), JsValue> {
         if let Some(side_input) = side_input {
             let core = &mut self.throne_context.core;
             let string_cache = &mut self.throne_context.string_cache;
@@ -156,7 +159,7 @@ impl Context {
             js_from_update_result(update(core, side_input), &core.rules)
         } else {
             js_from_update_result(
-                self.throne_context.update(|_: &Phrase| None),
+                self.throne_context.update(),
                 &self.throne_context.core.rules,
             )
         }

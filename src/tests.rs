@@ -268,7 +268,7 @@ fn context_from_text_backwards_predicate_update_test() {
     )
     .unwrap();
 
-    context.update(|_: &Phrase| None).unwrap();
+    context.update().unwrap();
     context.print();
 
     assert_eq!(
@@ -292,7 +292,7 @@ fn context_from_text_backwards_predicate_update2_test() {
     .unwrap();
 
     context.print();
-    context.update(|_: &Phrase| None).unwrap();
+    context.update().unwrap();
     context.print();
 
     assert_eq!(
@@ -647,7 +647,7 @@ fn update_test() {
     .with_test_rng();
 
     context.print();
-    context.update(|_: &Phrase| None).unwrap();
+    context.update().unwrap();
     context.print();
 
     assert_eq!(
@@ -676,7 +676,7 @@ fn update2_test() {
     .with_test_rng();
 
     context.print();
-    context.update(|_: &Phrase| None).unwrap();
+    context.update().unwrap();
     context.print();
 
     assert_eq!(
@@ -2048,7 +2048,7 @@ fn update_rule_repeat_error_test() {
     )
     .unwrap();
 
-    let result = context.update(|_: &Phrase| None);
+    let result = context.update();
     assert!(matches!(
         result,
         Err(update::Error::RuleRepeatError(update::RuleRepeatError {

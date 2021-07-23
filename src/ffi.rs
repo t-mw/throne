@@ -26,7 +26,7 @@ pub extern "C" fn throne_context_destroy(context: *mut Context) {
 #[no_mangle]
 pub extern "C" fn throne_update(context: *mut Context) {
     let context = unsafe { &mut *context };
-    context.update(|_: &Phrase| None).unwrap();
+    context.update().unwrap();
 }
 
 #[no_mangle]

@@ -63,7 +63,7 @@ mod example {
             };
 
             context
-                .update(|p: &throne::Phrase| {
+                .update_with_side_input(|p: &throne::Phrase| {
                     if p.len() != 2 {
                         return None;
                     }
