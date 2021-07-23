@@ -163,13 +163,13 @@ impl Context {
     }
 
     /// Alias for [StringCache::str_to_atom].
-    pub fn str_to_atom(&mut self, text: &str) -> Atom {
-        self.string_cache.str_to_atom(text)
+    pub fn str_to_atom(&mut self, string: &str) -> Atom {
+        self.string_cache.str_to_atom(string)
     }
 
     /// Alias for [StringCache::str_to_existing_atom].
-    pub fn str_to_existing_atom(&self, text: &str) -> Option<Atom> {
-        self.string_cache.str_to_existing_atom(text)
+    pub fn str_to_existing_atom(&self, string: &str) -> Option<Atom> {
+        self.string_cache.str_to_existing_atom(string)
     }
 
     /// Alias for [StringCache::atom_to_str].
