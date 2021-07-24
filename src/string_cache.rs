@@ -28,6 +28,10 @@ impl StringCache {
     }
 
     /// Returns an [Atom] referencing the provided `string`, defining a new [Atom] if necessary.
+    ///
+    /// The string referenced by the returned [Atom] can be retrieved using [Self::atom_to_str()],
+    /// unless the string could be converted to an integer in which case [Self::atom_to_integer()]
+    /// must be used.
     pub fn str_to_atom(&mut self, string: &str) -> Atom {
         use std::str::FromStr;
 
