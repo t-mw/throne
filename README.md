@@ -26,6 +26,11 @@ As described in [this](https://brunodias.dev/2017/05/05/inform-prototyping.html)
 
 Throne allows gameplay logic to be defined through rules and so provides some of the benefits of a rule-based language like Inform, but is also fast to execute and easy to embed in an existing engine. Its syntax is strongly influenced by the [Ceptre](https://www.cs.cmu.edu/~cmartens/ceptre.pdf) programming language.
 
+## Examples
+- [blocks](examples/blocks.throne) - a simple tile matching game run with `cargo run --example blocks`.
+- [throne-playground](https://github.com/t-mw/throne-playground) - a web-based editor for Throne.
+- [Urban Gift](https://twitter.com/UrbanGiftGame/) - uses Throne for gameplay logic.
+
 ## Reference
 
 Rules are of the format `INPUT = OUTPUT`, where `INPUT` and `OUTPUT` are lists that use period (`.`) as a separator between items:
@@ -88,11 +93,6 @@ Stage phrases only differ in their behavior to normal phrases when used as a pre
 | Example | Compiled Form |
 | --- | --- |
 | <pre>#first-stage: {<br/>  foo = bar<br/>  () = #second-stage<br/>}</pre> | <pre>#first-stage . foo = #first-stage . bar<br/>#first-stage . () = #second-stage</pre> |
-
-## Examples
-- [blocks](examples/blocks.throne) - a simple tile matching game run with `cargo run --example blocks`.
-- [throne-playground](https://github.com/t-mw/throne-playground) - a web-based editor for Throne.
-- [Urban Gift](https://twitter.com/UrbanGiftGame/) - uses Throne for gameplay logic.
 
 ## Build for Wasm
 
