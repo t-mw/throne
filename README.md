@@ -27,7 +27,7 @@ As described in [this](https://brunodias.dev/2017/05/05/inform-prototyping.html)
 Throne allows gameplay logic to be defined through rules and so provides some of the benefits of a rule-based language like Inform, but is also fast to execute and easy to embed in an existing engine. Its syntax is strongly influenced by the [Ceptre](https://www.cs.cmu.edu/~cmartens/ceptre.pdf) programming language.
 
 ## Examples
-- [throne-playground](https://github.com/t-mw/throne-playground) - a web-based editor for Throne.
+- [throne-playground](https://github.com/t-mw/throne-playground) - a web-based editor for Throne, made possible by compiling Throne to WebAssembly.
 - [blocks](examples/blocks.throne) - a simple tile matching game run with `cargo run --example blocks`.
 - [storylets-rs](https://github.com/t-mw/storylets-rs) - A storylet-based narrative engine for games.
 - [Urban Gift](https://twitter.com/UrbanGiftGame/) - uses Throne for gameplay logic.
@@ -95,7 +95,7 @@ Stage phrases only differ in their behavior to normal phrases when used as a pre
 | --- | --- |
 | <pre>#first-stage: {<br/>  foo = bar<br/>  () = #second-stage<br/>}</pre> | <pre>#first-stage . foo = #first-stage . bar<br/>#first-stage . () = #second-stage</pre> |
 
-## Build for Wasm
+## Build for WebAssembly
 
 1. Run `cargo install wasm-pack` to install [wasm-pack](https://github.com/rustwasm/wasm-pack).
 1. Run `npm install ; npm start` in this directory.
