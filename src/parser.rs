@@ -523,7 +523,7 @@ fn check_rule_variables(
     }
 
     for (var_name, count) in &var_counts {
-        if *count == 1 {
+        if !var_name.starts_with(WILDCARD_DUMMY_PREFIX) && *count == 1 {
             println!("WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.", var_name, rule_str);
         }
     }
@@ -546,7 +546,7 @@ fn check_rule_variables_for_pair(pair: Pair<generated::Rule>, enable_unused_warn
     }
 
     for (var_name, count) in &var_counts {
-        if *count == 1 {
+        if !var_name.starts_with(WILDCARD_DUMMY_PREFIX) && *count == 1 {
             println!("WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.", var_name, rule_str);
         }
     }

@@ -4,6 +4,8 @@ use regex::Regex;
 
 use std::hash::Hash;
 
+pub(crate) const WILDCARD_DUMMY_PREFIX: &str = "WILDCARD";
+
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum TokenFlag {
     None,
@@ -215,7 +217,7 @@ pub fn tokenize(string: &str, string_cache: &mut StringCache) -> Vec<Token> {
             let atom = string_cache.str_to_atom(strings.next().expect("string"));
             result.push(Token::new_atom(atom, open_depth, close_depth));
         } else if is_wildcard_token(token) {
-            let var_string = format!("WILDCARD{}", string_cache.wildcard_counter);
+            let var_string = format!("{}{}", WILDCARD_DUMMY_PREFIX, string_cache.wildcard_counter);
             string_cache.wildcard_counter += 1;
 
             result.push(Token::new(
