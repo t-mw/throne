@@ -41,17 +41,16 @@ mod example {
             .build()
             .unwrap_or_else(|e| panic!("{}", e));
 
-        let kd = context.str_to_atom("kd");
-        let ku = context.str_to_atom("ku");
-        let kp = context.str_to_atom("kp");
+        let kd = context.str_to_atom("key-down");
+        let ku = context.str_to_atom("key-up");
+        let kp = context.str_to_atom("key-pressed");
         let left = context.str_to_atom("left");
         let right = context.str_to_atom("right");
         let up = context.str_to_atom("up");
         let down = context.str_to_atom("down");
 
         while window.is_open() && !window.is_key_down(Key::Escape) {
-            context.push_state("#tick");
-            context.push_state("dt 3");
+            context.push_state("#update");
             // context.print();
 
             let string_to_key = |s: &throne::Atom| match s {
@@ -106,9 +105,10 @@ mod example {
                     p.get(0).and_then(|t| t.as_str(&context.string_cache)),
                     p.get(2).and_then(|t| t.as_integer()),
                     p.get(3).and_then(|t| t.as_integer()),
+                    p.get(4).and_then(|t| t.as_integer()),
                 ) {
-                    (Some("block-falling"), Some(x), Some(y))
-                    | (Some("block-set"), Some(x), Some(y)) => {
+                    (Some("block-falling"), Some(x), Some(y), _)
+                    | (Some("block-set"), _, Some(x), Some(y)) => {
                         let color = 0x00b27474;
 
                         let x0 = x * 10;
