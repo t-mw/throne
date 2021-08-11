@@ -1,4 +1,4 @@
-# Throne
+![Throne](Throne.png)
 
 [![Crates.io](https://img.shields.io/crates/v/throne.svg)](https://crates.io/crates/throne)
 [![Docs Status](https://docs.rs/throne/badge.svg)](https://docs.rs/throne)
