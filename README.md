@@ -101,7 +101,7 @@ Special syntax exists to make it easier to write complex rules, but in the end t
 | --- | --- | --- | --- |
 | Input phrase prefixed with `$` | Copies the input phrase to the rule output. | `$foo = bar` | `foo = bar . foo` |
 | A set of rules surrounded by curly braces prefixed with `INPUT:` where `INPUT` is a list of phrases | Copies `INPUT` to each rule's inputs. | <pre>foo . bar: {<br/>  hello = world<br/>  123 = 456<br/>}</pre> | <pre>foo . bar . hello = world<br/>foo . bar . 123 = 456</pre> |
-| `<<PHRASE . PHRASES` where `PHRASE` is a single phrase and `PHRASES` is a list of phrases | Replaces `<<PHRASE` with `PHRASES` wherever it exists in a rule's list of inputs. | <pre><<arithmetic A B . + A 1 B<br/><<arithmetic A B . - A 1 B<br/>foo . <<arithmetic X Y = Y</pre> | <pre>foo . + X 1 Y = Y<br/>foo . - X 1 Y = Y</pre> |
+| `<<PHRASE . PHRASES` where `PHRASE` is a single phrase and `PHRASES` is a list of phrases | Replaces `<<PHRASE` with `PHRASES` wherever it exists in a rule's list of inputs. | <pre><<math A B . + A 1 B<br/><<math A C . - A 1 B . % B 2 C<br/>foo X . <<math X Y = Y</pre> | <pre>foo X . + X 1 Y = Y<br/>foo X . - X 1 B . % B 2 Y = Y</pre> |
 
 ### The `()` Phrase
 
