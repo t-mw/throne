@@ -21,7 +21,7 @@ CHILD is child of PARENT . AUNT is sister of PARENT .
 
 ## Motivation
 
-The original inspiration for Throne comes from languages used to author interactive fiction, such as [Inform](https://inform7.com/).
+The original inspiration for Throne comes from languages used to author interactive fiction, such as [Inform](http://inform7.com/).
 As described in [this](https://brunodias.dev/2017/05/05/inform-prototyping.html) article, Inform can be used to prototype games from genres besides interactive fiction. By defining gameplay through rules, some of the verbosity of general purpose programming languages can be avoided. However, Inform and other interactive fiction authoring systems are too slow to execute their rules in every frame of a real-time gameplay loop and are difficult to embed in an existing engine.
 
 Throne allows gameplay logic to be defined through rules and so provides some of the benefits of a rule-based language like Inform, but is also fast to execute and easy to embed in an existing engine. Its rule syntax and mechanics began as simplified versions of those found in the [Ceptre](https://www.cs.cmu.edu/~cmartens/ceptre.pdf) programming language, which was the main influence for the design of Throne.
