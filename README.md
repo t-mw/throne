@@ -30,7 +30,6 @@ Throne allows gameplay logic to be defined through rules and so provides some of
 - [throne-playground](https://github.com/t-mw/throne-playground) - a web-based editor for Throne, made possible by compiling Throne to WebAssembly.
 - [blocks](examples/blocks.throne) - a simple tile matching game run with `cargo run --example blocks`.
 - [storylets-rs](https://github.com/t-mw/storylets-rs) - A storylet-based narrative engine for games.
-- [Urban Gift](https://twitter.com/UrbanGiftGame/) - uses Throne for gameplay logic.
 
 ## Reference
 
