@@ -1,7 +1,3 @@
-*** TODO support custom backwards predicate (<<) under stage label
-*** TODO decide on consistent syntax for arguments e.g. keywords?
-*** TODO arbitrary math expressions e.g. 'expr 2 + A / 3 + 1.5 = B'
-*** TODO lispy key properties to enable pattern matching
 *** TODO syntax to match rule only once per update / permanently. or even make matching once per update the default.
   - option to scope permanence by a variable
   - #stage: { input 3= output } evaluates max 3 times within stage, becomes:
@@ -13,10 +9,15 @@
     }
     #tmp-cleanup: { tmp-counter-123 _ = () }
   - could also allow integer variables to be used instead of constant e.g. #stage: { $count N . input N= output }
+*** TODO lispy key properties to enable pattern matching or syntax sugar for getting + modifying values by key in a record of form (record (k1 v1) (k2 v2) ...)
 *** TODO make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
-*** TODO replace !== backwards predicate with ability to use '!' anywhere in a phrase
+*** TODO support custom backwards predicate (<<) under stage label
+*** TODO decide on consistent syntax for arguments e.g. keywords?
+*** TODO arbitrary math expressions e.g. 'expr 2 + A / 3 + 1.5 = B'
+*** TODO replace !== backwards predicate with ability to use '!' anywhere in a phrase e.g. !== A B would become == A !B
 *** TODO ability to arbitrarily nest 'stage' scopes
 *** TODO ability to put rule output in 'stage' scopes e.g. in1 . in2 = out1 { subset = () } === in1 . in2 . subset = out1
+*** TODO ability to put state in 'stage' scopes e.g. #stage { some-state } becomes #stage . !some-state = some-state
 *** TODO reduce serialization boilerplate with either serde or generated code (like with pest)
 *** TODO allow output in custom backwards predicate, i.e. output is appended to rule
 *** TODO test doing initial matching through ecs instead of first atoms (e.g. https://github.com/TomGillen/legion)
