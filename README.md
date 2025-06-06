@@ -68,7 +68,7 @@ The following predicates can be used as one of the items in a rule's list of inp
 | `<= X Y` | Matches when `X` is less than or equal to `Y` | `<= MONEY 0` |
 | `>= X Y` | Matches when `X` is greater than or equal to `Y` | `>= MONEY 0` |
 | `% X Y Z` | Matches when the modulo of `X` with `Y` equals `Z` | `% DEGREES 360 REM` |
-| `= X Y` | Matches when `X` equals `Y` | `= HEALTH 100` |
+| `== X Y` | Matches when `X` equals `Y` | `== HEALTH 100` |
 | `!X` | Matches when `X` does not exist in the state | `!this does not exist` |
 | `^X` | Calls the host application and matches depending on the response | `^os-clock-hour 12` |
 
@@ -100,7 +100,7 @@ Special syntax exists to make it easier to write complex rules, but in the end t
 | --- | --- | --- | --- |
 | Input phrase prefixed with `$` | Copies the input phrase to the rule output. | `$foo = bar` | `foo = bar . foo` |
 | A set of rules surrounded by curly braces prefixed with `INPUT:` where `INPUT` is a list of phrases | Copies `INPUT` to each rule's inputs. | <pre>foo . bar: {<br/>  hello = world<br/>  123 = 456<br/>}</pre> | <pre>foo . bar . hello = world<br/>foo . bar . 123 = 456</pre> |
-| `<<PHRASE . PHRASES` where `PHRASE` is a single phrase and `PHRASES` is a list of phrases | Replaces `<<PHRASE` with `PHRASES` wherever it exists in a rule's list of inputs. | <pre><<math A B . + A 1 B<br/><<math A C . - A 1 B . % B 2 C<br/>foo X . <<math X Y = Y</pre> | <pre>foo X . + X 1 Y = Y<br/>foo X . - X 1 B . % B 2 Y = Y</pre> |
+| `<<PHRASE . PHRASES` where `PHRASE` is a single phrase and `PHRASES` is a list of phrases | Replaces `<<PHRASE` with `PHRASES` wherever it exists in a rule's list of inputs. The same `<<PHRASE` can be defined multiple times with different `PHRASES`. | <pre><<math A B . + A 1 B<br/><<math A C . - A 1 B . % B 2 C<br/>foo X . <<math X Y = Y</pre> | <pre>foo X . + X 1 Y = Y<br/>foo X . - X 1 B . % B 2 Y = Y</pre> |
 
 ### The `()` Phrase
 
