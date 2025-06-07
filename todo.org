@@ -10,7 +10,15 @@
     #tmp-cleanup: { tmp-counter-123 _ = () }
   - could also allow integer variables to be used instead of constant e.g. #stage: { $count N . input N= output }
 *** TODO lispy key properties to enable pattern matching or syntax sugar for getting + modifying values by key in a record of form (record (k1 v1) (k2 v2) ...)
-*** TODO make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax
+    e.g to modify player (name N) (x 10) (y 20)
+    // This rule...
+    player :x X . + X 1 X' = player :x X'
+    // ...would be syntactic sugar for:
+    player ( (x X) ...OTHERS ) . + X 1 X' = player ( (x X') ...OTHERS )
+    // if there’s more than one ‘player’ on each side of the rule the verbose syntax is needed to disambiguate
+    // for record like phrases the ... syntax treats the members as an unordered list. for other phrases it would be ordered e.g for path a b c d e
+    path (FIRST ...REST) gives (b c d e) in REST
+*** TODO make $ remove instead of preserve, since remove is less common and this makes the stage behavior (#asdf:) consistent with other syntax 
 *** TODO support custom backwards predicate (<<) under stage label
 *** TODO decide on consistent syntax for arguments e.g. keywords?
 *** TODO arbitrary math expressions e.g. 'expr 2 + A / 3 + 1.5 = B'
