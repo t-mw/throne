@@ -6,6 +6,18 @@ extern crate criterion;
 extern crate lazy_static;
 
 use criterion::Criterion;
+use rand::{rngs::SmallRng, SeedableRng};
+
+const TEST_SEED: u64 = 123;
+
+fn build_context(text: &str) -> throne::Context {
+    let mut rng = SmallRng::seed_from_u64(TEST_SEED);
+    throne::ContextBuilder::new()
+        .text(text)
+        .rng(&mut rng)
+        .build()
+        .unwrap()
+}
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("update/context1", |b| {
@@ -14,16 +26,16 @@ fn criterion_benchmark(c: &mut Criterion) {
                 // only parse once, otherwise benchmark is affected
                 lazy_static! {
                     static ref CONTEXT: throne::Context =
-                        throne::Context::from_text(include_str!("wood.throne"))
-                            .unwrap()
-                            .with_test_rng();
+                        build_context(include_str!("wood.throne"));
                 }
 
                 CONTEXT.clone()
             },
             |mut context| {
-                context.append_state("#update");
-                throne::update(&mut context.core, |_: &throne::Phrase| None).unwrap();
+                context.push_state("#update");
+                context
+                    .update_with_side_input(|_: &throne::Phrase| None)
+                    .unwrap();
             },
         )
     });
@@ -34,15 +46,15 @@ fn criterion_benchmark(c: &mut Criterion) {
                 // only parse once, otherwise benchmark is affected
                 lazy_static! {
                     static ref CONTEXT: throne::Context =
-                        throne::Context::from_text(include_str!("spaceopera.throne"))
-                            .unwrap()
-                            .with_test_rng();
+                        build_context(include_str!("spaceopera.throne"));
                 }
 
                 CONTEXT.clone()
             },
             |mut context| {
-                throne::update(&mut context.core, |_: &throne::Phrase| None).unwrap();
+                context
+                    .update_with_side_input(|_: &throne::Phrase| None)
+                    .unwrap();
             },
         )
     });
@@ -53,16 +65,16 @@ fn criterion_benchmark(c: &mut Criterion) {
                 // only parse once, otherwise benchmark is affected
                 lazy_static! {
                     static ref CONTEXT: throne::Context =
-                        throne::Context::from_text(include_str!("increment.throne"))
-                            .unwrap()
-                            .with_test_rng();
+                        build_context(include_str!("increment.throne"));
                 }
 
                 CONTEXT.clone()
             },
             |mut context| {
-                context.append_state("#increment");
-                throne::update(&mut context.core, |_: &throne::Phrase| None).unwrap();
+                context.push_state("#increment");
+                context
+                    .update_with_side_input(|_: &throne::Phrase| None)
+                    .unwrap();
             },
         )
     });
