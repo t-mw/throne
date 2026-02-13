@@ -8,7 +8,7 @@ use crate::token::*;
 use crate::update::{self, update, SideInput};
 
 use itertools::Itertools;
-use rand::{self, rngs::SmallRng, thread_rng, SeedableRng};
+use rand::{self, rngs::SmallRng, SeedableRng};
 
 use std::fmt;
 use std::vec::Vec;
@@ -51,7 +51,7 @@ impl<'a> ContextBuilder<'a> {
 
     /// Sets the random number generator used for the [Context].
     ///
-    /// Defaults to `rand::rngs::SmallRng::from_rng(&mut rand::thread_rng())`.
+    /// Defaults to `rand::rngs::SmallRng::from_rng(&mut rand::rng())`.
     pub fn rng(mut self, rng: &'a mut SmallRng) -> Self {
         self.rng = Some(rng);
         self
@@ -70,7 +70,7 @@ impl<'a> ContextBuilder<'a> {
 
 fn default_rng() -> SmallRng {
     // NB: update doc for ContextBuilder::rng if this changes
-    SmallRng::from_rng(&mut thread_rng()).unwrap()
+    SmallRng::from_rng(&mut rand::rng())
 }
 
 /// Stores the [State], [Rules](Rule) and [Atom] mappings for a Throne script.

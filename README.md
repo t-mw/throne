@@ -129,4 +129,6 @@ Stage phrases only differ in their behavior to normal phrases when used as a pre
 ## Build for WebAssembly
 
 1. Run `cargo install wasm-pack` to install [wasm-pack](https://github.com/rustwasm/wasm-pack).
-1. Run `npm install ; npm start` in this directory.
+1. Run `npm install` in this directory.
+1. Run `npm start` for local development (Vite dev server).
+1. Run `npm run build` for a production build.

@@ -127,6 +127,13 @@ impl Context {
             .remove_pattern([Some(atom)], false);
     }
 
+    pub fn update(&mut self) -> Result<(), JsValue> {
+        js_from_update_result(
+            self.throne_context.update(),
+            &self.throne_context.core.rules,
+        )
+    }
+
     pub fn update_with_side_input(
         &mut self,
         side_input: Option<js_sys::Function>,
@@ -161,10 +168,7 @@ impl Context {
             };
             js_from_update_result(update(core, side_input), &core.rules)
         } else {
-            js_from_update_result(
-                self.throne_context.update(),
-                &self.throne_context.core.rules,
-            )
+            self.update()
         }
     }
 

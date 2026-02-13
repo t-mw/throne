@@ -1,6 +1,6 @@
 [package]
 name = "throne"
-version = "0.4.1"
+version = "0.5.0"
 description = "Scripting language for game prototyping and story logic"
 authors = ["Tobias Mansfield-Williams <contact@tmwhere.com>"]
 repository = "https://github.com/t-mw/throne"
@@ -8,33 +8,33 @@ readme = "README.md"
 keywords = ["script", "scripting", "game", "language"]
 categories = ["game-development"]
 license = "MIT"
-edition = "2018"
+edition = "2024"
 exclude = ["todo.org"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-itertools = "0.10"
-lazy_static = "1.4"
-pest = "2.1"
-pest_derive = "2.1"
-rand = { version = "0.8", features = ["small_rng"] }
-regex = "1.4"
+itertools = "0.14"
+lazy_static = "1.5"
+pest = "2.8.6"
+pest_derive = "2.8.6"
+rand = "0.10"
+regex = "1.12.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-criterion = "0.3"
-minifb = "0.19"
-pretty_assertions = "0.7"
+criterion = "0.8.2"
+minifb = "0.28"
+pretty_assertions = "1.4.1"
 
 [target.wasm32-unknown-unknown.dependencies]
-console_error_panic_hook = "0.1"
-getrandom = { version = "0.2", features = ["js"] }
-js-sys = "0.3"
-wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1.7"
+getrandom = { version = "0.4.1", features = ["wasm_js"] }
+js-sys = "0.3.85"
+wasm-bindgen = "0.2.108"
 
 [target.wasm32-unknown-unknown.dev-dependencies]
-wasm-bindgen-test = "0.3"
+wasm-bindgen-test = "0.3.58"
 
 [[bench]]
 name = "benchmark"

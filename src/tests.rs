@@ -199,12 +199,20 @@ fn context_from_text_backwards_predicate_simple_test() {
 
     context.print();
 
+    let replacement_atom = context.core.rules[0].inputs[0][2].atom;
+    let replacement = context
+        .string_cache
+        .atom_to_str(replacement_atom)
+        .unwrap()
+        .to_string();
+    assert!(replacement.starts_with("D_BACK"));
+
     assert_eq!(
         context.core.rules,
         [RuleBuilder::new(
             vec![
                 tokenize(
-                    "?state1 A D_BACK18164667602342569625",
+                    &format!("?state1 A {}", replacement),
                     &mut context.string_cache
                 ),
                 tokenize("test", &mut context.string_cache),
@@ -235,12 +243,20 @@ fn context_from_text_backwards_predicate_consuming_test() {
 
     context.print();
 
+    let replacement_atom = context.core.rules[0].inputs[0][2].atom;
+    let replacement = context
+        .string_cache
+        .atom_to_str(replacement_atom)
+        .unwrap()
+        .to_string();
+    assert!(replacement.starts_with("D_BACK"));
+
     assert_eq!(
         context.core.rules,
         [RuleBuilder::new(
             vec![
                 tokenize(
-                    "state1 A D_BACK18164667602342569625",
+                    &format!("state1 A {}", replacement),
                     &mut context.string_cache
                 ),
                 tokenize("state2 B A", &mut context.string_cache)
@@ -679,14 +695,16 @@ fn update2_test() {
     context.update().unwrap();
     context.print();
 
-    assert_eq!(
-        context.core.state.get_all(),
-        [
-            tokenize("2", &mut context.string_cache),
-            tokenize("1", &mut context.string_cache),
-            tokenize("(3)", &mut context.string_cache),
-        ]
-    );
+    let mut actual = context
+        .core
+        .state
+        .get_all()
+        .iter()
+        .map(|p| phrase_to_string(p, &context.string_cache))
+        .collect::<Vec<_>>();
+    actual.sort();
+
+    assert_eq!(actual, vec!["((3))", "(1)", "(2)"]);
 }
 
 #[test]

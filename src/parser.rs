@@ -6,7 +6,7 @@ use crate::token::*;
 use pest::iterators::Pair;
 use pest::Parser;
 use rand::rngs::SmallRng;
-use rand::Rng;
+use rand::RngExt;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -479,7 +479,7 @@ fn replace_variables(
         } else {
             loop {
                 let s = string_cache.atom_to_str(token.atom).unwrap();
-                let replacement_s = format!("{}_BACK{}{}", s, rng.gen::<u32>(), rng.gen::<u32>());
+                let replacement_s = format!("{}_BACK{}{}", s, rng.random::<u32>(), rng.random::<u32>());
                 let replacement = string_cache.str_to_atom(&replacement_s);
 
                 if existing_map.contains_key(&replacement) {
