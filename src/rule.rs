@@ -1,5 +1,5 @@
 use crate::string_cache::StringCache;
-use crate::token::{phrase_to_string, PhraseGroup, Token};
+use crate::token::{PhraseGroup, Token, phrase_to_string};
 
 use std::marker::PhantomData;
 

@@ -295,7 +295,7 @@ impl PhraseGroup for Phrase {
         vec[0].open_depth = 1 + (-min_interior_depth) as u8;
         vec[len - 1].close_depth = 1 + (interior_depth - min_interior_depth) as u8;
 
-        return vec;
+        vec
     }
 }
 
@@ -350,11 +350,11 @@ impl PhraseGroupCounter {
         }
         self.idx += 1;
         self.depth -= token.close_depth;
-        if self.depth <= self.at_depth {
-            if let Some(start_idx) = self.start_idx.take() {
-                self.group_count += 1;
-                return Some(start_idx);
-            }
+        if self.depth <= self.at_depth
+            && let Some(start_idx) = self.start_idx.take()
+        {
+            self.group_count += 1;
+            return Some(start_idx);
         }
         None
     }

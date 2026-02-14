@@ -1,3 +1,4 @@
+use crate::Context;
 use crate::matching::*;
 use crate::parser;
 use crate::rule::{LineColSpan, Rule, RuleBuilder};
@@ -5,11 +6,10 @@ use crate::state::{self, State};
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
 use crate::update;
-use crate::Context;
 
 #[cfg(not(target_arch = "wasm32"))]
 use pretty_assertions::{assert_eq, assert_ne};
-use rand::{rngs::SmallRng, SeedableRng};
+use rand::{SeedableRng, rngs::SmallRng};
 
 #[test]
 fn context_from_text_empty_test() {
@@ -615,7 +615,7 @@ fn context_find_matching_rules_test() {
     .unwrap();
 
     assert_eq!(
-        context.find_matching_rules(&mut |_: &Phrase| None).unwrap(),
+        context.find_matching_rules(|_: &Phrase| None).unwrap(),
         [
             RuleBuilder::new(
                 vec![
@@ -1984,7 +1984,7 @@ fn phrase_groups_compound_test() {
     assert_eq!(
         phrase
             .groups()
-            .nth(0)
+            .next()
             .unwrap()
             .groups_at_depth(2)
             .collect::<Vec<_>>(),
@@ -2037,7 +2037,10 @@ fn test_match_without_variables_test() {
 
     // test complicated match that caused integer overflow in the past
     let input_tokens = tokenize("ui-action ID RESULT HINT", &mut string_cache);
-    let pred_tokens = tokenize("ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan \"to your team\")", &mut string_cache);
+    let pred_tokens = tokenize(
+        "ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan \"to your team\")",
+        &mut string_cache,
+    );
 
     let result = test_match_without_variables(&input_tokens, &pred_tokens);
     assert!(result.is_some());
@@ -2052,7 +2055,10 @@ fn test_match_without_variables2_test() {
     input_tokens[0].open_depth = 0;
     input_tokens[0].close_depth = 0;
 
-    let pred_tokens = tokenize("ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan \"to your team\")", &mut string_cache);
+    let pred_tokens = tokenize(
+        "ui-action character-recruit (on-tick 1 2 (character-recruit (3 4))) (Recruit Logan \"to your team\")",
+        &mut string_cache,
+    );
 
     let result = test_match_without_variables(&input_tokens, &pred_tokens);
     assert!(result.is_some());
@@ -2102,7 +2108,7 @@ fn find_phrases_test() {
         .collect();
 
     for phrase in &phrases {
-        println!("{}", phrase_to_string(&phrase, &context.string_cache));
+        println!("{}", phrase_to_string(phrase, &context.string_cache));
     }
     assert_eq!(
         phrases,

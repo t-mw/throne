@@ -17,7 +17,8 @@ impl std::error::Error for ExcessivePermutationError {}
 
 impl fmt::Display for ExcessivePermutationError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
+        write!(
+            f,
             "Rule {} caused > {} state permutations to be checked. Review the complexity of the rule.",
             self.rule_id, EXCESSIVE_PERMUTATION_LIMIT
         )
@@ -80,7 +81,7 @@ impl BaseMatcher for TwoWayMatcher<'_> {
     }
 
     fn do_match(&mut self, token: &Token, phrase: &Phrase) -> bool {
-        let variable_already_matched = if let Some(ref existing_match) = self
+        let variable_already_matched = if let Some(existing_match) = self
             .existing_matches_and_result
             .iter()
             .find(|m| m.atom == token.atom)
@@ -246,9 +247,9 @@ impl MatchLite {
 
         // calculate close depth required so that sum(open_depth - close_depth) == 0
         let mut depth = 0;
-        for i in 0..subset_len - 1 {
-            depth += phrase[i].open_depth;
-            depth -= phrase[i].close_depth;
+        for token in phrase.iter().take(subset_len - 1) {
+            depth += token.open_depth;
+            depth -= token.close_depth;
         }
         depth += phrase[subset_len - 1].open_depth;
         phrase[subset_len - 1].close_depth = depth;
@@ -280,7 +281,7 @@ impl Match {
         Match {
             atom: token.atom,
             depths,
-            phrase: phrase,
+            phrase,
         }
     }
 }
@@ -349,13 +350,12 @@ pub fn match_state_variables_assuming_compatible_structure(
 
             let end_i = pred_token_i;
 
-            let variable_already_matched = if let Some(ref existing_match) =
-                existing_matches_and_result
-                    .iter()
-                    .find(|m| m.var_atom == token.atom)
+            let variable_already_matched = if let Some(existing_match) = existing_matches_and_result
+                .iter()
+                .find(|m| m.var_atom == token.atom)
             {
                 if !phrase_equal(
-                    &existing_match.as_slice(state),
+                    existing_match.as_slice(state),
                     &pred_tokens[start_i..end_i],
                     existing_match.var_open_close_depth,
                     (token.open_depth, token.close_depth),
@@ -443,10 +443,9 @@ pub fn match_variables_assuming_compatible_structure(
 
             let end_i = pred_token_i;
 
-            let variable_already_matched = if let Some(ref existing_match) =
-                existing_matches_and_result
-                    .iter()
-                    .find(|m| m.atom == token.atom)
+            let variable_already_matched = if let Some(existing_match) = existing_matches_and_result
+                .iter()
+                .find(|m| m.atom == token.atom)
             {
                 if !phrase_equal(
                     &existing_match.phrase[..],
@@ -618,7 +617,7 @@ impl InputStateMatch {
     fn test_final_match(
         &self,
         state_match_idx: usize,
-        inputs: &Vec<Vec<Token>>,
+        inputs: &[Vec<Token>],
         state: &State,
         states_matched_bool: &mut [bool],
         variables_matched: &mut Vec<MatchLite>,
@@ -647,8 +646,8 @@ impl InputStateMatch {
 }
 
 fn gather_potential_input_state_matches(
-    inputs: &Vec<Vec<Token>>,
-    input_phrase_group_counts: &Vec<usize>,
+    inputs: &[Vec<Token>],
+    input_phrase_group_counts: &[usize],
     state: &State,
 ) -> Option<InputStateMatches> {
     // only matches that have a structure that is compatible with the input should be returned from
@@ -687,7 +686,7 @@ fn gather_potential_input_state_matches(
             }
         }
 
-        if states.len() == 0 {
+        if states.is_empty() {
             return None;
         } else if states.len() == 1 {
             single_matches.push(InputStateMatch {
@@ -723,7 +722,7 @@ fn gather_potential_input_state_matches(
 
     // having gathered the variables for all initial single matches, eliminate
     // any other matches that have now become single matches.
-    if definite_matched_variables.len() > 0 {
+    if !definite_matched_variables.is_empty() {
         for input_state_match in multiple_matches {
             let mut state_single_match_idx = None;
 
@@ -780,7 +779,7 @@ fn gather_potential_input_state_matches(
 
 fn test_inputs_with_permutation(
     p_i: usize,
-    inputs: &Vec<Vec<Token>>,
+    inputs: &[Vec<Token>],
     state: &mut State,
     input_state_matches: &InputStateMatches,
     input_rev_permutation_counts: &[usize],
@@ -877,7 +876,7 @@ where
     let pred = assign_state_vars(pred, state, existing_matches_and_result, &mut group_counter);
 
     if let Some(eval_result) = side_input(&pred) {
-        if eval_result.len() == 0 {
+        if eval_result.is_empty() {
             return true;
         }
 
@@ -899,15 +898,15 @@ pub(crate) fn assign_state_vars(
     let mut result: Vec<Token> = vec![];
 
     for token in tokens {
-        if is_var_token(token) {
-            if let Some(m) = matches.iter().find(|m| m.var_atom == token.atom) {
-                let mut append_phrase = normalize_match_phrase(token, m.to_phrase(state));
-                for t in &append_phrase {
-                    group_counter.count(t);
-                }
-                result.append(&mut append_phrase);
-                continue;
+        if is_var_token(token)
+            && let Some(m) = matches.iter().find(|m| m.var_atom == token.atom)
+        {
+            let mut append_phrase = normalize_match_phrase(token, m.to_phrase(state));
+            for t in &append_phrase {
+                group_counter.count(t);
             }
+            result.append(&mut append_phrase);
+            continue;
         }
 
         result.push(token.clone());
@@ -928,11 +927,11 @@ pub fn assign_vars(tokens: &Phrase, matches: &[Match]) -> Vec<Token> {
     let mut result: Vec<Token> = vec![];
 
     for token in tokens {
-        if is_var_token(token) {
-            if let Some(m) = matches.iter().find(|m| m.atom == token.atom) {
-                result.append(&mut normalize_match_phrase(token, m.phrase.clone()));
-                continue;
-            }
+        if is_var_token(token)
+            && let Some(m) = matches.iter().find(|m| m.atom == token.atom)
+        {
+            result.append(&mut normalize_match_phrase(token, m.phrase.clone()));
+            continue;
         }
 
         result.push(token.clone());
@@ -1073,12 +1072,10 @@ pub fn evaluate_backwards_pred(tokens: &Phrase) -> Option<Vec<Token>> {
                 } else {
                     Some(tokens.to_owned())
                 }
+            } else if tokens[0].is_negated {
+                Some(tokens.to_owned())
             } else {
-                if tokens[0].is_negated {
-                    Some(tokens.to_owned())
-                } else {
-                    None
-                }
+                None
             }
         }
         _ => unreachable!("{:?}", tokens[0].flag),

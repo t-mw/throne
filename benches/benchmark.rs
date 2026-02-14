@@ -6,7 +6,7 @@ extern crate criterion;
 extern crate lazy_static;
 
 use criterion::Criterion;
-use rand::{rngs::SmallRng, SeedableRng};
+use rand::{SeedableRng, rngs::SmallRng};
 
 const TEST_SEED: u64 = 123;
 

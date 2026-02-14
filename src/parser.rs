@@ -3,10 +3,10 @@ use crate::rule::{LineColSpan, Rule, RuleBuilder};
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
 
-use pest::iterators::Pair;
 use pest::Parser;
-use rand::rngs::SmallRng;
+use pest::iterators::Pair;
 use rand::RngExt;
+use rand::rngs::SmallRng;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -45,7 +45,7 @@ pub mod generated {
 
 pub(crate) fn parse(
     text: &str,
-    mut string_cache: &mut StringCache,
+    string_cache: &mut StringCache,
     rng: &mut SmallRng,
 ) -> Result<ParseResult, Error> {
     let text = text.replace("()", QUI);
@@ -72,7 +72,7 @@ pub(crate) fn parse(
                     let (r, has_input_qui) = pair_to_throne_rule(
                         pair,
                         Some(prefix_inputs_pair.clone()),
-                        &mut string_cache,
+                        string_cache,
                         enable_unused_warnings,
                     );
                     rule_builders.push((r, enable_unused_warnings));
@@ -91,7 +91,7 @@ pub(crate) fn parse(
                         prefix_inputs_pair,
                         &mut inputs,
                         &mut outputs,
-                        &mut string_cache,
+                        string_cache,
                         false,
                     );
                     inputs.push(tokenize(QUI, string_cache));
@@ -109,31 +109,31 @@ pub(crate) fn parse(
                 let mut backwards_def = line.into_inner();
 
                 let mut first_phrase =
-                    tokenize(backwards_def.next().unwrap().as_str(), &mut string_cache);
+                    tokenize(backwards_def.next().unwrap().as_str(), string_cache);
 
                 let mut var_replacements =
-                    replace_variables(&mut first_phrase, &mut string_cache, None, rng);
+                    replace_variables(&mut first_phrase, string_cache, None, rng);
 
                 let mut other_phrases = backwards_def
-                    .map(|phrase| tokenize(phrase.as_str(), &mut string_cache))
+                    .map(|phrase| tokenize(phrase.as_str(), string_cache))
                     .collect::<Vec<_>>();
 
                 for phrase in &mut other_phrases {
                     var_replacements =
-                        replace_variables(phrase, &mut string_cache, Some(var_replacements), rng);
+                        replace_variables(phrase, string_cache, Some(var_replacements), rng);
                 }
 
                 backwards_preds.push((first_phrase, other_phrases));
             }
             generated::Rule::rule => {
                 rule_builders.push((
-                    pair_to_throne_rule(line, None, &mut string_cache, enable_unused_warnings).0,
+                    pair_to_throne_rule(line, None, string_cache, enable_unused_warnings).0,
                     enable_unused_warnings,
                 ));
             }
             generated::Rule::state => {
                 for phrase in line.into_inner() {
-                    state.push(tokenize(phrase.as_str(), &mut string_cache));
+                    state.push(tokenize(phrase.as_str(), string_cache));
                 }
             }
             generated::Rule::compiler_disable_unused_warnings => {
@@ -150,9 +150,9 @@ pub(crate) fn parse(
     let mut new_rule_builders = vec![];
     for (rule, enable_unused_warnings_for_rule) in &rule_builders {
         if let Some(mut replaced_rules) = replace_backwards_preds(
-            &rule,
+            rule,
             &backwards_preds,
-            &string_cache,
+            string_cache,
             *enable_unused_warnings_for_rule,
         ) {
             new_rule_builders.append(&mut replaced_rules);
@@ -307,7 +307,7 @@ fn add_input_phrase_pair_to_inputs_outputs(
 // for each backwards predicate, replace it with the corresponding phrase
 fn replace_backwards_preds(
     rule: &RuleBuilder,
-    backwards_preds: &Vec<(VecPhrase, Vec<VecPhrase>)>,
+    backwards_preds: &[(VecPhrase, Vec<VecPhrase>)],
     string_cache: &StringCache,
     enable_unused_warnings: bool,
 ) -> Option<Vec<RuleBuilder>> {
@@ -327,18 +327,21 @@ fn replace_backwards_preds(
 
             if !matched {
                 if enable_unused_warnings {
-                    println!("WARNING: backwards predicate in rule did not match '{}'. Check that the backwards predicate is defined.", rule.to_string(string_cache));
+                    println!(
+                        "WARNING: backwards predicate in rule did not match '{}'. Check that the backwards predicate is defined.",
+                        rule.to_string(string_cache)
+                    );
                 }
                 return None;
             }
         }
     }
 
-    let first = backwards_preds_per_input.iter().position(|v| v.len() > 0);
+    let first = backwards_preds_per_input.iter().position(|v| !v.is_empty());
     let last = backwards_preds_per_input
         .iter()
         .rev()
-        .position(|v| v.len() > 0)
+        .position(|v| !v.is_empty())
         .map(|idx| backwards_preds_per_input.len() - 1 - idx);
 
     let backwards_pred_input_range = match (first, last) {
@@ -356,7 +359,7 @@ fn replace_backwards_preds(
 
         for (i_i, input) in rule.inputs.iter().enumerate() {
             let backwards_preds_for_input = &backwards_preds_per_input[i_i];
-            if backwards_preds_for_input.len() > 0 {
+            if !backwards_preds_for_input.is_empty() {
                 let backwards_pred_pointer = backwards_pred_pointers[i_i];
                 let (first_phrase, _) =
                     &backwards_preds[backwards_preds_for_input[backwards_pred_pointer]];
@@ -375,11 +378,7 @@ fn replace_backwards_preds(
                 }
 
                 for m in &nonvariable_matches {
-                    if matches
-                        .iter()
-                        .find(|other_m| other_m.atom == m.atom)
-                        .is_none()
-                    {
+                    if !matches.iter().any(|other_m| other_m.atom == m.atom) {
                         matches.push(m.clone());
                     }
                 }
@@ -397,7 +396,7 @@ fn replace_backwards_preds(
 
             for (i_i, input) in rule.inputs.iter().enumerate() {
                 let backwards_preds_for_input = &backwards_preds_per_input[i_i];
-                if backwards_preds_for_input.len() > 0 {
+                if !backwards_preds_for_input.is_empty() {
                     let backwards_pred_pointer = backwards_pred_pointers[i_i];
                     let (first_phrase, other_phrases) =
                         &backwards_preds[backwards_preds_for_input[backwards_pred_pointer]];
@@ -406,7 +405,7 @@ fn replace_backwards_preds(
                     let mut inverse_matches = vec![];
 
                     match_variables_assuming_compatible_structure(
-                        &first_phrase,
+                        first_phrase,
                         &complete_input_phrase,
                         &mut inverse_matches,
                     );
@@ -437,7 +436,7 @@ fn replace_backwards_preds(
         for i in (backwards_pred_input_range.0..=backwards_pred_input_range.1).rev() {
             let backwards_preds_for_input = &backwards_preds_per_input[i];
 
-            if backwards_preds_for_input.len() == 0 {
+            if backwards_preds_for_input.is_empty() {
                 continue;
             }
 
@@ -467,7 +466,7 @@ fn replace_variables(
     existing_map: Option<HashMap<Atom, Atom>>,
     rng: &mut SmallRng,
 ) -> HashMap<Atom, Atom> {
-    let mut existing_map = existing_map.unwrap_or(HashMap::new());
+    let mut existing_map = existing_map.unwrap_or_default();
 
     for token in phrase {
         if token.flag != TokenFlag::Variable {
@@ -479,7 +478,8 @@ fn replace_variables(
         } else {
             loop {
                 let s = string_cache.atom_to_str(token.atom).unwrap();
-                let replacement_s = format!("{}_BACK{}{}", s, rng.random::<u32>(), rng.random::<u32>());
+                let replacement_s =
+                    format!("{}_BACK{}{}", s, rng.random::<u32>(), rng.random::<u32>());
                 let replacement = string_cache.str_to_atom(&replacement_s);
 
                 if existing_map.contains_key(&replacement) {
@@ -497,8 +497,8 @@ fn replace_variables(
 }
 
 fn check_rule_variables(
-    inputs: &Vec<Vec<Token>>,
-    outputs: &Vec<Vec<Token>>,
+    inputs: &[Vec<Token>],
+    outputs: &[Vec<Token>],
     pair: Pair<generated::Rule>,
     enable_unused_warnings: bool,
     string_cache: &StringCache,
@@ -524,7 +524,10 @@ fn check_rule_variables(
 
     for (var_name, count) in &var_counts {
         if !var_name.starts_with(WILDCARD_DUMMY_PREFIX) && *count == 1 {
-            println!("WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.", var_name, rule_str);
+            println!(
+                "WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.",
+                var_name, rule_str
+            );
         }
     }
 }
@@ -547,7 +550,10 @@ fn check_rule_variables_for_pair(pair: Pair<generated::Rule>, enable_unused_warn
 
     for (var_name, count) in &var_counts {
         if !var_name.starts_with(WILDCARD_DUMMY_PREFIX) && *count == 1 {
-            println!("WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.", var_name, rule_str);
+            println!(
+                "WARNING: {} was only used once in '{}'. Check for errors or replace with a wildcard.",
+                var_name, rule_str
+            );
         }
     }
 }

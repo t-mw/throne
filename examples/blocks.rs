@@ -102,7 +102,7 @@ mod example {
                 let p = context.core.state.get(phrase_id);
 
                 match (
-                    p.get(0).and_then(|t| t.as_str(&context.string_cache)),
+                    p.first().and_then(|t| t.as_str(&context.string_cache)),
                     p.get(2).and_then(|t| t.as_integer()),
                     p.get(3).and_then(|t| t.as_integer()),
                     p.get(4).and_then(|t| t.as_integer()),

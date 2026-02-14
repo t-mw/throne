@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::i32;
 
 /// References a string or integer stored in a [StringCache].
 #[repr(C)]
@@ -35,7 +34,7 @@ impl StringCache {
     pub fn str_to_atom(&mut self, string: &str) -> Atom {
         use std::str::FromStr;
 
-        if let Some(n) = i32::from_str(string).ok() {
+        if let Ok(n) = i32::from_str(string) {
             return StringCache::integer_to_atom(n);
         }
 

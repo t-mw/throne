@@ -175,17 +175,20 @@ impl State {
         });
         self.storage.rev += 1;
 
-        let id = PhraseId {
+        PhraseId {
             idx: self.storage.phrase_ranges.len() - 1,
             rev: self.storage.rev,
-        };
-
-        id
+        }
     }
 
     /// Returns the number of phrases in the `State`.
     pub fn len(&self) -> usize {
         self.storage.phrase_ranges.len()
+    }
+
+    /// Returns `true` if the `State` contains no phrases.
+    pub fn is_empty(&self) -> bool {
+        self.storage.phrase_ranges.is_empty()
     }
 
     /// Returns an iterator of references to phrases in the `State`.

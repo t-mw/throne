@@ -5,10 +5,10 @@ use crate::rule::Rule;
 use crate::state::{self, State};
 use crate::string_cache::{Atom, StringCache};
 use crate::token::*;
-use crate::update::{self, update, SideInput};
+use crate::update::{self, SideInput, update};
 
 use itertools::Itertools;
-use rand::{self, rngs::SmallRng, SeedableRng};
+use rand::{self, SeedableRng, rngs::SmallRng};
 
 use std::fmt;
 use std::vec::Vec;
@@ -26,6 +26,12 @@ pub struct ContextBuilder<'a> {
     text: &'a str,
     string_cache: StringCache,
     rng: Option<&'a mut SmallRng>,
+}
+
+impl<'a> Default for ContextBuilder<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<'a> ContextBuilder<'a> {
@@ -153,7 +159,7 @@ impl Context {
         let mut rules = vec![];
         for rule in &self.core.rules {
             if let Some(matching_rule) =
-                rule_matches_state(&rule, state, &mut side_input)?.map(|result| result.rule)
+                rule_matches_state(rule, state, &mut side_input)?.map(|result| result.rule)
             {
                 rules.push(matching_rule);
             }
@@ -208,7 +214,7 @@ impl Context {
                         let string = other
                             .string_cache
                             .atom_to_str(t.atom)
-                            .expect(&format!("missing token: {:?}", t));
+                            .unwrap_or_else(|| panic!("missing token: {:?}", t));
 
                         let mut new_token = t.clone();
                         new_token.atom = self.string_cache.str_to_atom(string);

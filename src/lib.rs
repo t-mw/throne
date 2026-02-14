@@ -67,8 +67,8 @@ pub use crate::ffi::*;
 pub use crate::rule::Rule;
 pub use crate::state::{PhraseId, State};
 pub use crate::string_cache::{Atom, StringCache};
-pub use crate::token::{tokenize, Phrase, PhraseGroup, PhraseString, Token};
-pub use crate::update::{update, SideInput};
+pub use crate::token::{Phrase, PhraseGroup, PhraseString, Token, tokenize};
+pub use crate::update::{SideInput, update};
 #[cfg(target_arch = "wasm32")]
 pub use crate::wasm::*;
 

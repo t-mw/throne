@@ -110,7 +110,7 @@ where
         for i in 0..rules.len() {
             let rule = &rules[(start_rule_idx + i) % rules.len()];
 
-            if let Some(result) = matching::rule_matches_state(&rule, state, &mut side_input)? {
+            if let Some(result) = matching::rule_matches_state(rule, state, &mut side_input)? {
                 matching_rule = Some(result.rule);
                 rule_output_phrase_group_counts = result.output_phrase_group_counts;
                 break;
@@ -178,10 +178,8 @@ pub(crate) fn execute_rule(
     let outputs = &rule.outputs;
 
     for input in inputs {
-        if input[0].is_consuming {
-            if !state.remove_phrase(input) {
-                return false;
-            }
+        if input[0].is_consuming && !state.remove_phrase(input) {
+            return false;
         }
     }
 
