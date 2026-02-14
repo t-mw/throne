@@ -63,7 +63,19 @@
     - currently backwards predicates are evaluated left to right in two passes, so > 2 backwards predicates in the wrong order will fail matching e.g. + C 3 D . % B 2 C . + A 1 B = ...
     - backwards predicates need to be evaluated in order based on variable dependencies.
     - could extend ordering based on dependencies to matching in general, including side predicates and normal state matches, to reduce permutations.
-*** TODO try https://twitter.com/tomaka17/status/1391052081272967170
+*** TODO optimization ideas
+    - execute from a match plan instead of rebuilding concrete rules
+      - matching would return matched state indices + variable bindings + output phrases.
+      - then execute directly, instead of rebuilding phrases and matching/removing them again.
+    - track which rules are affected by recent state changes and only re-check those.
+    - replace permutation walk with constraint/backtracking search
+      - pick the next input with the smallest candidate set first.
+      - propagate variable bindings early so dead branches fail fast.
+    - compile a static per-rule match plan once
+      - pre-split inputs into concrete/var/backwards/side/negated buckets.
+      - precompute variable occurrence/dependency maps used during matching.
+    - rete-like incremental matcher
+*** TODO try https://twitter.com/tomaka16/status/1391052081272967170
     - "you might be able to save a lot of hashmap lookups if you replace a `HashMap<K, V>` with a `HashMap<K, usize>` and a `Slab<V>`. This might be very useful if K is something heavy such as a `String`"
 *** DONE support quiescence rule under stage label i.e. don't copy left-hand stage for quiescence rule
     CLOSED: [2021-04-30 Fri 11:16]
