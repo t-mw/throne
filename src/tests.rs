@@ -50,7 +50,7 @@ fn context_from_text_state_test() {
 fn context_from_text_prefix_test() {
     let mut context = Context::from_text(
         "at 0 0 wood . at 1 2 wood = at 1 0 wood \n\
-             asdf . #test: { \n\
+             asdf . $#test: { \n\
              at 3 4 wood = at 5 6 wood . at 7 8 wood \n\
              }",
     )
@@ -111,6 +111,68 @@ fn context_from_text_prefix_test() {
             )
             .build(2)
         ]
+    );
+}
+
+#[test]
+fn context_from_text_prefix_stage_consumed_by_default_test() {
+    let mut context = Context::from_text(
+        "#test: {\n\
+             in = out\n\
+             }",
+    )
+    .unwrap();
+
+    assert_eq!(context.core.rules.len(), 2);
+    assert_eq!(
+        context.core.rules[0].inputs,
+        vec![
+            tokenize("#test", &mut context.string_cache),
+            tokenize("in", &mut context.string_cache),
+        ]
+    );
+    assert_eq!(
+        context.core.rules[0].outputs,
+        vec![tokenize("out", &mut context.string_cache)]
+    );
+}
+
+#[test]
+fn context_from_text_prefix_copy_not_preserved_in_quiescence_rule_test() {
+    let mut context = Context::from_text(
+        "$foo: {\n\
+             bar = baz\n\
+             () = qux\n\
+             }",
+    )
+    .unwrap();
+
+    assert_eq!(context.core.rules.len(), 2);
+    assert_eq!(
+        context.core.rules[0].inputs,
+        vec![
+            tokenize("foo", &mut context.string_cache),
+            tokenize("bar", &mut context.string_cache),
+        ]
+    );
+    assert_eq!(
+        context.core.rules[0].outputs,
+        vec![
+            tokenize("foo", &mut context.string_cache),
+            tokenize("baz", &mut context.string_cache),
+        ]
+    );
+
+    assert_eq!(
+        context.core.rules[1].inputs,
+        vec![
+            tokenize("foo", &mut context.string_cache),
+            tokenize(parser::QUI, &mut context.string_cache),
+        ]
+    );
+    assert_eq!(
+        context.core.rules[1].outputs,
+        vec![tokenize("qux", &mut context.string_cache)]
     );
 }
 
@@ -519,7 +581,7 @@ fn context_from_text_comment_test() {
 #[test]
 fn context_from_text_comment_state_test() {
     let mut context = Context::from_text(
-        "#test: {\n\
+        "$#test: {\n\
              \n\
              // comment 1\n\
              in1 = out1\n\
@@ -653,7 +715,7 @@ fn context_find_matching_rules_test() {
 fn update_test() {
     let mut context = Context::from_text(
         "at 0 0 wood . at 0 1 wood . at 1 1 wood . at 0 1 fire . #update\n\
-             #update: {\n\
+             $#update: {\n\
              at X Y wood . at X Y fire = at X Y fire\n\
              () = #spread\n\
              }\n\

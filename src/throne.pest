@@ -1,18 +1,17 @@
 WHITESPACE = _{ " " }
 COMMENT = _{ ("//" ~ (!NEWLINE ~ ANY)*) | ("/*" ~ (!"*/" ~ ANY)* ~ "*/") }
-atom = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ ~ "'"* }
+atom = @{ ("#" ~ (ASCII_ALPHANUMERIC | "_" | "-")+ | (ASCII_ALPHANUMERIC | "_" | "-")+) ~ "'"* }
 atom_var = @{ ASCII_ALPHA_UPPER ~ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "_" | "-")* ~ "'"* }
 string = { "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
 wildcard = @{ "_" ~ atom? }
 qui = { "qui" }
 
 // list <= and >= first, to give precendence over < and >
-prefix = { !(wildcard | string | atom_var | atom) ~ ("+" | "-" | "%" | "<=" | ">=" | "<" | ">" | "#" | "==") }
+prefix = { !(wildcard | string | atom_var | atom) ~ ("+" | "-" | "%" | "<=" | ">=" | "<" | ">" | "==") }
 
 phrase_compound = { prefix? ~ ((wildcard | string | atom_var | atom)+ | "(" ~ phrase_compound+ ~ ")") }
 phrase = !{ phrase_compound+ }
 
-stage_phrase = ${ "#" ~ phrase }
 copy_phrase = ${ "$" ~ phrase }
 side_phrase = ${ "^" ~ phrase }
 negate_phrase = ${ "!" ~ phrase }
@@ -23,16 +22,15 @@ compiler_block = _{ "[" ~ (compiler_enable_unused_warnings | compiler_disable_un
 compiler_enable_unused_warnings = { "enable-unused-warnings" }
 compiler_disable_unused_warnings = { "disable-unused-warnings" }
 
-state_phrase = { stage_phrase | phrase }
-state = { state_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ state_phrase)* }
+state = { phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ phrase)* }
 
-input_phrase = { qui | stage_phrase | copy_phrase | side_phrase | negate_phrase | backwards_phrase | nonconsuming_phrase | phrase }
+input_phrase = { qui | copy_phrase | side_phrase | negate_phrase | backwards_phrase | nonconsuming_phrase | phrase }
 inputs = { input_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ input_phrase)* }
-output_phrase = { qui | stage_phrase | side_phrase | phrase }
+output_phrase = { qui | side_phrase | phrase }
 outputs = { output_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ output_phrase)* }
 rule = { inputs ~ NEWLINE? ~ "=" ~ NEWLINE? ~ outputs }
 
-backwards_def_phrase = { stage_phrase | side_phrase | negate_phrase | nonconsuming_phrase | phrase }
+backwards_def_phrase = { side_phrase | negate_phrase | nonconsuming_phrase | phrase }
 backwards_def = { backwards_phrase ~ (NEWLINE? ~ "." ~ NEWLINE? ~ backwards_def_phrase)* }
 
 prefix_block = _{ "{" ~ NEWLINE* ~ rule ~ (NEWLINE+ ~ rule)* ~ NEWLINE* ~ "}" }

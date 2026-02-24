@@ -92,7 +92,7 @@ pub(crate) fn parse(
                         &mut inputs,
                         &mut outputs,
                         string_cache,
-                        false,
+                        true,
                     );
                     inputs.push(tokenize(QUI, string_cache));
 
@@ -199,7 +199,7 @@ fn pair_to_throne_rule(
             &mut inputs,
             &mut outputs,
             string_cache,
-            !has_input_qui,
+            has_input_qui,
         );
     }
 
@@ -241,35 +241,52 @@ fn add_prefix_inputs_pair_to_inputs_outputs(
     inputs: &mut Vec<VecPhrase>,
     outputs: &mut Vec<VecPhrase>,
     string_cache: &mut StringCache,
-    copy_stage_phrase: bool,
+    is_quiescence_rule: bool,
 ) {
-    // insert stages at beginning of rule input, so that 'first atoms' optimization is effective
+    // Keep inputs that start with '#' at the front so they can benefit from the first-atom lookup.
+    // TODO: make this special case redundant by ordering inputs by how likely they are to narrow the search quickly.
     let prefix_input_pairs = prefix_inputs_pair.into_inner();
     for p in prefix_input_pairs.clone() {
         let input_phrase = p.into_inner().next().unwrap();
-        if input_phrase.as_rule() == generated::Rule::stage_phrase {
+        if is_stage_phrase(&input_phrase) {
             add_input_phrase_pair_to_inputs_outputs(
                 input_phrase,
                 inputs,
                 outputs,
                 string_cache,
-                copy_stage_phrase,
+                is_quiescence_rule,
             );
         }
     }
 
     for p in prefix_input_pairs {
         let input_phrase = p.into_inner().next().unwrap();
-        if input_phrase.as_rule() != generated::Rule::stage_phrase {
+        if !is_stage_phrase(&input_phrase) {
             add_input_phrase_pair_to_inputs_outputs(
                 input_phrase,
                 inputs,
                 outputs,
                 string_cache,
-                copy_stage_phrase,
+                is_quiescence_rule,
             );
         }
     }
+}
+
+fn is_stage_phrase(input_phrase: &Pair<generated::Rule>) -> bool {
+    let phrase = match input_phrase.as_rule() {
+        generated::Rule::copy_phrase
+        | generated::Rule::side_phrase
+        | generated::Rule::negate_phrase
+        | generated::Rule::nonconsuming_phrase
+        | generated::Rule::backwards_phrase => {
+            input_phrase.clone().into_inner().next().unwrap().as_str()
+        }
+        generated::Rule::phrase => input_phrase.as_str(),
+        _ => return false,
+    };
+
+    phrase.chars().next() == Some('#')
 }
 
 fn add_input_phrase_pair_to_inputs_outputs(
@@ -277,7 +294,7 @@ fn add_input_phrase_pair_to_inputs_outputs(
     inputs: &mut Vec<VecPhrase>,
     outputs: &mut Vec<VecPhrase>,
     string_cache: &mut StringCache,
-    copy_stage_phrase: bool,
+    is_quiescence_rule: bool,
 ) {
     match input_phrase.as_rule() {
         generated::Rule::copy_phrase => {
@@ -285,18 +302,10 @@ fn add_input_phrase_pair_to_inputs_outputs(
                 input_phrase.into_inner().next().unwrap().as_str(),
                 string_cache,
             );
-
             inputs.push(copy_phrase.clone());
-            outputs.push(copy_phrase);
-        }
-        // stage phrases have the special behavior of acting as copy phrases when used as
-        // prefixes, except when the prefixed rule includes a qui.
-        generated::Rule::stage_phrase => {
-            let stage_phrase = tokenize(input_phrase.as_str(), string_cache);
-            if copy_stage_phrase {
-                outputs.push(stage_phrase.clone());
+            if !is_quiescence_rule {
+                outputs.push(copy_phrase);
             }
-            inputs.push(stage_phrase);
         }
         _ => {
             inputs.push(tokenize(input_phrase.as_str(), string_cache));

@@ -115,16 +115,11 @@ foo = bar     // matched first
 
 In this way `()` can be used as a form of control flow, overriding the usual random order of rule execution.
 
-### Stage Phrases
+When using `INPUTS: { ... }`, copied prefix inputs (e.g. `$foo`) are copied to each expanded rule's outputs except when the expanded rule has `()` as an input.
 
-Prefixing a phrase with `#` marks it as a 'stage' phrase.
-Stage phrases behave in largely the same way as normal phrases, but their presence should be used to indicate how far a script has executed within a sequence of 'stages'. A stage phrase can be included in a rule's inputs to only execute the rule within that stage of the script's execution, and included in a rule's outputs to define the transition to a new stage of the script's execution.
+### Stages
 
-Stage phrases only differ in their behavior to normal phrases when used as a prefix to a set of curly braces. In this case the stage phrase will be copied to not only the inputs of the rules within the braces, but also the outputs, except when a rule includes `()` as an input phrase. This makes it easy to scope execution of the prefixed set of rules to a stage and finally transition to a second stage once execution of the first stage is complete.
-
-| Example | Compiled Form |
-| --- | --- |
-| <pre>#first-stage: {<br/>  foo = bar<br/>  () = #second-stage<br/>}</pre> | <pre>#first-stage . foo = #first-stage . bar<br/>#first-stage . () = #second-stage</pre> |
+By convention, phrases that start with `#` are used to indicate the current step of execution (for example `#update`, `#resolve`, `#done`). Besides the semantic meaning, they behave like normal phrases.
 
 ## Build for WebAssembly
 
